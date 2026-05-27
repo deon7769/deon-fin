@@ -1,0 +1,16 @@
+.env
+.env.local
+*.db
+*.db-journal
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.coverage
+htmlcov/
+data/
+imports/raw/
+*.log
+.vscode/
+.idea/
