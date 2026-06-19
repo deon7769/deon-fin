@@ -70,3 +70,6 @@ Check them with:
 
 ```bash
 /opt/infra-healthcheck.sh
+systemctl list-timers --all --no-pager | grep infra-watchdog
+systemctl status infra-watchdog.service --no-pager
+```
