@@ -313,9 +313,8 @@ def create_app() -> FastAPI:
         rows = db.list_transactions(since=since, limit=10_000)
         account_types = {row["id"]: row["type"] for row in db.list_accounts()}
 
-        by_cat: dict[str, float] = {}
+        spend_by_cat: dict[str, float] = {}
         inflow = 0.0
-        outflow = 0.0
         for r in rows:
             amount = float(r["amount"])
             account_type = account_types.get(r["account_id"])
@@ -325,20 +324,29 @@ def create_app() -> FastAPI:
 
             spent = spending_value(amount, account_type, category)
             if spent:
-                outflow -= spent
-                by_cat[category] = by_cat.get(category, 0.0) - spent
+                spend_by_cat[category] = spend_by_cat.get(category, 0.0) + spent
+
+        by_category = [
+            {"category": category, "amount": -total}
+            for category, total in sorted(
+                (
+                    (category, round(total, 2))
+                    for category, total in spend_by_cat.items()
+                ),
+                key=lambda kv: kv[1],
+                reverse=True,
+            )
+            if total > 0
+        ]
+        outflow = round(sum(row["amount"] for row in by_category), 2)
 
         return {
             "days": days,
             "transactions": len(rows),
             "inflow": round(inflow, 2),
-            "outflow": round(outflow, 2),
+            "outflow": outflow,
             "net": round(inflow + outflow, 2),
-            "by_category": [
-                {"category": k, "amount": round(v, 2)}
-                for k, v in sorted(by_cat.items(), key=lambda kv: kv[1])
-                if round(v, 2) != 0
-            ],
+            "by_category": by_category,
         }
 
     @app.get("/api/dashboard")

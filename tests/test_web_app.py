@@ -166,3 +166,53 @@ def test_summary_uses_canonical_financial_signs(client, tmp_db):
 
     by_category = {row["category"]: row["amount"] for row in s["by_category"]}
     assert by_category == {"Shopping": -250.0, "Groceries": -100.0}
+
+
+def _seed_refund_heavy_summary_transactions(db):
+    posted = date.today() - timedelta(days=3)
+    db.upsert_account(Account(id="bank1", source="test", name="Bank", type="BANK"))
+    db.upsert_account(Account(id="card1", source="test", name="Card", type="CREDIT"))
+    db.insert_transactions([
+        Transaction(
+            account_id="bank1",
+            posted_at=posted,
+            amount=Decimal("1000.00"),
+            description="Salary",
+            source="test",
+            category="Salary",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=posted,
+            amount=Decimal("40.00"),
+            description="Card shopping purchase",
+            source="test",
+            category="Shopping",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=posted,
+            amount=Decimal("-100.00"),
+            description="Card shopping refund",
+            source="test",
+            category="Shopping",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=posted,
+            amount=Decimal("70.00"),
+            description="Card groceries purchase",
+            source="test",
+            category="Groceries",
+        ),
+    ])
+
+
+def test_summary_omits_refund_heavy_categories_from_legacy_spending(client, tmp_db):
+    _seed_refund_heavy_summary_transactions(tmp_db)
+
+    s = client.get("/api/summary?days=30").json()
+
+    assert s["transactions"] == 4
+    assert s["inflow"] == 1000.0
+    assert s["outflow"] == -70.0

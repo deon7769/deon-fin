@@ -91,7 +91,7 @@ def report(days: int = 30) -> None:
         rows = db.list_transactions(since=since, limit=10_000)
         account_types = {row["id"]: row["type"] for row in db.list_accounts()}
 
-        by_cat: dict[str, float] = {}
+        spend_by_cat: dict[str, float] = {}
         for r in rows:
             category = r["category"] or "(sem categoria)"
             spent = spending_value(
@@ -100,15 +100,26 @@ def report(days: int = 30) -> None:
                 category,
             )
             if spent:
-                by_cat[category] = by_cat.get(category, 0.0) - spent
+                spend_by_cat[category] = spend_by_cat.get(category, 0.0) + spent
+
+        by_cat = [
+            (category, -total)
+            for category, total in sorted(
+                (
+                    (category, round(total, 2))
+                    for category, total in spend_by_cat.items()
+                ),
+                key=lambda kv: kv[1],
+                reverse=True,
+            )
+            if total > 0
+        ]
 
         table = Table("Categoria", "Total (R$)")
-        for cat, total in sorted(by_cat.items(), key=lambda kv: kv[1]):
-            if round(total, 2) == 0:
-                continue
+        for cat, total in by_cat:
             table.add_row(cat, f"{total:,.2f}")
         console.print(table)
-        console.print(f"[bold]Saída total:[/bold] R$ {sum(by_cat.values()):,.2f}")
+        console.print(f"[bold]Saída total:[/bold] R$ {sum(total for _, total in by_cat):,.2f}")
     finally:
         db.close()
 
