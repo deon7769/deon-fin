@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 import secrets
@@ -10,7 +11,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -31,6 +32,8 @@ from ..storage import Database
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 log = logging.getLogger(__name__)
+DEFAULT_DASHBOARD_MONTHS = 12
+DEFAULT_SYNC_DAYS = 365
 
 
 # ---------------------------------------------------------------- dependencies
@@ -65,7 +68,7 @@ class ItemCallbackRequest(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    days: int = 90
+    days: int = DEFAULT_SYNC_DAYS
 
 
 class AnalyzeRequest(BaseModel):
@@ -92,6 +95,88 @@ class AmortizacaoRequest(BaseModel):
     juros_aa: float
     parcela: float
     aporte_extra: float = 0.0
+
+
+def _months_cutoff(today: date, months: int) -> date:
+    idx = (today.year * 12 + (today.month - 1)) - (months - 1)
+    cy, cm = divmod(idx, 12)
+    return date(cy, cm + 1, 1)
+
+
+def _normalized_days(days: int | None) -> int:
+    if not days or days <= 0:
+        return DEFAULT_SYNC_DAYS
+    return min(days, 5 * 365)
+
+
+def _metadata(row: Any) -> dict[str, Any]:
+    raw = row["metadata_json"] if "metadata_json" in row.keys() else None
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+_ACCOUNT_TYPE_LABELS = {
+    "BANK": "Conta",
+    "CHECKING": "Conta",
+    "CHECKING_ACCOUNT": "Conta",
+    "SAVINGS": "Poupança",
+    "SAVINGS_ACCOUNT": "Poupança",
+    "CREDIT": "Cartão",
+    "CREDIT_CARD": "Cartão",
+}
+
+
+def _account_type_label(row: Any, meta: dict[str, Any]) -> str:
+    raw = (row["type"] or meta.get("subtype") or "").upper()
+    return _ACCOUNT_TYPE_LABELS.get(raw, "Conta")
+
+
+def _account_label(row: Any, meta: dict[str, Any]) -> str:
+    label = (
+        meta.get("marketingName")
+        or row["name"]
+        or row["institution"]
+        or row["id"].replace("pluggy:", "")
+    )
+    return f"{_account_type_label(row, meta)}: {label}"
+
+
+def _accounts_by_pluggy_item(db: Database) -> dict[str, list[tuple[Any, dict[str, Any]]]]:
+    grouped: dict[str, list[tuple[Any, dict[str, Any]]]] = {}
+    for account in db.list_accounts():
+        if account["source"] != "pluggy":
+            continue
+        meta = _metadata(account)
+        item_id = meta.get("itemId")
+        if not item_id:
+            continue
+        grouped.setdefault(item_id, []).append((account, meta))
+    return grouped
+
+
+def _item_display_name(
+    item: dict[str, Any],
+    accounts: list[tuple[Any, dict[str, Any]]],
+) -> str:
+    bank = next(
+        (
+            account for account, meta in accounts
+            if _account_type_label(account, meta) in {"Conta", "Poupança"}
+        ),
+        None,
+    )
+    first = bank or (accounts[0][0] if accounts else None)
+    return (
+        (first["name"] if first else None)
+        or (first["institution"] if first else None)
+        or item.get("connector_name")
+        or item["id"][:8]
+    )
 
 
 # ---------------------------------------------------------------- background
@@ -258,12 +343,22 @@ def create_app() -> FastAPI:
             status=body.status,
             client_user_id=body.client_user_id,
         )
-        bg.add_task(_background_sync, body.item_id, 90)
+        bg.add_task(_background_sync, body.item_id, DEFAULT_SYNC_DAYS)
         return {"item_id": body.item_id, "sync_scheduled": True}
 
     @app.get("/api/items")
     def list_items(db: Database = Depends(get_db)) -> list[dict[str, Any]]:
-        return [dict(r) for r in db.list_pluggy_items()]
+        accounts_by_item = _accounts_by_pluggy_item(db)
+        rows: list[dict[str, Any]] = []
+        for r in db.list_pluggy_items():
+            item = dict(r)
+            accounts = accounts_by_item.get(item["id"], [])
+            item["display_name"] = _item_display_name(item, accounts)
+            item["account_labels"] = [
+                _account_label(account, meta) for account, meta in accounts
+            ]
+            rows.append(item)
+        return rows
 
     @app.get("/api/sync-status")
     def sync_status() -> dict[str, Any]:
@@ -273,12 +368,16 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/sync-all")
-    def sync_all(bg: BackgroundTasks) -> dict[str, Any]:
+    def sync_all(
+        bg: BackgroundTasks,
+        body: SyncRequest | None = Body(default=None),
+    ) -> dict[str, Any]:
         """Dispara um sync de todas as contas agora (em background)."""
+        days = _normalized_days(body.days if body else None)
         if _sync_state["running"]:
-            return {"scheduled": False, "detail": "já em andamento"}
-        bg.add_task(_sync_all_items, settings.auto_sync_days)
-        return {"scheduled": True}
+            return {"scheduled": False, "detail": "já em andamento", "days": days}
+        bg.add_task(_sync_all_items, days)
+        return {"scheduled": True, "days": days}
 
     @app.post("/api/items/{item_id}/sync")
     def sync_item(
@@ -289,8 +388,9 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         if not db.get_pluggy_item(item_id):
             raise HTTPException(status_code=404, detail="item desconhecido localmente")
-        bg.add_task(_background_sync, item_id, body.days)
-        return {"item_id": item_id, "sync_scheduled": True, "days": body.days}
+        days = _normalized_days(body.days)
+        bg.add_task(_background_sync, item_id, days)
+        return {"item_id": item_id, "sync_scheduled": True, "days": days}
 
     @app.delete("/api/items/{item_id}")
     def remove_item(
@@ -308,8 +408,16 @@ def create_app() -> FastAPI:
         return {"item_id": item_id, "deleted": True}
 
     @app.get("/api/summary")
-    def summary(days: int = 30, db: Database = Depends(get_db)) -> dict[str, Any]:
-        since = date.today() - timedelta(days=days)
+    def summary(
+        days: int | None = 30,
+        months: int | None = None,
+        db: Database = Depends(get_db),
+    ) -> dict[str, Any]:
+        period_months = months if months and months > 0 else None
+        if period_months:
+            since = _months_cutoff(date.today(), period_months)
+        else:
+            since = date.today() - timedelta(days=days or 30)
         rows = db.list_transactions(since=since, limit=10_000)
         account_types = {row["id"]: row["type"] for row in db.list_accounts()}
 
@@ -341,7 +449,9 @@ def create_app() -> FastAPI:
         outflow = round(sum(row["amount"] for row in by_category), 2)
 
         return {
-            "days": days,
+            "days": None if period_months else days,
+            "period_months": period_months,
+            "since": since.isoformat(),
             "transactions": len(rows),
             "inflow": round(inflow, 2),
             "outflow": outflow,
@@ -355,8 +465,9 @@ def create_app() -> FastAPI:
 
         Lê o perfil familiar e os de/para (tradução + recorrências) do disco a
         cada request, então edições na Manutenção valem sem reiniciar.
-        `meses` (3/6/12) filtra o período do realizado; ausente = tudo.
+        `meses` (3/6/12) filtra o período do realizado; ausente = 12 meses.
         """
+        period_months = meses if meses and meses > 0 else DEFAULT_DASHBOARD_MONTHS
         profile = mnt.load_family_profile()
         overrides = mnt.load_overrides()
         cat_map = overrides["categorias_pt"]
@@ -368,7 +479,7 @@ def create_app() -> FastAPI:
             db,
             monthly_income=income,
             goals=settings.financial_goals,
-            period_months=meses if meses and meses > 0 else None,
+            period_months=period_months,
             family_profile=profile,
         ).to_dict()
 
@@ -419,6 +530,7 @@ def create_app() -> FastAPI:
                 "custo_financeiro": ctx["custo_financeiro"]["total"],
                 "pagamentos_cartao": ctx["pagamentos_cartao_total"],
                 "meses_cobertos": ctx["meses_cobertos"],
+                "periodo_meses": period_months,
             },
             "fluxo_mensal": fluxo,
             "gasto_por_categoria": gasto_cat,

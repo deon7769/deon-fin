@@ -23,6 +23,26 @@ function fmtBRL(value) {
     .format(value || 0);
 }
 
+const DEFAULT_PERIOD_MONTHS = "12";
+let currentPeriodMonths = DEFAULT_PERIOD_MONTHS;
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function periodLabel(months) {
+  return `${months || DEFAULT_PERIOD_MONTHS} meses`;
+}
+
+function selectedSyncDays() {
+  return parseInt($("#sync-period")?.value || "365", 10) || 365;
+}
+
 // ---------------------------------------------------------------- tabs
 function switchTab(name) {
   $$(".tab-content").forEach((el) => el.classList.remove("active"));
@@ -59,9 +79,10 @@ if (window.Chart) {
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
 }
 
-async function loadDashboard(meses) {
+async function loadDashboard(meses = currentPeriodMonths) {
+  currentPeriodMonths = String(meses || DEFAULT_PERIOD_MONTHS);
   let d;
-  const qs = meses ? `?meses=${meses}` : "";
+  const qs = `?meses=${encodeURIComponent(currentPeriodMonths)}`;
   try {
     d = await api("GET", "/api/dashboard" + qs);
   } catch (e) {
@@ -399,7 +420,7 @@ async function openConnectWidget({ itemId } = {}) {
         return;
       }
       await refreshItems();
-      setTimeout(() => { refreshSummary(); loadDashboard(); }, 5000);
+      setTimeout(() => { refreshSummary(); loadDashboard(currentPeriodMonths); }, 5000);
     },
     onError: (err) => setStatus(statusEl, `Erro: ${err.message || err}`, "err"),
     onClose: () => {
@@ -426,16 +447,29 @@ async function refreshItems() {
     return;
   }
   for (const it of items) {
+    const labels = (it.account_labels || [])
+      .slice(0, 4)
+      .map((label) => `<span>${escapeHtml(label)}</span>`)
+      .join("");
+    const accounts = labels
+      ? `<div class="account-list">${labels}</div>`
+      : `<div class="muted small">Sem contas sincronizadas ainda</div>`;
     tbody.insertAdjacentHTML("beforeend", `
       <tr>
-        <td><code>${it.id.slice(0, 8)}…</code></td>
-        <td>${it.connector_name || "—"}</td>
-        <td>${it.status || "—"}</td>
-        <td>${it.last_synced_at || "<em>nunca</em>"}</td>
         <td>
-          <button class="secondary" data-action="sync"   data-id="${it.id}">Sync</button>
-          <button class="secondary" data-action="update" data-id="${it.id}">Atualizar credenciais</button>
-          <button class="danger"    data-action="delete" data-id="${it.id}">Remover</button>
+          <div class="item-name">${escapeHtml(it.display_name || it.connector_name || it.id)}</div>
+          <div class="muted small">Item <code>${escapeHtml(it.id.slice(0, 8))}…</code></div>
+          ${accounts}
+        </td>
+        <td>${escapeHtml(it.connector_name || "—")}</td>
+        <td>${escapeHtml(it.status || "—")}</td>
+        <td>${it.last_synced_at ? escapeHtml(it.last_synced_at) : "<em>nunca</em>"}</td>
+        <td>
+          <div class="item-actions">
+            <button class="secondary" data-action="sync"   data-id="${escapeHtml(it.id)}">Sync período</button>
+            <button class="secondary" data-action="update" data-id="${escapeHtml(it.id)}">Atualizar credenciais</button>
+            <button class="danger"    data-action="delete" data-id="${escapeHtml(it.id)}">Remover</button>
+          </div>
         </td>
       </tr>`);
   }
@@ -447,9 +481,9 @@ $("#items-table").addEventListener("click", async (ev) => {
   const { action, id } = btn.dataset;
   if (action === "sync") {
     btn.disabled = true; btn.textContent = "Sincronizando…";
-    try { await api("POST", `/api/items/${id}/sync`, { days: 90 }); }
-    finally { btn.disabled = false; btn.textContent = "Sync"; }
-    setTimeout(() => { refreshSummary(); loadDashboard(); }, 4000);
+    try { await api("POST", `/api/items/${id}/sync`, { days: selectedSyncDays() }); }
+    finally { btn.disabled = false; btn.textContent = "Sync período"; }
+    setTimeout(() => { refreshSummary(); loadDashboard(currentPeriodMonths); }, 4000);
   } else if (action === "update") {
     await openConnectWidget({ itemId: id });
   } else if (action === "delete") {
@@ -462,11 +496,13 @@ $("#items-table").addEventListener("click", async (ev) => {
 async function refreshSummary() {
   const tbody = $("#summary-table tbody");
   const totals = $("#summary-totals");
+  const title = $("#summary-title");
   tbody.innerHTML = "";
   totals.innerHTML = "";
+  if (title) title.textContent = `Resumo dos últimos ${periodLabel(currentPeriodMonths)}`;
   let s;
   try {
-    s = await api("GET", "/api/summary?days=30");
+    s = await api("GET", `/api/summary?months=${encodeURIComponent(currentPeriodMonths)}`);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="2">Erro: ${e.message}</td></tr>`;
     return;
@@ -512,14 +548,15 @@ async function refreshSyncStatus() {
 async function syncAll() {
   const btn = $("#btn-sync-all");
   btn.disabled = true;
-  try { await api("POST", "/api/sync-all"); } catch (e) { /* segue */ }
+  try { await api("POST", "/api/sync-all", { days: selectedSyncDays() }); } catch (e) { /* segue */ }
   // poll até terminar, então recarrega o dashboard
   const poll = setInterval(async () => {
     const s = await refreshSyncStatus();
     if (s && !s.running) {
       clearInterval(poll);
       btn.disabled = false;
-      loadDashboard($("#dash-period").value);
+      refreshSummary();
+      loadDashboard(currentPeriodMonths);
     }
   }, 2500);
 }
@@ -873,7 +910,7 @@ async function saveMaintenance() {
     status.className = "status ok";
     status.textContent = "Salvo! Atualizando dashboard…";
     maintFullProfile = fp;
-    await loadDashboard();
+    await loadDashboard(currentPeriodMonths);
   } catch (e) {
     status.className = "status err";
     status.textContent = `Falha: ${e.message}`;
@@ -998,7 +1035,11 @@ $$("[data-preset]").forEach((b) => b.addEventListener("click", () => applyPreset
 $("#btn-simular").addEventListener("click", simular);
 $("#btn-amort").addEventListener("click", amortizar);
 $("#btn-amort-load").addEventListener("click", loadAmortFromImovel);
-$("#dash-period").addEventListener("change", (e) => loadDashboard(e.target.value));
+$("#dash-period").addEventListener("change", (e) => {
+  currentPeriodMonths = e.target.value || DEFAULT_PERIOD_MONTHS;
+  loadDashboard(currentPeriodMonths);
+  refreshSummary();
+});
 
 // ---------------------------------------------------------------- boot
 $("#btn-connect").addEventListener("click", () => openConnectWidget());
@@ -1006,5 +1047,6 @@ $("#btn-refresh-items").addEventListener("click", refreshItems);
 $("#btn-refresh-summary").addEventListener("click", refreshSummary);
 $("#btn-sync-all").addEventListener("click", syncAll);
 
-loadDashboard();
+$("#dash-period").value = DEFAULT_PERIOD_MONTHS;
+loadDashboard(currentPeriodMonths);
 refreshSyncStatus();
