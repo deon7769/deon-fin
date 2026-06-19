@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
+from decimal import Decimal
+
 import pytest
 from fastapi.testclient import TestClient
 
+from src.storage import Account, Transaction
 from src.web.app import create_app, get_db, get_pluggy
 
 
@@ -92,3 +96,73 @@ def test_summary_empty(client):
     assert s["inflow"] == 0.0
     assert s["outflow"] == 0.0
     assert s["by_category"] == []
+
+
+def _seed_summary_sign_transactions(db):
+    posted = date.today() - timedelta(days=3)
+    db.upsert_account(Account(id="bank1", source="test", name="Bank", type="BANK"))
+    db.upsert_account(Account(id="card1", source="test", name="Card", type="CREDIT"))
+    db.insert_transactions([
+        Transaction(
+            account_id="bank1",
+            posted_at=posted,
+            amount=Decimal("1000.00"),
+            description="Salary",
+            source="test",
+            category="Salary",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=posted,
+            amount=Decimal("-100.00"),
+            description="Debit groceries",
+            source="test",
+            category="Groceries",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=posted,
+            amount=Decimal("-300.00"),
+            description="Invoice payment from bank",
+            source="test",
+            category="Credit card payment",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=posted,
+            amount=Decimal("300.00"),
+            description="Card purchase",
+            source="test",
+            category="Shopping",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=posted,
+            amount=Decimal("-50.00"),
+            description="Card refund",
+            source="test",
+            category="Shopping",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=posted,
+            amount=Decimal("-300.00"),
+            description="Invoice settlement on card",
+            source="test",
+            category="Credit card payment",
+        ),
+    ])
+
+
+def test_summary_uses_canonical_financial_signs(client, tmp_db):
+    _seed_summary_sign_transactions(tmp_db)
+
+    s = client.get("/api/summary?days=30").json()
+
+    assert s["transactions"] == 6
+    assert s["inflow"] == 1000.0
+    assert s["outflow"] == -350.0
+    assert s["net"] == 650.0
+
+    by_category = {row["category"]: row["amount"] for row in s["by_category"]}
+    assert by_category == {"Shopping": -250.0, "Groceries": -100.0}

@@ -19,6 +19,7 @@ from starlette.requests import Request
 
 from ..agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
 from ..agent.budget import summarize_5030, summarize_executivo, summarize_wishlist
+from ..agent.context import income_value, spending_value
 from ..agent.simulator import simular_amortizacao, simular_compra
 from ..agent.cards import card_monthly_breakdown
 from ..agent import maintenance as mnt
@@ -310,17 +311,23 @@ def create_app() -> FastAPI:
     def summary(days: int = 30, db: Database = Depends(get_db)) -> dict[str, Any]:
         since = date.today() - timedelta(days=days)
         rows = db.list_transactions(since=since, limit=10_000)
+        account_types = {row["id"]: row["type"] for row in db.list_accounts()}
+
         by_cat: dict[str, float] = {}
         inflow = 0.0
         outflow = 0.0
         for r in rows:
-            amt = r["amount"]
-            if amt >= 0:
-                inflow += amt
-            else:
-                outflow += amt
-                key = r["category"] or "(sem categoria)"
-                by_cat[key] = by_cat.get(key, 0.0) + amt
+            amount = float(r["amount"])
+            account_type = account_types.get(r["account_id"])
+            category = r["category"] or "(sem categoria)"
+
+            inflow += income_value(amount, account_type, category)
+
+            spent = spending_value(amount, account_type, category)
+            if spent:
+                outflow -= spent
+                by_cat[category] = by_cat.get(category, 0.0) - spent
+
         return {
             "days": days,
             "transactions": len(rows),
@@ -330,6 +337,7 @@ def create_app() -> FastAPI:
             "by_category": [
                 {"category": k, "amount": round(v, 2)}
                 for k, v in sorted(by_cat.items(), key=lambda kv: kv[1])
+                if round(v, 2) != 0
             ],
         }
 
