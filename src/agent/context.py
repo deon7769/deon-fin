@@ -39,17 +39,26 @@ FINANCIAL_COST_CATEGORIES = {
 # Movimentações que NÃO são consumo (transferências internas / liquidação / aporte).
 NON_SPENDING_CATEGORIES = {
     "Transfer - PIX",
+    "Transfer - Internal",
     "Transfers",
     "Same person transfer",
+    "Transferência - PIX",
+    "Transferência - TED/DOC",
+    "Transferências",
     "Transferências - PIX",
     "Transferências - TED/DOC",
+    "Transferência entre contas",
+    "Transferência interna",
     "Transfer - Bank Slip",
     "Credit card payment",
+    "Payment",
+    "Pagamento de fatura",
     "Investments",
+    "Investimentos",
 }
 
 INVESTMENT_CATEGORIES = {"Investments", "Investimentos"}
-CARD_PAYMENT_CATEGORIES = {"Credit card payment"}
+CARD_PAYMENT_CATEGORIES = {"Credit card payment", "Pagamento de fatura", "Payment"}
 _DEFAULT_PROFILE = object()
 
 _TOKEN = re.compile(r"[a-zà-ÿ0-9]+", re.IGNORECASE)

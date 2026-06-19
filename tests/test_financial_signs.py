@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from src.agent.context import build_financial_context, income_value, spending_value
 from src.storage import Account, Transaction
 
@@ -18,6 +20,27 @@ def test_canonical_spending_and_income_values():
     assert spending_value(-300.0, "CREDIT", "Credit card payment") == 0.0
     assert spending_value(-300.0, "BANK", "Credit card payment") == 0.0
     assert spending_value(-120.0, "BANK", "Transfers") == 0.0
+
+
+@pytest.mark.parametrize("category", [
+    "Investimentos",
+    "Pagamento de fatura",
+    "Payment",
+    "Transferência - PIX",
+    "Transferências",
+    "Transferência entre contas",
+    "Transferência interna",
+    "Transfer - Internal",
+    "Transferências - PIX",
+    "Transferências - TED/DOC",
+    "Transferência - TED/DOC",
+])
+def test_non_spending_aliases_do_not_count_as_spending_or_income(category):
+    assert spending_value(-100.0, "BANK", category) == 0.0
+    assert spending_value(100.0, "BANK", category) == 0.0
+    assert spending_value(100.0, "CREDIT", category) == 0.0
+    assert spending_value(-100.0, "CREDIT", category) == 0.0
+    assert income_value(100.0, "BANK", category) == 0.0
 
 
 def test_context_uses_bank_debits_and_card_purchases_without_duplicate_invoice(tmp_db):
@@ -90,3 +113,52 @@ def test_context_uses_bank_debits_and_card_purchases_without_duplicate_invoice(t
 
     categories = {row["categoria"]: row["total"] for row in ctx["gasto_por_categoria"]}
     assert categories == {"Shopping": 260.0, "Groceries": 80.0}
+
+
+def test_context_tracks_portuguese_non_spending_aliases(tmp_db):
+    tmp_db.upsert_account(Account(id="bank1", source="test", name="Bank", type="BANK"))
+    tmp_db.upsert_account(Account(id="card1", source="test", name="Card", type="CREDIT"))
+    tmp_db.insert_transactions([
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 5, 1),
+            amount=Decimal("-300.00"),
+            description="Pagamento fatura",
+            source="test",
+            category="Pagamento de fatura",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 5, 2),
+            amount=Decimal("-200.00"),
+            description="Aplicacao",
+            source="test",
+            category="Investimentos",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 5, 3),
+            amount=Decimal("-50.00"),
+            description="Transferencia interna",
+            source="test",
+            category="Transferência entre contas",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=date(2026, 5, 4),
+            amount=Decimal("100.00"),
+            description="Compra cartão",
+            source="test",
+            category="Shopping",
+        ),
+    ])
+
+    ctx = build_financial_context(tmp_db, today=date(2026, 6, 19)).to_dict()
+
+    assert ctx["fluxo_mensal"]["2026-05"]["gasto"] == 100.0
+    assert ctx["fluxo_mensal"]["2026-05"]["investido"] == 200.0
+    assert ctx["pagamentos_cartao_total"] == 300.0
+    assert ctx["investido_total"] == 200.0
+    assert ctx["gasto_por_categoria"] == [
+        {"categoria": "Shopping", "total": 100.0, "qtd": 1, "media_mensal": 100.0}
+    ]
