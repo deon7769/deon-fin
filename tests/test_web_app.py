@@ -111,6 +111,47 @@ def test_list_items_includes_connected_account_names(client, tmp_db):
     ]
 
 
+def test_list_items_uses_bank_code_when_account_name_is_generic(client, tmp_db):
+    tmp_db.upsert_pluggy_item(
+        "item-inter",
+        connector_name="MeuPluggy",
+        status="UPDATED",
+    )
+    tmp_db.upsert_account(Account(
+        id="pluggy:inter-bank",
+        source="pluggy",
+        institution="077/0001/31238064-0",
+        name="Conta Corrente",
+        type="BANK",
+        metadata={
+            "itemId": "item-inter",
+            "subtype": "CHECKING_ACCOUNT",
+            "bankData": {"transferNumber": "077/0001/31238064-0"},
+        },
+    ))
+    tmp_db.upsert_account(Account(
+        id="pluggy:inter-card",
+        source="pluggy",
+        institution="DAVI OLIVEIRA NETO",
+        name="DAVI OLIVEIRA NETO",
+        type="CREDIT",
+        metadata={
+            "itemId": "item-inter",
+            "number": "1122",
+            "creditData": {"brand": "MASTERCARD"},
+        },
+    ))
+
+    items = client.get("/api/items").json()
+
+    item = next(i for i in items if i["id"] == "item-inter")
+    assert item["display_name"] == "Banco Inter"
+    assert item["account_labels"] == [
+        "Conta: Banco Inter - Conta Corrente",
+        "Cartão: Banco Inter Mastercard final 1122",
+    ]
+
+
 def test_sync_all_uses_requested_period(client, monkeypatch):
     from unittest.mock import MagicMock
 
@@ -325,3 +366,43 @@ def test_dashboard_defaults_to_last_12_months(client, tmp_db):
     assert d["kpis"]["periodo_meses"] == 12
     assert recent.isoformat()[:7] in months
     assert old.isoformat()[:7] not in months
+
+
+def test_dashboard_period_kpis_use_filtered_income_not_fixed_profile(
+    client,
+    tmp_db,
+    monkeypatch,
+):
+    today = date.today()
+    posted = today - timedelta(days=20)
+    tmp_db.upsert_account(Account(id="bank1", source="test", name="Bank", type="BANK"))
+    tmp_db.insert_transactions([
+        Transaction(
+            account_id="bank1",
+            posted_at=posted,
+            amount=Decimal("1000.00"),
+            description="Salary",
+            source="test",
+            category="Salary",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=posted,
+            amount=Decimal("-100.00"),
+            description="Groceries",
+            source="test",
+            category="Groceries",
+        ),
+    ])
+    monkeypatch.setattr(
+        "src.web.app.mnt.load_family_profile",
+        lambda: {"receitas": [{"membro": "Config", "valor": 9999}]},
+    )
+
+    d = client.get("/api/dashboard?meses=12").json()
+
+    assert d["kpis"]["renda_informada"] == 9999
+    assert d["kpis"]["renda_media"] == 1000.0
+    assert d["kpis"]["saldo_medio"] == 900.0
+    assert d["budget_5030"]["renda"] == 1000.0
+    assert d["executivo"]["renda"] == 1000.0

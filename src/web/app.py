@@ -130,20 +130,90 @@ _ACCOUNT_TYPE_LABELS = {
     "CREDIT_CARD": "Cartão",
 }
 
+_BANK_CODE_NAMES = {
+    "001": "Banco do Brasil",
+    "033": "Santander",
+    "077": "Banco Inter",
+    "104": "Caixa",
+    "208": "BTG Pactual",
+    "237": "Bradesco",
+    "260": "Nubank",
+    "323": "Mercado Pago",
+    "341": "Itaú",
+}
+
+_GENERIC_ACCOUNT_NAMES = {
+    "conta",
+    "conta corrente",
+    "conta poupança",
+    "poupança",
+    "checking account",
+    "savings account",
+}
+
+
+def _bank_code_from_account(row: Any, meta: dict[str, Any]) -> str | None:
+    transfer = (meta.get("bankData") or {}).get("transferNumber") or row["institution"] or ""
+    digits = "".join(ch for ch in str(transfer).split("/", 1)[0] if ch.isdigit())
+    if len(digits) >= 3:
+        return digits[:3]
+    return None
+
+
+def _bank_name_from_account(row: Any, meta: dict[str, Any]) -> str | None:
+    code = _bank_code_from_account(row, meta)
+    return _BANK_CODE_NAMES.get(code or "")
+
+
+def _is_generic_account_name(value: str | None) -> bool:
+    if not value:
+        return True
+    normalized = " ".join(value.lower().strip().split())
+    return normalized in _GENERIC_ACCOUNT_NAMES
+
+
+def _is_probably_person_name(value: str | None) -> bool:
+    if not value:
+        return False
+    cleaned = str(value).strip()
+    if any(ch.isdigit() for ch in cleaned):
+        return False
+    words = cleaned.split()
+    return len(words) >= 2 and cleaned.upper() == cleaned
+
+
+def _display_brand(value: str | None) -> str | None:
+    if not value:
+        return None
+    return str(value).replace("_", " ").strip().title()
+
 
 def _account_type_label(row: Any, meta: dict[str, Any]) -> str:
     raw = (row["type"] or meta.get("subtype") or "").upper()
     return _ACCOUNT_TYPE_LABELS.get(raw, "Conta")
 
 
-def _account_label(row: Any, meta: dict[str, Any]) -> str:
-    label = (
-        meta.get("marketingName")
-        or row["name"]
-        or row["institution"]
-        or row["id"].replace("pluggy:", "")
-    )
-    return f"{_account_type_label(row, meta)}: {label}"
+def _account_label(row: Any, meta: dict[str, Any], item_bank_name: str | None = None) -> str:
+    type_label = _account_type_label(row, meta)
+    bank_name = _bank_name_from_account(row, meta) or item_bank_name
+    raw_name = meta.get("marketingName") or row["name"] or row["institution"]
+    label = raw_name or row["id"].replace("pluggy:", "")
+
+    if type_label in {"Conta", "Poupança"} and bank_name and _is_generic_account_name(raw_name):
+        label = f"{bank_name} - {raw_name or type_label}"
+    elif type_label == "Cartão" and bank_name and (
+        _is_probably_person_name(raw_name) or _is_generic_account_name(raw_name)
+    ):
+        brand = _display_brand((meta.get("creditData") or {}).get("brand"))
+        number = meta.get("number")
+        parts = [bank_name]
+        if brand:
+            parts.append(brand)
+        if number:
+            parts.append(f"final {number}")
+        label = " ".join(parts)
+
+    return f"{type_label}: {label}"
 
 
 def _accounts_by_pluggy_item(db: Database) -> dict[str, list[tuple[Any, dict[str, Any]]]]:
@@ -171,6 +241,11 @@ def _item_display_name(
         None,
     )
     first = bank or (accounts[0][0] if accounts else None)
+    if bank:
+        bank_meta = next(meta for account, meta in accounts if account["id"] == bank["id"])
+        bank_name = _bank_name_from_account(bank, bank_meta)
+        if bank_name and _is_generic_account_name(bank["name"]):
+            return bank_name
     return (
         (first["name"] if first else None)
         or (first["institution"] if first else None)
@@ -353,9 +428,10 @@ def create_app() -> FastAPI:
         for r in db.list_pluggy_items():
             item = dict(r)
             accounts = accounts_by_item.get(item["id"], [])
-            item["display_name"] = _item_display_name(item, accounts)
+            display_name = _item_display_name(item, accounts)
+            item["display_name"] = display_name
             item["account_labels"] = [
-                _account_label(account, meta) for account, meta in accounts
+                _account_label(account, meta, display_name) for account, meta in accounts
             ]
             rows.append(item)
         return rows
@@ -483,6 +559,8 @@ def create_app() -> FastAPI:
             family_profile=profile,
         ).to_dict()
 
+        periodo_income = ctx["media_renda_mensal"]
+        dashboard_income = periodo_income if periodo_income > 0 else income
         fluxo = [{"mes": mes, **vals} for mes, vals in ctx["fluxo_mensal"].items()]
         futuros = ctx["compromissos_futuros"]
 
@@ -497,13 +575,13 @@ def create_app() -> FastAPI:
             ctx["recorrencias_provaveis"], overrides["recorrencias"]
         )[:10]
 
-        sobra_mensal = (income or 0) - ctx["media_gasto_mensal"]
+        sobra_mensal = (dashboard_income or 0) - ctx["media_gasto_mensal"]
         wishlist = summarize_wishlist((profile or {}).get("wishlist", []), sobra_mensal)
 
         # KPIs executivos (Fase 1+7) + frase-resumo
         pf = ctx.get("perfil_familiar") or {}
         provisoes_mensal = pf.get("provisoes_total_mensal", 0.0)
-        executivo = summarize_executivo(ctx, income, provisoes_mensal)
+        executivo = summarize_executivo(ctx, dashboard_income, provisoes_mensal)
         patrimonio_liq = pf.get("patrimonio_consolidado", {}).get("patrimonio_liquido")
         _MESES = ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho",
                   "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
@@ -525,6 +603,7 @@ def create_app() -> FastAPI:
                 "renda_media": ctx["media_renda_mensal"],
                 "renda_informada": income,
                 "gasto_medio": ctx["media_gasto_mensal"],
+                "saldo_medio": round(periodo_income - ctx["media_gasto_mensal"], 2),
                 "investido_total": ctx["investido_total"],
                 "compromissos_futuros": futuros["total"],
                 "custo_financeiro": ctx["custo_financeiro"]["total"],
@@ -534,7 +613,7 @@ def create_app() -> FastAPI:
             },
             "fluxo_mensal": fluxo,
             "gasto_por_categoria": gasto_cat,
-            "budget_5030": summarize_5030(ctx, income),
+            "budget_5030": summarize_5030(ctx, dashboard_income),
             "recorrencias": recorrencias,
             "compromissos_futuros": {
                 "total": futuros["total"],

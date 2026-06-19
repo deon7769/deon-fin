@@ -98,7 +98,7 @@ async function loadDashboard(meses = currentPeriodMonths) {
   renderRecorrencias(d.recorrencias);
   renderCusto(d.custo_financeiro);
   renderWishlist(d.wishlist);
-  lastSobra = (d.kpis.renda_informada || d.kpis.renda_media || 0) - (d.kpis.gasto_medio || 0);
+  lastSobra = d.kpis.saldo_medio ?? ((d.kpis.renda_media || 0) - (d.kpis.gasto_medio || 0));
 
   if (d.perfil_familiar) {
     $("#family-section").style.display = "block";
@@ -198,11 +198,12 @@ function renderFamily(pf) {
 }
 
 function renderKPIs(k) {
-  const renda = k.renda_informada || k.renda_media;
+  const renda = k.renda_media || 0;
+  const saldo = k.saldo_medio ?? (renda - (k.gasto_medio || 0));
   $("#kpi-renda").textContent = fmtBRL(renda);
   $("#kpi-gasto").textContent = fmtBRL(k.gasto_medio);
-  $("#kpi-saldo").textContent = fmtBRL(renda - k.gasto_medio);
-  $("#kpi-saldo").className = renda - k.gasto_medio >= 0 ? "good" : "bad";
+  $("#kpi-saldo").textContent = fmtBRL(saldo);
+  $("#kpi-saldo").className = saldo >= 0 ? "good" : "bad";
   $("#kpi-investido").textContent = fmtBRL(k.investido_total);
   $("#kpi-futuro").textContent = fmtBRL(k.compromissos_futuros);
 }
