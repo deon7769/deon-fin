@@ -3,9 +3,94 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+from src.agent.analyst import (
+    FinancialAnalyst,
+    _delta_text_parts,
+    _effective_max_tokens,
+    _looks_reasoning_model,
+    _openrouter_extra_body,
+)
+
+
 from src.agent.anonymize import anonymize
 from src.agent.context import build_financial_context
 from src.storage import Account, Transaction
+
+
+def test_reasoning_model_detection():
+    assert _looks_reasoning_model("minimax/minimax-m3")
+    assert not _looks_reasoning_model("anthropic/claude-sonnet-4.5")
+
+
+def test_effective_max_tokens_bumps_reasoning_models():
+    assert _effective_max_tokens("openrouter", "minimax/minimax-m3", 8000) >= 24000
+    assert _effective_max_tokens("openrouter", "anthropic/claude-sonnet-4.5", 8000) == 8000
+
+
+def test_openrouter_extra_body_for_reasoning_models():
+    assert _openrouter_extra_body("minimax/minimax-m3") == {"reasoning": {"effort": "low"}}
+    assert _openrouter_extra_body("anthropic/claude-sonnet-4.5") is None
+
+
+def test_delta_text_parts_reads_reasoning_aliases():
+    class Delta:
+        content = ""
+        reasoning = "pensando"
+        reasoning_content = None
+
+    assert _delta_text_parts(Delta()) == ("pensando", "")
+
+    class Delta2:
+        content = "resposta"
+        reasoning = None
+        reasoning_content = "fallback"
+
+    assert _delta_text_parts(Delta2()) == ("fallback", "resposta")
+
+
+def test_stream_openai_yields_reasoning_while_waiting(monkeypatch):
+    class FakeDelta:
+        def __init__(self, reasoning="", content=""):
+            self.reasoning = reasoning
+            self.reasoning_content = None
+            self.content = content
+
+    class FakeChoice:
+        def __init__(self, delta):
+            self.delta = delta
+
+    class FakeChunk:
+        def __init__(self, delta):
+            self.choices = [FakeChoice(delta)]
+
+    chunks = [
+        FakeChunk(FakeDelta(reasoning="analisando ")),
+        FakeChunk(FakeDelta(reasoning="dados")),
+        FakeChunk(FakeDelta(content="# Relatório")),
+    ]
+
+    class FakeStream:
+        def __iter__(self):
+            return iter(chunks)
+
+    class FakeCompletions:
+        def create(self, **_kwargs):
+            return FakeStream()
+
+    class FakeClient:
+        chat = type("Chat", (), {"completions": FakeCompletions()})()
+
+    analyst = FinancialAnalyst(
+        provider="openrouter",
+        model="minimax/minimax-m3",
+        api_key="test-key",
+        base_url="https://openrouter.ai/api/v1",
+    )
+    analyst._client = FakeClient()
+    out = "".join(analyst._stream_openai("prompt"))
+    assert "analisando" in out
+    assert "# Relatório" in out
+    assert "<details" in out
 
 
 # --------------------------------------------------------------- anonymize

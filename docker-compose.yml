@@ -1,0 +1,25 @@
+services:
+  financas-agent:
+    build: .
+    image: financas-agent:local
+    container_name: financas-agent
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    networks:
+      - traefik_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_proxy"
+      - "traefik.http.routers.financas.rule=Host(`fin.deonlab.tech`)"
+      - "traefik.http.routers.financas.entrypoints=websecure"
+      - "traefik.http.routers.financas.middlewares=tailscale-only@docker"
+      - "traefik.http.routers.financas.tls=true"
+      - "traefik.http.routers.financas.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.financas.service=financas"
+      - "traefik.http.services.financas.loadbalancer.server.port=8000"
+
+networks:
+  traefik_proxy:
+    external: true

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Iterator
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 
@@ -134,26 +135,28 @@ class PluggyClient:
         *,
         from_date: str | None = None,
         to_date: str | None = None,
-        page_size: int = 500,
+        page_size: int = 500,  # mantido na assinatura; v2 fixa 500 no servidor
     ) -> Iterator[dict[str, Any]]:
-        page = 1
+        """Itera transações via GET /v2/transactions (cursor pagination)."""
+        _ = page_size  # v2 não aceita pageSize; página padrão = 500
+        params: dict[str, Any] = {"accountId": account_id}
+        if from_date:
+            params["dateFrom"] = from_date
+        if to_date:
+            params["dateTo"] = to_date
+
         while True:
-            params: dict[str, Any] = {
-                "accountId": account_id,
-                "pageSize": page_size,
-                "page": page,
-            }
-            if from_date:
-                params["from"] = from_date
-            if to_date:
-                params["to"] = to_date
-            data = self._request("GET", "/transactions", params=params)
+            data = self._request("GET", "/v2/transactions", params=params)
             results = data.get("results", [])
             for tx in results:
                 yield tx
-            if len(results) < page_size:
+            nxt = data.get("next")
+            if not nxt or not results:
                 return
-            page += 1
+            after = _cursor_after(nxt)
+            if not after:
+                return
+            params = {"accountId": account_id, "after": after}
 
     def list_categories(self) -> list[dict[str, Any]]:
         data = self._request("GET", "/categories")
@@ -174,3 +177,10 @@ def _safe_json(resp: httpx.Response) -> Any:
         return resp.json()
     except ValueError:
         return {"raw": resp.text}
+
+
+def _cursor_after(next_cursor: str) -> str | None:
+    """Extrai o parâmetro `after` do cursor retornado pelo Pluggy v2."""
+    query = next_cursor if next_cursor.startswith("?") else f"?{next_cursor}"
+    after_vals = parse_qs(urlparse(query).query).get("after")
+    return after_vals[0] if after_vals else None

@@ -85,10 +85,42 @@ Comece com um parágrafo curto de diagnóstico geral (a foto da situação).""",
 
 VALID_KINDS = tuple(_PROMPTS.keys())
 DEFAULT_MAX_TOKENS = 16000
+# Modelos com raciocínio interno (ex.: MiniMax via OpenRouter) consomem tokens
+# antes de emitir `content`; precisam de teto maior.
+REASONING_MODEL_MIN_TOKENS = 24000
 
 
 class AnalystError(RuntimeError):
     pass
+
+
+def _looks_reasoning_model(model: str) -> bool:
+    m = model.lower()
+    return any(
+        k in m
+        for k in ("minimax", "/o1", "/o3", "deepseek-r", "qwq", "thinking")
+    )
+
+
+def _delta_text_parts(delta) -> tuple[str, str]:
+    """Extrai (reasoning, content) de um delta OpenAI/OpenRouter."""
+    content = getattr(delta, "content", None) or ""
+    reasoning = getattr(delta, "reasoning", None) or ""
+    if not reasoning:
+        reasoning = getattr(delta, "reasoning_content", None) or ""
+    return reasoning, content
+
+
+def _openrouter_extra_body(model: str) -> dict[str, dict[str, str]] | None:
+    if not _looks_reasoning_model(model):
+        return None
+    return {"reasoning": {"effort": "low"}}
+
+
+def _effective_max_tokens(provider: str, model: str, max_tokens: int) -> int:
+    if provider == "openrouter" and _looks_reasoning_model(model):
+        return max(max_tokens, REASONING_MODEL_MIN_TOKENS)
+    return max_tokens
 
 
 def _user_prompt(kind: str, context: dict) -> str:
@@ -135,7 +167,11 @@ class FinancialAnalyst:
             model=settings.analyst_model,
             api_key=settings.analyst_api_key,
             base_url=settings.analyst_base_url,
-            max_tokens=settings.analyst_max_tokens,
+            max_tokens=_effective_max_tokens(
+                settings.analyst_provider,
+                settings.analyst_model,
+                settings.analyst_max_tokens,
+            ),
         )
 
     # ------------------------------------------------------------------ client
@@ -194,21 +230,67 @@ class FinancialAnalyst:
     def _stream_openai(self, prompt: str) -> Iterator[str]:
         from openai import OpenAIError
 
+        extra_body = (
+            _openrouter_extra_body(self.model)
+            if self.provider == "openrouter"
+            else None
+        )
+        create_kwargs: dict = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "stream": True,
+        }
+        if extra_body:
+            create_kwargs["extra_body"] = extra_body
+
+        yield (
+            "*Analisando seus dados…* "
+            "Modelos com raciocínio (ex.: MiniMax) podem levar 1–2 min "
+            "antes do relatório começar a aparecer.\n\n"
+        )
+
+        reasoning_open = False
+        saw_content = False
+        reasoning_buf: list[str] = []
+
         try:
-            stream = self._client.chat.completions.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                stream=True,
-            )
+            stream = self._client.chat.completions.create(**create_kwargs)
             for chunk in stream:
                 if not chunk.choices:
                     continue
                 delta = chunk.choices[0].delta
-                if delta and delta.content:
-                    yield delta.content
+                if not delta:
+                    continue
+                reasoning, content = _delta_text_parts(delta)
+                if reasoning:
+                    reasoning_buf.append(reasoning)
+                    if not saw_content and not reasoning_open:
+                        yield (
+                            "<details open><summary>"
+                            "Raciocínio da IA (em andamento)</summary>\n\n"
+                        )
+                        reasoning_open = True
+                    if reasoning_open:
+                        yield reasoning
+                if content:
+                    if reasoning_open and not saw_content:
+                        yield "\n\n</details>\n\n---\n\n"
+                        reasoning_open = False
+                    saw_content = True
+                    yield content
         except OpenAIError as e:
             raise AnalystError(f"Falha na API ({self.provider}): {e}") from e
+
+        if reasoning_open:
+            yield "\n\n</details>\n\n"
+
+        if not saw_content and reasoning_buf:
+            yield (
+                "\n\n> O modelo encerrou sem emitir o relatório formatado. "
+                "Se o bloco acima não tiver a análise, tente outro modelo "
+                "ou aumente `ANALYST_MAX_TOKENS`.\n"
+            )

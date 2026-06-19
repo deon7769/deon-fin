@@ -631,7 +631,14 @@ async function runAnalysis(kind) {
   const btn = $("#btn-analyze");
   btn.disabled = true;
   out.classList.add("muted");
-  out.textContent = "Analisando seus dados… (pode levar alguns segundos)";
+  out.classList.remove("err");
+  const t0 = Date.now();
+  const timer = setInterval(() => {
+    const s = Math.floor((Date.now() - t0) / 1000);
+    if (!out.textContent.startsWith("Analisando")) return;
+    out.textContent = `Analisando seus dados… (${s}s — modelos com raciocínio podem levar 1–2 min)`;
+  }, 1000);
+  out.textContent = "Analisando seus dados… (0s — modelos com raciocínio podem levar 1–2 min)";
   try {
     const resp = await fetch("/api/analyze", {
       method: "POST",
@@ -647,20 +654,25 @@ async function runAnalysis(kind) {
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let text = "";
+    let rendered = false;
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       text += decoder.decode(value, { stream: true });
-      renderMarkdown(out, text);
+      if (text.trim()) {
+        renderMarkdown(out, text);
+        rendered = true;
+      }
     }
-    if (!text.trim()) {
-      out.className = "analysis-output muted";
-      out.textContent = "Sem resposta da IA.";
+    if (!rendered) {
+      out.className = "analysis-output err";
+      out.textContent = "Sem resposta da IA. Verifique ANALYST_MODEL e a chave de API no .env.";
     }
   } catch (e) {
     out.className = "analysis-output err";
     out.textContent = `Falha: ${e.message}`;
   } finally {
+    clearInterval(timer);
     btn.disabled = false;
   }
 }

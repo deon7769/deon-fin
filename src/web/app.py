@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import secrets
 import threading
@@ -28,6 +29,7 @@ from ..storage import Database
 
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
+log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------- dependencies
@@ -126,6 +128,7 @@ def _sync_all_items(days: int) -> str:
         _sync_state["running"] = True
         _sync_state["last_started"] = datetime.now().isoformat(timespec="seconds")
     ok = err = 0
+    errors: list[str] = []
     db = Database(settings.database_path)
     pc = PluggyClient(settings.client_id, settings.client_secret)
     try:
@@ -136,10 +139,17 @@ def _sync_all_items(days: int) -> str:
                 sync_pluggy_item(pc, db, it["id"], since=since)
                 db.upsert_pluggy_item(it["id"], mark_synced=True)
                 ok += 1
-            except Exception:  # uma conta com erro não derruba as outras
+            except Exception as e:
                 err += 1
+                msg = f"{it['id'][:8]}…: {e}"
+                errors.append(msg)
+                log.exception("sync falhou para item %s", it["id"])
         Categorizer().apply_to_database(db)
         result = f"{ok} conta(s) sincronizada(s)" + (f", {err} com erro" if err else "")
+        if errors:
+            result += " — " + "; ".join(errors[:3])
+            if len(errors) > 3:
+                result += f" (+{len(errors) - 3})"
     except Exception as e:
         result = f"falha: {e}"
     finally:
@@ -496,7 +506,14 @@ def create_app() -> FastAPI:
             except AnalystError as e:
                 yield f"\n\n**Erro:** {e}"
 
-        return StreamingResponse(generate(), media_type="text/plain; charset=utf-8")
+        return StreamingResponse(
+            generate(),
+            media_type="text/plain; charset=utf-8",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     return app
 

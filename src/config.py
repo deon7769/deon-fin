@@ -102,11 +102,17 @@ def load_settings() -> Settings:
         "zai": "ZAI_API_KEY",
         "openai": "OPENAI_API_KEY",
     }
-    analyst_api_key = (
-        os.environ.get("ANALYST_API_KEY")
-        or os.environ.get(_KEY_ENV.get(provider, ""))
-        or None
-    )
+    _key_candidates = [
+        os.environ.get("ANALYST_API_KEY"),
+        os.environ.get(_KEY_ENV.get(provider, "")),
+    ]
+    if provider == "zai":
+        # Aliases comuns para Z.ai (z.api)
+        _key_candidates.extend([
+            os.environ.get("ZAI_API_KEY"),
+            os.environ.get("Z_API_KEY"),
+        ])
+    analyst_api_key = next((k.strip() for k in _key_candidates if k and k.strip()), None)
     analyst_base_url = os.environ.get("ANALYST_BASE_URL") or _BASE_URLS.get(provider)
     analyst_model = os.environ.get("ANALYST_MODEL") or _DEFAULT_MODELS.get(provider, "")
     try:
