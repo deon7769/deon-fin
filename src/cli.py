@@ -7,7 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .agent import Categorizer
+from .agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
 from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
 from .pluggy import PluggyClient
@@ -100,6 +100,54 @@ def report(days: int = 30) -> None:
         console.print(f"[bold]Saída total:[/bold] R$ {sum(by_cat.values()):,.2f}")
     finally:
         db.close()
+
+
+@app.command()
+def analyze(
+    kind: str = typer.Option(
+        "all", help="all | budget | waste | goals (relatório completo ou seção)"
+    ),
+    income: float = typer.Option(
+        None, help="Renda mensal líquida (sobrescreve MONTHLY_INCOME do .env)"
+    ),
+) -> None:
+    """Análise financeira por IA (Claude): orçamento 50/30/20, desperdícios e metas."""
+    db = _db()
+    try:
+        ctx = build_financial_context(
+            db,
+            monthly_income=income if income is not None else settings.monthly_income,
+            goals=settings.financial_goals,
+        )
+    finally:
+        db.close()
+
+    try:
+        analyst = FinancialAnalyst.from_settings(settings)
+    except AnalystError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(
+        f"[dim]Analisando {ctx.months_covered} meses com "
+        f"{analyst.provider}/{analyst.model}…[/dim]"
+    )
+    buffer: list[str] = []
+    try:
+        for chunk in analyst.stream(kind, ctx.to_dict()):
+            buffer.append(chunk)
+            console.print(chunk, end="", soft_wrap=True, markup=False)
+    except AnalystError as e:
+        console.print(f"\n[red]{e}[/red]")
+        raise typer.Exit(code=1)
+    console.print()  # newline final
+
+
+@app.command()
+def serve(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None:
+    """Sobe a UI web (FastAPI + widget Pluggy Connect) em http://HOST:PORT."""
+    import uvicorn
+    uvicorn.run("src.web.app:app", host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":

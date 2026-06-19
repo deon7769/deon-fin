@@ -14,3 +14,10 @@ imports/raw/
 *.log
 .vscode/
 .idea/
+
+# Pessoal / especifico da maquina (caminhos, URL do Tailscale, dados da familia) — NAO versionar
+*.bat
+*.vbs
+PROJETO.md
+cf.out
+cf.err

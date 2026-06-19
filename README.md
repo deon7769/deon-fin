@@ -34,6 +34,20 @@ Esse script roda em ordem:
 
 Saída esperada: `Tudo certo — projeto validado.`
 
+## Conectar um banco real (UI web)
+
+```powershell
+.venv\Scripts\python -m src.cli serve
+```
+
+Abre `http://127.0.0.1:8000`. Lá você:
+1. Clica em **Abrir Pluggy Connect** → modal abre, você escolhe o banco e loga
+2. O `itemId` é salvo localmente e a sincronização das transações roda em background
+3. A tela mostra a lista de contas conectadas e o resumo dos últimos 30 dias por categoria
+4. Botões por linha: **Sync** (re-puxa), **Atualizar credenciais** (re-abre widget pra mesma conexão), **Remover**
+
+A página usa o widget oficial do Pluggy carregado do CDN.
+
 ## Comandos da CLI
 
 ```powershell
@@ -53,6 +67,9 @@ Saída esperada: `Tudo certo — projeto validado.`
 
 # Relatório dos últimos 30 dias
 .venv\Scripts\python -m src.cli report --days 30
+
+# UI web (Pluggy Connect Widget)
+.venv\Scripts\python -m src.cli serve --host 127.0.0.1 --port 8000
 ```
 
 ## Estrutura

@@ -1,0 +1,504 @@
+from __future__ import annotations
+
+import base64
+import os
+import secrets
+import threading
+import time as _time
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from starlette.requests import Request
+
+from ..agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
+from ..agent.budget import summarize_5030, summarize_executivo, summarize_wishlist
+from ..agent.simulator import simular_amortizacao, simular_compra
+from ..agent.cards import card_monthly_breakdown
+from ..agent import maintenance as mnt
+from ..config import settings
+from ..importers import sync_pluggy_item
+from ..pluggy import PluggyAPIError, PluggyClient
+from ..storage import Database
+
+WEB_DIR = Path(__file__).resolve().parent
+TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
+
+
+# ---------------------------------------------------------------- dependencies
+def get_db() -> Database:
+    db = Database(settings.database_path)
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_pluggy() -> PluggyClient:
+    client = PluggyClient(settings.client_id, settings.client_secret)
+    try:
+        yield client
+    finally:
+        client.close()
+
+
+# ---------------------------------------------------------------- pydantic
+class ConnectTokenRequest(BaseModel):
+    client_user_id: str | None = None
+    item_id: str | None = None  # se passado, gera token de update
+
+
+class ItemCallbackRequest(BaseModel):
+    item_id: str
+    connector_id: int | None = None
+    connector_name: str | None = None
+    status: str | None = None
+    client_user_id: str | None = None
+
+
+class SyncRequest(BaseModel):
+    days: int = 90
+
+
+class AnalyzeRequest(BaseModel):
+    kind: str = "all"  # all | budget | waste | goals
+
+
+class MaintenanceRequest(BaseModel):
+    family_profile: dict[str, Any] | None = None
+    overrides: dict[str, Any] | None = None
+
+
+class SimularRequest(BaseModel):
+    preco: float
+    entrada: float = 0.0
+    prazo_meses: int = 48
+    juros_aa: float = 18.0
+    sobra_mensal: float = 0.0
+    rendimento_aa: float = 0.0
+    taxa_adm_consorcio: float = 18.0
+
+
+class AmortizacaoRequest(BaseModel):
+    saldo: float
+    juros_aa: float
+    parcela: float
+    aporte_extra: float = 0.0
+
+
+# ---------------------------------------------------------------- background
+def _background_sync(item_id: str, days: int) -> None:
+    """Roda em thread pool do FastAPI (BackgroundTasks) — não bloqueia request."""
+    db = Database(settings.database_path)
+    pc = PluggyClient(settings.client_id, settings.client_secret)
+    try:
+        since = date.today() - timedelta(days=days)
+        sync_pluggy_item(pc, db, item_id, since=since)
+        Categorizer().apply_to_database(db)
+        db.upsert_pluggy_item(item_id, mark_synced=True)
+    finally:
+        pc.close()
+        db.close()
+
+
+# ---------------------------------------------------------------- auto-sync
+# Estado compartilhado da rotina de sincronização automática do Pluggy.
+_sync_state: dict[str, Any] = {
+    "running": False,
+    "last_started": None,
+    "last_finished": None,
+    "last_result": None,   # ex.: "3 itens sincronizados" ou erro
+    "scheduler_on": False,
+}
+_sync_lock = threading.Lock()
+
+
+def _sync_all_items(days: int) -> str:
+    """Sincroniza TODOS os itens Pluggy conhecidos. Retorna um resumo."""
+    with _sync_lock:
+        if _sync_state["running"]:
+            return "já em andamento"
+        _sync_state["running"] = True
+        _sync_state["last_started"] = datetime.now().isoformat(timespec="seconds")
+    ok = err = 0
+    db = Database(settings.database_path)
+    pc = PluggyClient(settings.client_id, settings.client_secret)
+    try:
+        since = date.today() - timedelta(days=days)
+        items = list(db.list_pluggy_items())
+        for it in items:
+            try:
+                sync_pluggy_item(pc, db, it["id"], since=since)
+                db.upsert_pluggy_item(it["id"], mark_synced=True)
+                ok += 1
+            except Exception:  # uma conta com erro não derruba as outras
+                err += 1
+        Categorizer().apply_to_database(db)
+        result = f"{ok} conta(s) sincronizada(s)" + (f", {err} com erro" if err else "")
+    except Exception as e:
+        result = f"falha: {e}"
+    finally:
+        pc.close()
+        db.close()
+        with _sync_lock:
+            _sync_state["running"] = False
+            _sync_state["last_finished"] = datetime.now().isoformat(timespec="seconds")
+            _sync_state["last_result"] = result
+    return result
+
+
+def _start_auto_sync() -> None:
+    """Sync na inicialização + agendador periódico (thread daemon). Idempotente."""
+    with _sync_lock:
+        if _sync_state["scheduler_on"]:
+            return
+        _sync_state["scheduler_on"] = True
+
+    def loop() -> None:
+        if settings.auto_sync_on_start:
+            _sync_all_items(settings.auto_sync_days)
+        interval = settings.auto_sync_minutes * 60
+        while interval > 0:
+            _time.sleep(interval)
+            _sync_all_items(settings.auto_sync_days)
+
+    threading.Thread(target=loop, name="pluggy-auto-sync", daemon=True).start()
+
+
+# ---------------------------------------------------------------- factory
+def create_app() -> FastAPI:
+    app = FastAPI(title="Financas — Pluggy Connect MVP", version="0.1.0")
+
+    app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
+
+    @app.middleware("http")
+    async def _basic_auth(request: Request, call_next):
+        """Protege tudo com Basic Auth quando APP_PASSWORD está definido."""
+        pw = settings.app_password
+        if pw and request.url.path != "/api/health":
+            header = request.headers.get("authorization", "")
+            ok = False
+            if header.startswith("Basic "):
+                try:
+                    user, _, passwd = base64.b64decode(header[6:]).decode().partition(":")
+                    ok = secrets.compare_digest(user, settings.app_user) and \
+                        secrets.compare_digest(passwd, pw)
+                except Exception:
+                    ok = False
+            if not ok:
+                return JSONResponse(
+                    {"detail": "Autenticação necessária"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": 'Basic realm="Raio-X Financeiro"'},
+                )
+        return await call_next(request)
+
+    @app.on_event("startup")
+    def _on_startup() -> None:
+        # Não roda sob pytest (evita chamadas de rede ao Pluggy nos testes).
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            return
+        # Sincroniza o Pluggy ao abrir o app + agenda re-sync periódico.
+        if settings.auto_sync_on_start or settings.auto_sync_minutes > 0:
+            _start_auto_sync()
+
+    @app.get("/", response_class=HTMLResponse)
+    def index(request: Request) -> HTMLResponse:
+        return TEMPLATES.TemplateResponse(
+            request,
+            "index.html",
+            {"sandbox": settings.use_sandbox},
+        )
+
+    @app.get("/api/health")
+    def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.post("/api/connect-token")
+    def create_connect_token(
+        body: ConnectTokenRequest,
+        pc: PluggyClient = Depends(get_pluggy),
+    ) -> dict[str, str]:
+        try:
+            token = pc.create_connect_token(
+                client_user_id=body.client_user_id,
+                item_id=body.item_id,
+            )
+        except PluggyAPIError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+        return {"accessToken": token}
+
+    @app.post("/api/items")
+    def register_item(
+        body: ItemCallbackRequest,
+        bg: BackgroundTasks,
+        db: Database = Depends(get_db),
+    ) -> dict[str, Any]:
+        """Chamado pelo frontend após o widget reportar sucesso."""
+        db.upsert_pluggy_item(
+            body.item_id,
+            connector_id=body.connector_id,
+            connector_name=body.connector_name,
+            status=body.status,
+            client_user_id=body.client_user_id,
+        )
+        bg.add_task(_background_sync, body.item_id, 90)
+        return {"item_id": body.item_id, "sync_scheduled": True}
+
+    @app.get("/api/items")
+    def list_items(db: Database = Depends(get_db)) -> list[dict[str, Any]]:
+        return [dict(r) for r in db.list_pluggy_items()]
+
+    @app.get("/api/sync-status")
+    def sync_status() -> dict[str, Any]:
+        return {
+            **_sync_state,
+            "auto_sync_minutes": settings.auto_sync_minutes,
+        }
+
+    @app.post("/api/sync-all")
+    def sync_all(bg: BackgroundTasks) -> dict[str, Any]:
+        """Dispara um sync de todas as contas agora (em background)."""
+        if _sync_state["running"]:
+            return {"scheduled": False, "detail": "já em andamento"}
+        bg.add_task(_sync_all_items, settings.auto_sync_days)
+        return {"scheduled": True}
+
+    @app.post("/api/items/{item_id}/sync")
+    def sync_item(
+        item_id: str,
+        body: SyncRequest,
+        bg: BackgroundTasks,
+        db: Database = Depends(get_db),
+    ) -> dict[str, Any]:
+        if not db.get_pluggy_item(item_id):
+            raise HTTPException(status_code=404, detail="item desconhecido localmente")
+        bg.add_task(_background_sync, item_id, body.days)
+        return {"item_id": item_id, "sync_scheduled": True, "days": body.days}
+
+    @app.delete("/api/items/{item_id}")
+    def remove_item(
+        item_id: str,
+        db: Database = Depends(get_db),
+        pc: PluggyClient = Depends(get_pluggy),
+    ) -> dict[str, Any]:
+        try:
+            pc.delete_item(item_id)
+        except PluggyAPIError as e:
+            # Se já não existe no Pluggy, segue removendo localmente
+            if e.status != 404:
+                raise HTTPException(status_code=502, detail=str(e))
+        db.delete_pluggy_item(item_id)
+        return {"item_id": item_id, "deleted": True}
+
+    @app.get("/api/summary")
+    def summary(days: int = 30, db: Database = Depends(get_db)) -> dict[str, Any]:
+        since = date.today() - timedelta(days=days)
+        rows = db.list_transactions(since=since, limit=10_000)
+        by_cat: dict[str, float] = {}
+        inflow = 0.0
+        outflow = 0.0
+        for r in rows:
+            amt = r["amount"]
+            if amt >= 0:
+                inflow += amt
+            else:
+                outflow += amt
+                key = r["category"] or "(sem categoria)"
+                by_cat[key] = by_cat.get(key, 0.0) + amt
+        return {
+            "days": days,
+            "transactions": len(rows),
+            "inflow": round(inflow, 2),
+            "outflow": round(outflow, 2),
+            "net": round(inflow + outflow, 2),
+            "by_category": [
+                {"category": k, "amount": round(v, 2)}
+                for k, v in sorted(by_cat.items(), key=lambda kv: kv[1])
+            ],
+        }
+
+    @app.get("/api/dashboard")
+    def dashboard(meses: int | None = None, db: Database = Depends(get_db)) -> dict[str, Any]:
+        """Agregados prontos para os gráficos (reaproveita o context.py).
+
+        Lê o perfil familiar e os de/para (tradução + recorrências) do disco a
+        cada request, então edições na Manutenção valem sem reiniciar.
+        `meses` (3/6/12) filtra o período do realizado; ausente = tudo.
+        """
+        profile = mnt.load_family_profile()
+        overrides = mnt.load_overrides()
+        cat_map = overrides["categorias_pt"]
+
+        # Renda dinâmica: soma das receitas do perfil; senão, MONTHLY_INCOME.
+        income = mnt.income_from_profile(profile) or settings.monthly_income
+
+        ctx = build_financial_context(
+            db,
+            monthly_income=income,
+            goals=settings.financial_goals,
+            period_months=meses if meses and meses > 0 else None,
+            family_profile=profile,
+        ).to_dict()
+
+        fluxo = [{"mes": mes, **vals} for mes, vals in ctx["fluxo_mensal"].items()]
+        futuros = ctx["compromissos_futuros"]
+
+        def _tr(name: str) -> str:
+            return mnt.translate_category(name, cat_map)
+
+        gasto_cat = [
+            {**c, "categoria": _tr(c["categoria"]), "categoria_en": c["categoria"]}
+            for c in ctx["gasto_por_categoria"][:12]
+        ]
+        recorrencias = mnt.apply_recurrence_overrides(
+            ctx["recorrencias_provaveis"], overrides["recorrencias"]
+        )[:10]
+
+        sobra_mensal = (income or 0) - ctx["media_gasto_mensal"]
+        wishlist = summarize_wishlist((profile or {}).get("wishlist", []), sobra_mensal)
+
+        # KPIs executivos (Fase 1+7) + frase-resumo
+        pf = ctx.get("perfil_familiar") or {}
+        provisoes_mensal = pf.get("provisoes_total_mensal", 0.0)
+        executivo = summarize_executivo(ctx, income, provisoes_mensal)
+        patrimonio_liq = pf.get("patrimonio_consolidado", {}).get("patrimonio_liquido")
+        _MESES = ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+                  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+        _hoje = date.fromisoformat(ctx["hoje"])
+        gasto_total = executivo["fixas"] + executivo["variaveis"]
+        frase = (
+            f"Em {_MESES[_hoje.month]} de {_hoje.year}, a família gerou "
+            f"R$ {executivo['renda']:,.0f} em receitas, gastou R$ {gasto_total:,.0f} "
+            f"(R$ {executivo['fixas']:,.0f} fixas + R$ {executivo['variaveis']:,.0f} variáveis), "
+            f"com saldo operacional de R$ {executivo['saldo_operacional']:,.0f}"
+        )
+        if patrimonio_liq is not None:
+            frase += f" e patrimônio líquido estimado em R$ {patrimonio_liq:,.0f}"
+        frase = frase.replace(",", ".") + "."
+        executivo["frase"] = frase
+
+        return {
+            "kpis": {
+                "renda_media": ctx["media_renda_mensal"],
+                "renda_informada": income,
+                "gasto_medio": ctx["media_gasto_mensal"],
+                "investido_total": ctx["investido_total"],
+                "compromissos_futuros": futuros["total"],
+                "custo_financeiro": ctx["custo_financeiro"]["total"],
+                "pagamentos_cartao": ctx["pagamentos_cartao_total"],
+                "meses_cobertos": ctx["meses_cobertos"],
+            },
+            "fluxo_mensal": fluxo,
+            "gasto_por_categoria": gasto_cat,
+            "budget_5030": summarize_5030(ctx, income),
+            "recorrencias": recorrencias,
+            "compromissos_futuros": {
+                "total": futuros["total"],
+                "por_categoria": [
+                    {"categoria": _tr(k), "total": v}
+                    for k, v in futuros["por_categoria"].items()
+                ][:8],
+                "por_mes": [
+                    {"mes": k, "total": v}
+                    for k, v in futuros.get("por_mes", {}).items()
+                ],
+            },
+            "custo_financeiro": {
+                "total": ctx["custo_financeiro"]["total"],
+                "por_categoria": {
+                    _tr(k): v for k, v in ctx["custo_financeiro"]["por_categoria"].items()
+                },
+            },
+            "contas": ctx["contas"],
+            "perfil_familiar": ctx.get("perfil_familiar"),
+            "wishlist": wishlist,
+            "executivo": executivo,
+        }
+
+    @app.get("/api/cartao")
+    def cartao(db: Database = Depends(get_db)) -> dict[str, Any]:
+        """Visão de cartões mês a mês (realizado + parcelas futuras) + insights."""
+        cat_map = mnt.load_overrides()["categorias_pt"]
+        income = mnt.income_from_profile(mnt.load_family_profile()) or settings.monthly_income
+        return card_monthly_breakdown(db, cat_map=cat_map, income=income)
+
+    # ---------------------------------------------------------- manutenção
+    @app.get("/api/maintenance")
+    def get_maintenance() -> dict[str, Any]:
+        """Dados editáveis: perfil familiar + de/para (tradução e recorrências)."""
+        return {
+            "family_profile": mnt.load_family_profile() or {},
+            "overrides": mnt.load_overrides(),
+        }
+
+    @app.post("/api/maintenance")
+    def save_maintenance(body: MaintenanceRequest) -> dict[str, Any]:
+        if body.family_profile is not None:
+            mnt.save_family_profile(body.family_profile)
+        if body.overrides is not None:
+            mnt.save_overrides(body.overrides)
+        return {"saved": True}
+
+    @app.post("/api/simular")
+    def simular(body: SimularRequest) -> dict[str, Any]:
+        """Simula uma compra (carro/imóvel): financiar (Price/SAC) × juntar à vista."""
+        return simular_compra(
+            preco=body.preco,
+            entrada=body.entrada,
+            prazo_meses=body.prazo_meses,
+            juros_aa=body.juros_aa,
+            sobra_mensal=body.sobra_mensal,
+            rendimento_aa=body.rendimento_aa,
+            taxa_adm_consorcio=body.taxa_adm_consorcio,
+        )
+
+    @app.post("/api/amortizacao")
+    def amortizacao(body: AmortizacaoRequest) -> dict[str, Any]:
+        """Simula quitar um financiamento com aporte extra (juros economizados)."""
+        return simular_amortizacao(
+            saldo=body.saldo,
+            juros_aa=body.juros_aa,
+            parcela=body.parcela,
+            aporte_extra=body.aporte_extra,
+        )
+
+    @app.post("/api/analyze")
+    def analyze(
+        body: AnalyzeRequest,
+        db: Database = Depends(get_db),
+    ) -> StreamingResponse:
+        """Gera a análise financeira por IA em streaming (texto Markdown)."""
+        try:
+            analyst = FinancialAnalyst.from_settings(settings)
+        except AnalystError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # Contexto montado já aqui (db ainda aberto); streaming usa só o dict.
+        profile = mnt.load_family_profile()
+        income = mnt.income_from_profile(profile) or settings.monthly_income
+        ctx = build_financial_context(
+            db,
+            monthly_income=income,
+            goals=settings.financial_goals,
+            family_profile=profile,
+        ).to_dict()
+
+        def generate():
+            try:
+                for chunk in analyst.stream(body.kind, ctx):
+                    yield chunk
+            except AnalystError as e:
+                yield f"\n\n**Erro:** {e}"
+
+        return StreamingResponse(generate(), media_type="text/plain; charset=utf-8")
+
+    return app
+
+
+app = create_app()

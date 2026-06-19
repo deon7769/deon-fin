@@ -4,7 +4,7 @@ import hashlib
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable, Iterator
@@ -39,6 +39,18 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_tx_account_date ON transactions(account_id, posted_at);
 CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category);
 CREATE INDEX IF NOT EXISTS idx_tx_external ON transactions(external_id);
+
+CREATE TABLE IF NOT EXISTS pluggy_items (
+    id              TEXT PRIMARY KEY,         -- itemId do Pluggy
+    connector_id    INTEGER,
+    connector_name  TEXT,
+    status          TEXT,                     -- UPDATED | OUTDATED | LOGIN_ERROR | etc
+    client_user_id  TEXT,
+    last_synced_at  TEXT,
+    metadata_json   TEXT,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
@@ -91,7 +103,11 @@ class Database:
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(str(self.path))
+        # check_same_thread=False: FastAPI's sync routes run on a starlette
+        # threadpool, so a connection created elsewhere needs cross-thread use.
+        # Safe here because each Database instance is used by one request at a
+        # time (FastAPI creates a fresh one per request via get_db dependency).
+        self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA)
         self._conn.commit()
@@ -187,6 +203,61 @@ class Database:
         with self._cursor() as cur:
             cur.execute(sql, params)
             return cur.fetchall()
+
+    # ------------------------------------------------------------- pluggy items
+    def upsert_pluggy_item(
+        self,
+        item_id: str,
+        *,
+        connector_id: int | None = None,
+        connector_name: str | None = None,
+        status: str | None = None,
+        client_user_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        mark_synced: bool = False,
+    ) -> None:
+        import json
+        flag = 1 if mark_synced else 0
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO pluggy_items
+                  (id, connector_id, connector_name, status, client_user_id, metadata_json,
+                   last_synced_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?,
+                  CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END,
+                  datetime('now'))
+                ON CONFLICT(id) DO UPDATE SET
+                    connector_id   = COALESCE(excluded.connector_id, connector_id),
+                    connector_name = COALESCE(excluded.connector_name, connector_name),
+                    status         = COALESCE(excluded.status, status),
+                    client_user_id = COALESCE(excluded.client_user_id, client_user_id),
+                    metadata_json  = COALESCE(excluded.metadata_json, metadata_json),
+                    last_synced_at = CASE WHEN ? = 1 THEN datetime('now')
+                                          ELSE last_synced_at END,
+                    updated_at     = datetime('now')
+                """,
+                (
+                    item_id, connector_id, connector_name, status, client_user_id,
+                    json.dumps(metadata) if metadata else None,
+                    flag,
+                    flag,
+                ),
+            )
+
+    def list_pluggy_items(self) -> list[sqlite3.Row]:
+        with self._cursor() as cur:
+            cur.execute("SELECT * FROM pluggy_items ORDER BY created_at DESC")
+            return cur.fetchall()
+
+    def get_pluggy_item(self, item_id: str) -> sqlite3.Row | None:
+        with self._cursor() as cur:
+            cur.execute("SELECT * FROM pluggy_items WHERE id=?", (item_id,))
+            return cur.fetchone()
+
+    def delete_pluggy_item(self, item_id: str) -> None:
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM pluggy_items WHERE id=?", (item_id,))
 
     def close(self) -> None:
         self._conn.close()

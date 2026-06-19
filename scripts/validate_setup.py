@@ -38,6 +38,7 @@ from src.config import settings
 from src.importers import import_nubank_csv, import_ofx
 from src.pluggy import PluggyClient
 from src.storage import Database
+from src.web.app import create_app
 
 console = Console()
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -96,6 +97,16 @@ def main() -> int:
         return f"connect_token gerado ({tok[:25]}...)"
     results.append(step("4. Pluggy /connect_token", _connect_token))
 
+    def _web_app():
+        app = create_app()
+        routes = sorted({getattr(r, "path", "") for r in app.routes if getattr(r, "path", "")})
+        required = {"/", "/api/health", "/api/connect-token", "/api/items", "/api/summary"}
+        missing = required - set(routes)
+        if missing:
+            raise RuntimeError(f"rotas faltando: {missing}")
+        return f"{len(routes)} rotas registradas ({len(required)} essenciais OK)"
+    results.append(step("5. FastAPI app (rotas)", _web_app))
+
     def _pytest():
         cmd = [sys.executable, "-m", "pytest", "-q", "--no-header", "-x"]
         proc = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True)
@@ -103,7 +114,7 @@ def main() -> int:
             raise RuntimeError(f"pytest falhou:\n{proc.stdout}\n{proc.stderr}")
         last = proc.stdout.strip().splitlines()[-1] if proc.stdout else ""
         return last
-    results.append(step("5. Suíte pytest completa", _pytest))
+    results.append(step("6. Suíte pytest completa", _pytest))
 
     with tempfile.TemporaryDirectory() as tmp:
         db = Database(Path(tmp) / "validate.db")
@@ -111,22 +122,22 @@ def main() -> int:
         def _ofx():
             r = import_ofx(FIXTURES / "sample.ofx", db)
             return r.summary()
-        results.append(step("6a. Importar OFX de exemplo", _ofx))
+        results.append(step("7a. Importar OFX de exemplo", _ofx))
 
         def _nubank_credit():
             r = import_nubank_csv(FIXTURES / "nubank_credit.csv", db, kind="credit")
             return r.summary()
-        results.append(step("6b. Importar CSV Nubank crédito", _nubank_credit))
+        results.append(step("7b. Importar CSV Nubank crédito", _nubank_credit))
 
         def _nubank_debit():
             r = import_nubank_csv(FIXTURES / "nubank_debit.csv", db, kind="debit")
             return r.summary()
-        results.append(step("6c. Importar CSV Nubank débito", _nubank_debit))
+        results.append(step("7c. Importar CSV Nubank débito", _nubank_debit))
 
         def _categorize():
             stats = Categorizer().apply_to_database(db)
             return str(stats)
-        results.append(step("7. Categorização automática", _categorize))
+        results.append(step("8. Categorização automática", _categorize))
 
         def _report():
             since = date.today() - timedelta(days=3650)
@@ -134,7 +145,7 @@ def main() -> int:
             outflow = sum(r["amount"] for r in rows if r["amount"] < 0)
             inflow = sum(r["amount"] for r in rows if r["amount"] > 0)
             return f"{len(rows)} txs | entradas R${inflow:,.2f} | saídas R${outflow:,.2f}"
-        results.append(step("8. Relatório consolidado", _report))
+        results.append(step("9. Relatório consolidado", _report))
 
         db.close()
 

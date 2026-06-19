@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Raio-X Financeiro</title>
+  <link rel="stylesheet" href="/static/app.css" />
+  <script src="/static/chart.umd.min.js"></script>
+  <script src="/static/marked.min.js"></script>
+</head>
+<body>
+  <header class="main-header">
+    <h1>Raio-X Financeiro</h1>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="cartao">Cartões</button>
+      <button class="tab-btn" data-tab="simulador">Simulador</button>
+      <button class="tab-btn" data-tab="maintenance">Manutenção</button>
+      <button class="tab-btn" data-tab="config">Conexões &amp; Sincronização</button>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- ============================= DASHBOARD ============================= -->
+    <section id="tab-dashboard" class="tab-content active">
+      <!-- Frase-resumo executiva -->
+      <div id="frase-resumo" class="frase-resumo">—</div>
+      <!-- Filtro de período -->
+      <div class="dash-toolbar">
+        <label>Período do realizado:
+          <select id="dash-period">
+            <option value="">Tudo</option>
+            <option value="3">Últimos 3 meses</option>
+            <option value="6">Últimos 6 meses</option>
+            <option value="12">Últimos 12 meses</option>
+          </select>
+        </label>
+      </div>
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="card kpi"><h3>Renda (informada)</h3><p id="kpi-renda">—</p></div>
+        <div class="card kpi"><h3>Gasto médio/mês</h3><p id="kpi-gasto" class="bad">—</p></div>
+        <div class="card kpi"><h3>Saldo /mês</h3><p id="kpi-saldo">—</p></div>
+        <div class="card kpi"><h3>Investido (total)</h3><p id="kpi-investido" class="good">—</p></div>
+        <div class="card kpi"><h3>Compromissos futuros</h3><p id="kpi-futuro">—</p></div>
+        <div class="card kpi"><h3>Saldo operacional /mês</h3><p id="kpi-saldo-op">—</p></div>
+        <div class="card kpi"><h3>Saldo patrimonial /mês</h3><p id="kpi-saldo-pat">—</p></div>
+      </div>
+
+      <!-- Gráficos principais -->
+      <div class="grid-2">
+        <div class="card">
+          <h2>Fluxo de caixa mensal</h2>
+          <div class="chart-box"><canvas id="chartFluxo"></canvas></div>
+        </div>
+        <div class="card">
+          <h2>Gasto por categoria (Top)</h2>
+          <div class="chart-box"><canvas id="chartCategorias"></canvas></div>
+        </div>
+      </div>
+
+      <!-- 50/30/20 + futuros + custo -->
+      <div class="grid-2">
+        <div class="card">
+          <h2>Termômetro 50/30/20 <span class="muted small" id="budget-base"></span></h2>
+          <div id="budget-bars" class="budget-bars"></div>
+        </div>
+        <div class="card">
+          <h2>Compromissos futuros</h2>
+          <p class="muted small">Faturas/parcelas a vencer (fora do gasto realizado).</p>
+          <p class="big" id="futuros-total">—</p>
+          <div class="chart-box-sm"><canvas id="chartFuturosMes"></canvas></div>
+          <table class="data-table"><tbody id="futuros-rows"></tbody></table>
+        </div>
+      </div>
+
+      <!-- recorrências + custo financeiro -->
+      <div class="grid-2">
+        <div class="card">
+          <h2>Assinaturas &amp; recorrências</h2>
+          <table class="data-table">
+            <thead><tr><th>Comerciante</th><th>Meses</th><th class="num">Valor médio</th></tr></thead>
+            <tbody id="recorrencias-rows"></tbody>
+          </table>
+        </div>
+        <div class="card warning">
+          <h2>Custo financeiro</h2>
+          <p>Tarifas, juros e impostos financeiros no período:</p>
+          <p class="big bad" id="custo-total">—</p>
+          <table class="data-table"><tbody id="custo-rows"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ============================= PERFIL FAMILIAR ============================= -->
+      <div id="family-section" style="display: none; margin-top: 30px;">
+        <div class="section-title" style="margin-bottom: 20px; border-bottom: 1px solid #262a33; padding-bottom: 10px;">
+          <h2 style="font-size: 1.5rem; color: #fff;">Planejamento Familiar</h2>
+        </div>
+        <div class="grid-2">
+          <!-- Patrimônio -->
+          <div class="card family-card">
+            <h2>Patrimônio Consolidado</h2>
+            <div class="net-worth-box" style="display: flex; gap: 15px; margin: 15px 0; background: #1a1d24; padding: 15px; border-radius: 8px;">
+              <div class="nw-item" style="flex: 1; text-align: center;">
+                <span class="muted" style="font-size: 0.8rem; display: block; margin-bottom: 5px;">Ativos Totais</span>
+                <strong id="family-ativos" class="good" style="font-size: 1.2rem;">R$ 0,00</strong>
+              </div>
+              <div class="nw-item" style="flex: 1; border-left: 1px solid #262a33; border-right: 1px solid #262a33; text-align: center;">
+                <span class="muted" style="font-size: 0.8rem; display: block; margin-bottom: 5px;">Dívidas Financiamento</span>
+                <strong id="family-passivos" class="bad" style="font-size: 1.2rem;">R$ 0,00</strong>
+              </div>
+              <div class="nw-item" style="flex: 1; text-align: center;">
+                <span class="muted" style="font-size: 0.8rem; display: block; margin-bottom: 5px;">Patrimônio Líquido</span>
+                <strong id="family-patrimonio-liquido" style="font-size: 1.2rem; color: #36a2eb;">R$ 0,00</strong>
+              </div>
+            </div>
+            
+            <h3 id="imovel-nome" style="margin-top: 20px; font-size: 1.1rem; color: #fff; margin-bottom: 10px;">Imóvel</h3>
+            <table class="data-table">
+              <tbody>
+                <tr><td>Receita de Aluguel</td><td class="num good" id="imovel-receita">—</td></tr>
+                <tr><td>Financiamento (Prestação)</td><td class="num bad" id="imovel-financiamento">—</td></tr>
+                <tr><td>Condomínio</td><td class="num bad" id="imovel-condominio">—</td></tr>
+                <tr><td>IPTU + Taxa de Lixo</td><td class="num bad" id="imovel-iptu">—</td></tr>
+                <tr style="border-top: 2px solid #262a33; font-weight: bold;">
+                  <td>Resultado Líquido do Imóvel</td>
+                  <td class="num good" id="imovel-resultado">—</td>
+                </tr>
+              </tbody>
+            </table>
+            
+            <h3 style="margin-top: 25px; font-size: 1.1rem; color: #fff; margin-bottom: 10px;">Reserva de Caixa &amp; Investimentos</h3>
+            <table class="data-table">
+              <thead><tr><th>Local / Conta</th><th>Aporte Mensal</th><th class="num">Saldo Atual</th></tr></thead>
+              <tbody id="family-caixa-rows"></tbody>
+            </table>
+          </div>
+
+          <!-- Provisões & Metas -->
+          <div class="card family-card">
+            <h2>Reservas &amp; Provisões Mensais</h2>
+            <p class="muted small" style="margin-bottom: 15px;">Provisão mensal recomendada total: <strong id="provisoes-total-mensal" class="bad">—</strong></p>
+            <div id="provisoes-list" class="budget-bars"></div>
+
+            <h2 style="margin-top: 35px;">Metas de Longo Prazo</h2>
+            <p class="muted small" style="margin-bottom: 15px;">Objetivos estratégicos definidos:</p>
+            <div id="metas-list" class="budget-bars"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Wishlist / desejo de economia -->
+      <div class="card">
+        <h2>Desejos de economia (wishlist)
+          <span class="muted small" id="wishlist-resumo"></span>
+        </h2>
+        <div id="wishlist-list" class="budget-bars"></div>
+        <p class="muted small" style="margin-top:10px;">
+          Edite seus desejos na aba <strong>Manutenção</strong>.
+        </p>
+      </div>
+
+      <!-- Insight da IA -->
+      <div class="card">
+        <h2>Insight da IA</h2>
+        <div class="analysis-controls">
+          <select id="analysis-kind">
+            <option value="all">Relatório completo</option>
+            <option value="budget">Orçamento 50/30/20</option>
+            <option value="waste">Auditoria de desperdícios</option>
+            <option value="goals">Plano de metas</option>
+          </select>
+          <button id="btn-analyze" class="primary">Gerar insight</button>
+        </div>
+        <div id="analysis-output" class="analysis-output muted">
+          Gere um relatório com a IA com base nos seus dados (agregados anonimizados).
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================= MANUTENÇÃO ============================= -->
+    <section id="tab-maintenance" class="tab-content">
+      <div class="card">
+        <h2>Manutenção dos dados fixos</h2>
+        <p class="muted small">
+          Edite aqui as informações que <strong>não vêm da integração bancária</strong> —
+          definidas a partir das conversas. As mudanças valem na hora (sem reiniciar).
+        </p>
+        <div style="display:flex; gap:12px; align-items:center; margin-top:12px;">
+          <button id="btn-maint-save" class="primary">Salvar tudo</button>
+          <button id="btn-maint-reload" class="secondary">Recarregar</button>
+          <span id="maint-status" class="status"></span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h2>Receitas (renda)</h2>
+          <p class="muted small">A soma vira a “Renda informada” do dashboard.</p>
+          <div id="maint-receitas" class="edit-area"></div>
+        </div>
+        <div class="card">
+          <h2>Reserva &amp; Investimentos (caixa)</h2>
+          <div id="maint-caixa" class="edit-area"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h2>Provisões mensais</h2>
+          <p class="muted small">Ex.: revisão do carro, pneus, seguro, material escolar.</p>
+          <div id="maint-provisoes" class="edit-area"></div>
+        </div>
+        <div class="card">
+          <h2>Metas de longo prazo</h2>
+          <div id="maint-metas" class="edit-area"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h2>Tradução de categorias (de/para)</h2>
+          <p class="muted small">Categoria de origem (Pluggy, em inglês) → nome em português.</p>
+          <div id="maint-categorias" class="edit-area"></div>
+        </div>
+        <div class="card">
+          <h2>Classificação de recorrências (de/para)</h2>
+          <p class="muted small">
+            “Contém” casa parte do nome do comerciante. Tipo: <em>assinatura</em>,
+            <em>recorrencia</em> ou <em>ignorar</em> (remove da lista). Rótulo é opcional.
+          </p>
+          <div id="maint-recorrencias" class="edit-area"></div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h2>Desejos de economia (wishlist)</h2>
+          <p class="muted small">
+            Prioridade: menor número = mais importante. Prazo em meses.
+          </p>
+          <div id="maint-wishlist" class="edit-area"></div>
+        </div>
+        <div class="card">
+          <h2>Patrimônio — Imóveis</h2>
+          <p class="muted small">Custos mensais nas últimas colunas (financiamento, condomínio, IPTU/lixo).</p>
+          <div id="maint-imoveis" class="edit-area"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================= CARTÕES ============================= -->
+    <section id="tab-cartao" class="tab-content">
+      <div class="kpi-grid">
+        <div class="card kpi"><h3>Gasto realizado (cartões)</h3><p id="cartao-realizado" class="bad">—</p></div>
+        <div class="card kpi"><h3>Fatura do mês atual</h3><p id="cartao-fatura">—</p></div>
+        <div class="card kpi"><h3>Já parcelado (futuro)</h3><p id="cartao-futuro">—</p></div>
+        <div class="card kpi"><h3>% da renda no cartão</h3><p id="cartao-pct">—</p></div>
+      </div>
+
+      <div id="cartao-alertas-card" class="card warning" style="display:none;">
+        <h2>Alertas</h2>
+        <div id="cartao-alertas"></div>
+      </div>
+
+      <div class="card">
+        <h2>Mês a mês <span class="muted small">(use ‹ › ou clique no mês)</span></h2>
+        <div class="carousel-nav">
+          <button id="cartao-prev" class="secondary nav-arrow">‹</button>
+          <div id="cartao-strip" class="carousel-strip"></div>
+          <button id="cartao-next" class="secondary nav-arrow">›</button>
+        </div>
+        <div id="cartao-slide" class="carousel-slide"></div>
+      </div>
+
+      <div class="card">
+        <h2>Top comerciantes (realizado)</h2>
+        <table class="data-table">
+          <thead><tr><th>Comerciante</th><th>Compras</th><th class="num">Total</th></tr></thead>
+          <tbody id="cartao-comerciantes"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================= SIMULADOR ============================= -->
+    <section id="tab-simulador" class="tab-content">
+      <div class="card">
+        <h2>Simulador de compras — carro / imóvel</h2>
+        <p class="muted small">
+          Compara <strong>financiar</strong> (tabela Price e SAC) com
+          <strong>juntar à vista</strong> usando sua sobra mensal.
+        </p>
+        <div class="sim-presets">
+          <button class="secondary" data-preset="carro">Preset: Carro</button>
+          <button class="secondary" data-preset="imovel">Preset: Imóvel</button>
+        </div>
+        <div class="sim-form">
+          <label>Preço (R$)<input id="sim-preco" type="number" step="0.01" value="50000"></label>
+          <label>Entrada (R$)<input id="sim-entrada" type="number" step="0.01" value="10000"></label>
+          <label>Prazo (meses)<input id="sim-prazo" type="number" value="48"></label>
+          <label>Juros (% a.a.)<input id="sim-juros" type="number" step="0.01" value="24"></label>
+          <label>Sobra mensal (R$)<input id="sim-sobra" type="number" step="0.01" value="0"></label>
+          <label>Rendimento p/ juntar (% a.a.)<input id="sim-rend" type="number" step="0.01" value="10"></label>
+          <label>Taxa adm. consórcio (%)<input id="sim-taxaadm" type="number" step="0.01" value="18"></label>
+        </div>
+        <button id="btn-simular" class="primary" style="margin-top:14px;">Simular</button>
+        <div id="sim-result" class="sim-result"></div>
+      </div>
+
+      <div class="card">
+        <h2>Amortização de financiamento</h2>
+        <p class="muted small">
+          Quanto você economiza de juros pagando um aporte extra todo mês.
+          Clique em “Carregar do apê” para preencher com seu imóvel cadastrado.
+        </p>
+        <div class="sim-presets">
+          <button id="btn-amort-load" class="secondary">Carregar do apê</button>
+        </div>
+        <div class="sim-form">
+          <label>Saldo devedor (R$)<input id="amo-saldo" type="number" step="0.01" value="32200.60"></label>
+          <label>Juros (% a.a.)<input id="amo-juros" type="number" step="0.01" value="4.5"></label>
+          <label>Parcela atual (R$)<input id="amo-parcela" type="number" step="0.01" value="395"></label>
+          <label>Aporte extra/mês (R$)<input id="amo-extra" type="number" step="0.01" value="500"></label>
+        </div>
+        <button id="btn-amort" class="primary" style="margin-top:14px;">Simular amortização</button>
+        <div id="amo-result" class="sim-result"></div>
+      </div>
+    </section>
+
+    <!-- ============================= CONFIG ============================= -->
+    <section id="tab-config" class="tab-content">
+      <section class="card">
+        <h2>Sincronização automática</h2>
+        <p class="muted small">
+          As contas são atualizadas ao abrir o app e a cada intervalo configurado
+          (<code>AUTO_SYNC_MINUTES</code> no .env). Você também pode forçar agora.
+        </p>
+        <div style="display:flex; gap:12px; align-items:center; margin-top:10px;">
+          <button id="btn-sync-all" class="primary">Sincronizar tudo agora</button>
+          <span id="sync-status" class="status muted"></span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Conectar novo banco</h2>
+        <p class="muted">Ambiente: <strong>{{ "sandbox" if sandbox else "produção" }}</strong>.</p>
+        <button id="btn-connect" class="primary">Abrir Pluggy Connect</button>
+        <p id="connect-status" class="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>Contas conectadas</h2>
+        <button id="btn-refresh-items" class="secondary">Atualizar lista</button>
+        <table id="items-table" class="data-table">
+          <thead>
+            <tr><th>Item ID</th><th>Conector</th><th>Status</th><th>Última sync</th><th>Ações</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>Resumo dos últimos 30 dias</h2>
+        <button id="btn-refresh-summary" class="secondary">Atualizar resumo</button>
+        <div id="summary-totals" class="totals"></div>
+        <table id="summary-table" class="data-table">
+          <thead><tr><th>Categoria</th><th class="num">Total (R$)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </section>
+  </main>
+
+  <script src="https://cdn.pluggy.ai/pluggy-connect/v2.7.0/pluggy-connect.js" onerror="window.PluggyConnect=function(){console.warn('Pluggy Connect nao carregou')}"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
