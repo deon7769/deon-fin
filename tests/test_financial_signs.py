@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+from datetime import date
+from decimal import Decimal
+
+from src.agent.context import build_financial_context, income_value, spending_value
+from src.storage import Account, Transaction
+
+
+def test_canonical_spending_and_income_values():
+    assert spending_value(-80.0, "BANK", "Groceries") == 80.0
+    assert spending_value(1000.0, "BANK", "Salary") == 0.0
+    assert income_value(1000.0, "BANK", "Salary") == 1000.0
+    assert income_value(300.0, "CREDIT", "Shopping") == 0.0
+
+    assert spending_value(300.0, "CREDIT", "Shopping") == 300.0
+    assert spending_value(-40.0, "CREDIT", "Shopping") == -40.0
+    assert spending_value(-300.0, "CREDIT", "Credit card payment") == 0.0
+    assert spending_value(-300.0, "BANK", "Credit card payment") == 0.0
+    assert spending_value(-120.0, "BANK", "Transfers") == 0.0
+
+
+def test_context_uses_bank_debits_and_card_purchases_without_duplicate_invoice(tmp_db):
+    tmp_db.upsert_account(Account(id="bank1", source="test", name="Bank", type="BANK"))
+    tmp_db.upsert_account(Account(id="card1", source="test", name="Card", type="CREDIT"))
+    tmp_db.insert_transactions([
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 5, 1),
+            amount=Decimal("1000.00"),
+            description="Salary",
+            source="test",
+            category="Salary",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 5, 2),
+            amount=Decimal("-80.00"),
+            description="Debit groceries",
+            source="test",
+            category="Groceries",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 5, 3),
+            amount=Decimal("-300.00"),
+            description="Invoice payment from bank",
+            source="test",
+            category="Credit card payment",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=date(2026, 5, 4),
+            amount=Decimal("300.00"),
+            description="Card purchase",
+            source="test",
+            category="Shopping",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=date(2026, 5, 5),
+            amount=Decimal("-40.00"),
+            description="Card refund",
+            source="test",
+            category="Shopping",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=date(2026, 5, 6),
+            amount=Decimal("-300.00"),
+            description="Invoice settlement on card",
+            source="test",
+            category="Credit card payment",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 5, 7),
+            amount=Decimal("-120.00"),
+            description="Internal transfer",
+            source="test",
+            category="Transfers",
+        ),
+    ])
+
+    ctx = build_financial_context(tmp_db, today=date(2026, 6, 19)).to_dict()
+
+    assert ctx["fluxo_mensal"]["2026-05"]["renda"] == 1000.0
+    assert ctx["fluxo_mensal"]["2026-05"]["gasto"] == 340.0
+    assert ctx["pagamentos_cartao_total"] == 300.0
+
+    categories = {row["categoria"]: row["total"] for row in ctx["gasto_por_categoria"]}
+    assert categories == {"Shopping": 260.0, "Groceries": 80.0}

@@ -69,6 +69,34 @@ def _month_key(iso_date: str) -> str:
     return iso_date[:7]  # YYYY-MM
 
 
+def _category_name(category: str | None) -> str:
+    return category or "(sem categoria)"
+
+
+def spending_value(amount: float, account_type: str | None, category: str | None) -> float:
+    """Return positive spending impact for expenses and negative impact for refunds."""
+    category_name = _category_name(category)
+    if category_name in NON_SPENDING_CATEGORIES:
+        return 0.0
+
+    value = float(amount)
+    if (account_type or "").upper() in CREDIT_TYPES:
+        return value
+    return -value if value < 0 else 0.0
+
+
+def income_value(amount: float, account_type: str | None, category: str | None) -> float:
+    """Return income from bank accounts only, excluding internal movements."""
+    category_name = _category_name(category)
+    if category_name in NON_SPENDING_CATEGORIES:
+        return 0.0
+    if (account_type or "").upper() in CREDIT_TYPES:
+        return 0.0
+
+    value = float(amount)
+    return value if value > 0 else 0.0
+
+
 def _merchant_key(raw: str) -> str:
     """Normaliza a descrição para agrupar transações do mesmo comerciante."""
     clean = anonymize(raw).lower()
@@ -205,15 +233,13 @@ def build_financial_context(
     for r in rows:
         posted = r["posted_at"]
         amount = float(r["amount"])
-        category = r["category"] or "(sem categoria)"
-        is_credit = acct_type.get(r["account_id"], "") in CREDIT_TYPES
+        category = _category_name(r["category"])
+        account_type = acct_type.get(r["account_id"], "")
+        is_credit = account_type in CREDIT_TYPES
 
-        # Valor de consumo (positivo = gastou); 0 se não for consumo.
-        if is_credit:
-            spend_val = amount          # compra positiva, estorno negativo
-        else:
-            spend_val = -amount if amount < 0 else 0.0
-        is_spending = category not in NON_SPENDING_CATEGORIES and spend_val != 0.0
+        # Valor de consumo (positivo = gastou; negativo = estorno).
+        spend_val = spending_value(amount, account_type, category)
+        is_spending = spend_val != 0.0
 
         if posted > today_iso:  # compromisso futuro (ex.: parcelas a vencer)
             if is_spending:
@@ -229,8 +255,9 @@ def build_financial_context(
         mk = _month_key(posted)
 
         # Renda: entradas em conta (não-cartão) que não são transferência interna.
-        if not is_credit and amount > 0 and category not in NON_SPENDING_CATEGORIES:
-            realized_months[mk]["renda"] += amount
+        income_val = income_value(amount, account_type, category)
+        if income_val:
+            realized_months[mk]["renda"] += income_val
 
         if category in INVESTMENT_CATEGORIES and amount < 0:
             invested_total += -amount
