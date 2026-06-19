@@ -31,7 +31,7 @@ docker compose up -d financas-agent
 
 echo "== container health smoke =="
 for attempt in {1..30}; do
-  if docker compose exec -T financas-agent python - <<'PY'
+  if health_output="$(docker compose exec -T financas-agent python - <<'PY' 2>&1
 import json
 import urllib.request as request
 
@@ -44,10 +44,12 @@ if payload != {"status": "ok"}:
     raise SystemExit(f"unexpected body: {body}")
 print(f"health ok: {body}")
 PY
-  then
+)"; then
+    printf '%s\n' "$health_output"
     break
   fi
   if [ "$attempt" -eq 30 ]; then
+    printf '%s\n' "$health_output" >&2
     echo "health check failed after ${attempt} attempts" >&2
     exit 1
   fi
