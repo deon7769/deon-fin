@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 import secrets
@@ -10,7 +11,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Body, Depends, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -19,6 +20,7 @@ from starlette.requests import Request
 
 from ..agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
 from ..agent.budget import summarize_5030, summarize_executivo, summarize_wishlist
+from ..agent.context import income_value, spending_value
 from ..agent.simulator import simular_amortizacao, simular_compra
 from ..agent.cards import card_monthly_breakdown
 from ..agent import maintenance as mnt
@@ -30,6 +32,8 @@ from ..storage import Database
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 log = logging.getLogger(__name__)
+DEFAULT_DASHBOARD_MONTHS = 12
+DEFAULT_SYNC_DAYS = 365
 
 
 # ---------------------------------------------------------------- dependencies
@@ -64,7 +68,7 @@ class ItemCallbackRequest(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    days: int = 90
+    days: int = DEFAULT_SYNC_DAYS
 
 
 class AnalyzeRequest(BaseModel):
@@ -91,6 +95,163 @@ class AmortizacaoRequest(BaseModel):
     juros_aa: float
     parcela: float
     aporte_extra: float = 0.0
+
+
+def _months_cutoff(today: date, months: int) -> date:
+    idx = (today.year * 12 + (today.month - 1)) - (months - 1)
+    cy, cm = divmod(idx, 12)
+    return date(cy, cm + 1, 1)
+
+
+def _normalized_days(days: int | None) -> int:
+    if not days or days <= 0:
+        return DEFAULT_SYNC_DAYS
+    return min(days, 5 * 365)
+
+
+def _metadata(row: Any) -> dict[str, Any]:
+    raw = row["metadata_json"] if "metadata_json" in row.keys() else None
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+_ACCOUNT_TYPE_LABELS = {
+    "BANK": "Conta",
+    "CHECKING": "Conta",
+    "CHECKING_ACCOUNT": "Conta",
+    "SAVINGS": "Poupança",
+    "SAVINGS_ACCOUNT": "Poupança",
+    "CREDIT": "Cartão",
+    "CREDIT_CARD": "Cartão",
+}
+
+_BANK_CODE_NAMES = {
+    "001": "Banco do Brasil",
+    "033": "Santander",
+    "077": "Banco Inter",
+    "104": "Caixa",
+    "208": "BTG Pactual",
+    "237": "Bradesco",
+    "260": "Nubank",
+    "323": "Mercado Pago",
+    "341": "Itaú",
+}
+
+_GENERIC_ACCOUNT_NAMES = {
+    "conta",
+    "conta corrente",
+    "conta poupança",
+    "poupança",
+    "checking account",
+    "savings account",
+}
+
+
+def _bank_code_from_account(row: Any, meta: dict[str, Any]) -> str | None:
+    transfer = (meta.get("bankData") or {}).get("transferNumber") or row["institution"] or ""
+    digits = "".join(ch for ch in str(transfer).split("/", 1)[0] if ch.isdigit())
+    if len(digits) >= 3:
+        return digits[:3]
+    return None
+
+
+def _bank_name_from_account(row: Any, meta: dict[str, Any]) -> str | None:
+    code = _bank_code_from_account(row, meta)
+    return _BANK_CODE_NAMES.get(code or "")
+
+
+def _is_generic_account_name(value: str | None) -> bool:
+    if not value:
+        return True
+    normalized = " ".join(value.lower().strip().split())
+    return normalized in _GENERIC_ACCOUNT_NAMES
+
+
+def _is_probably_person_name(value: str | None) -> bool:
+    if not value:
+        return False
+    cleaned = str(value).strip()
+    if any(ch.isdigit() for ch in cleaned):
+        return False
+    words = cleaned.split()
+    return len(words) >= 2 and cleaned.upper() == cleaned
+
+
+def _display_brand(value: str | None) -> str | None:
+    if not value:
+        return None
+    return str(value).replace("_", " ").strip().title()
+
+
+def _account_type_label(row: Any, meta: dict[str, Any]) -> str:
+    raw = (row["type"] or meta.get("subtype") or "").upper()
+    return _ACCOUNT_TYPE_LABELS.get(raw, "Conta")
+
+
+def _account_label(row: Any, meta: dict[str, Any], item_bank_name: str | None = None) -> str:
+    type_label = _account_type_label(row, meta)
+    bank_name = _bank_name_from_account(row, meta) or item_bank_name
+    raw_name = meta.get("marketingName") or row["name"] or row["institution"]
+    label = raw_name or row["id"].replace("pluggy:", "")
+
+    if type_label in {"Conta", "Poupança"} and bank_name and _is_generic_account_name(raw_name):
+        label = f"{bank_name} - {raw_name or type_label}"
+    elif type_label == "Cartão" and bank_name and (
+        _is_probably_person_name(raw_name) or _is_generic_account_name(raw_name)
+    ):
+        brand = _display_brand((meta.get("creditData") or {}).get("brand"))
+        number = meta.get("number")
+        parts = [bank_name]
+        if brand:
+            parts.append(brand)
+        if number:
+            parts.append(f"final {number}")
+        label = " ".join(parts)
+
+    return f"{type_label}: {label}"
+
+
+def _accounts_by_pluggy_item(db: Database) -> dict[str, list[tuple[Any, dict[str, Any]]]]:
+    grouped: dict[str, list[tuple[Any, dict[str, Any]]]] = {}
+    for account in db.list_accounts():
+        if account["source"] != "pluggy":
+            continue
+        meta = _metadata(account)
+        item_id = meta.get("itemId")
+        if not item_id:
+            continue
+        grouped.setdefault(item_id, []).append((account, meta))
+    return grouped
+
+
+def _item_display_name(
+    item: dict[str, Any],
+    accounts: list[tuple[Any, dict[str, Any]]],
+) -> str:
+    bank = next(
+        (
+            account for account, meta in accounts
+            if _account_type_label(account, meta) in {"Conta", "Poupança"}
+        ),
+        None,
+    )
+    first = bank or (accounts[0][0] if accounts else None)
+    if bank:
+        bank_meta = next(meta for account, meta in accounts if account["id"] == bank["id"])
+        bank_name = _bank_name_from_account(bank, bank_meta)
+        if bank_name and _is_generic_account_name(bank["name"]):
+            return bank_name
+    return (
+        (first["name"] if first else None)
+        or (first["institution"] if first else None)
+        or item.get("connector_name")
+        or item["id"][:8]
+    )
 
 
 # ---------------------------------------------------------------- background
@@ -257,12 +418,23 @@ def create_app() -> FastAPI:
             status=body.status,
             client_user_id=body.client_user_id,
         )
-        bg.add_task(_background_sync, body.item_id, 90)
+        bg.add_task(_background_sync, body.item_id, DEFAULT_SYNC_DAYS)
         return {"item_id": body.item_id, "sync_scheduled": True}
 
     @app.get("/api/items")
     def list_items(db: Database = Depends(get_db)) -> list[dict[str, Any]]:
-        return [dict(r) for r in db.list_pluggy_items()]
+        accounts_by_item = _accounts_by_pluggy_item(db)
+        rows: list[dict[str, Any]] = []
+        for r in db.list_pluggy_items():
+            item = dict(r)
+            accounts = accounts_by_item.get(item["id"], [])
+            display_name = _item_display_name(item, accounts)
+            item["display_name"] = display_name
+            item["account_labels"] = [
+                _account_label(account, meta, display_name) for account, meta in accounts
+            ]
+            rows.append(item)
+        return rows
 
     @app.get("/api/sync-status")
     def sync_status() -> dict[str, Any]:
@@ -272,12 +444,16 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/api/sync-all")
-    def sync_all(bg: BackgroundTasks) -> dict[str, Any]:
+    def sync_all(
+        bg: BackgroundTasks,
+        body: SyncRequest | None = Body(default=None),
+    ) -> dict[str, Any]:
         """Dispara um sync de todas as contas agora (em background)."""
+        days = _normalized_days(body.days if body else None)
         if _sync_state["running"]:
-            return {"scheduled": False, "detail": "já em andamento"}
-        bg.add_task(_sync_all_items, settings.auto_sync_days)
-        return {"scheduled": True}
+            return {"scheduled": False, "detail": "já em andamento", "days": days}
+        bg.add_task(_sync_all_items, days)
+        return {"scheduled": True, "days": days}
 
     @app.post("/api/items/{item_id}/sync")
     def sync_item(
@@ -288,8 +464,9 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         if not db.get_pluggy_item(item_id):
             raise HTTPException(status_code=404, detail="item desconhecido localmente")
-        bg.add_task(_background_sync, item_id, body.days)
-        return {"item_id": item_id, "sync_scheduled": True, "days": body.days}
+        days = _normalized_days(body.days)
+        bg.add_task(_background_sync, item_id, days)
+        return {"item_id": item_id, "sync_scheduled": True, "days": days}
 
     @app.delete("/api/items/{item_id}")
     def remove_item(
@@ -307,30 +484,55 @@ def create_app() -> FastAPI:
         return {"item_id": item_id, "deleted": True}
 
     @app.get("/api/summary")
-    def summary(days: int = 30, db: Database = Depends(get_db)) -> dict[str, Any]:
-        since = date.today() - timedelta(days=days)
+    def summary(
+        days: int | None = 30,
+        months: int | None = None,
+        db: Database = Depends(get_db),
+    ) -> dict[str, Any]:
+        period_months = months if months and months > 0 else None
+        if period_months:
+            since = _months_cutoff(date.today(), period_months)
+        else:
+            since = date.today() - timedelta(days=days or 30)
         rows = db.list_transactions(since=since, limit=10_000)
-        by_cat: dict[str, float] = {}
+        account_types = {row["id"]: row["type"] for row in db.list_accounts()}
+
+        spend_by_cat: dict[str, float] = {}
         inflow = 0.0
-        outflow = 0.0
         for r in rows:
-            amt = r["amount"]
-            if amt >= 0:
-                inflow += amt
-            else:
-                outflow += amt
-                key = r["category"] or "(sem categoria)"
-                by_cat[key] = by_cat.get(key, 0.0) + amt
+            amount = float(r["amount"])
+            account_type = account_types.get(r["account_id"])
+            category = r["category"] or "(sem categoria)"
+
+            inflow += income_value(amount, account_type, category)
+
+            spent = spending_value(amount, account_type, category)
+            if spent:
+                spend_by_cat[category] = spend_by_cat.get(category, 0.0) + spent
+
+        by_category = [
+            {"category": category, "amount": -total}
+            for category, total in sorted(
+                (
+                    (category, round(total, 2))
+                    for category, total in spend_by_cat.items()
+                ),
+                key=lambda kv: kv[1],
+                reverse=True,
+            )
+            if total > 0
+        ]
+        outflow = round(sum(row["amount"] for row in by_category), 2)
+
         return {
-            "days": days,
+            "days": None if period_months else days,
+            "period_months": period_months,
+            "since": since.isoformat(),
             "transactions": len(rows),
             "inflow": round(inflow, 2),
-            "outflow": round(outflow, 2),
+            "outflow": outflow,
             "net": round(inflow + outflow, 2),
-            "by_category": [
-                {"category": k, "amount": round(v, 2)}
-                for k, v in sorted(by_cat.items(), key=lambda kv: kv[1])
-            ],
+            "by_category": by_category,
         }
 
     @app.get("/api/dashboard")
@@ -339,8 +541,9 @@ def create_app() -> FastAPI:
 
         Lê o perfil familiar e os de/para (tradução + recorrências) do disco a
         cada request, então edições na Manutenção valem sem reiniciar.
-        `meses` (3/6/12) filtra o período do realizado; ausente = tudo.
+        `meses` (3/6/12) filtra o período do realizado; ausente = 12 meses.
         """
+        period_months = meses if meses and meses > 0 else DEFAULT_DASHBOARD_MONTHS
         profile = mnt.load_family_profile()
         overrides = mnt.load_overrides()
         cat_map = overrides["categorias_pt"]
@@ -352,10 +555,12 @@ def create_app() -> FastAPI:
             db,
             monthly_income=income,
             goals=settings.financial_goals,
-            period_months=meses if meses and meses > 0 else None,
+            period_months=period_months,
             family_profile=profile,
         ).to_dict()
 
+        periodo_income = ctx["media_renda_mensal"]
+        dashboard_income = periodo_income if periodo_income > 0 else income
         fluxo = [{"mes": mes, **vals} for mes, vals in ctx["fluxo_mensal"].items()]
         futuros = ctx["compromissos_futuros"]
 
@@ -370,13 +575,13 @@ def create_app() -> FastAPI:
             ctx["recorrencias_provaveis"], overrides["recorrencias"]
         )[:10]
 
-        sobra_mensal = (income or 0) - ctx["media_gasto_mensal"]
+        sobra_mensal = (dashboard_income or 0) - ctx["media_gasto_mensal"]
         wishlist = summarize_wishlist((profile or {}).get("wishlist", []), sobra_mensal)
 
         # KPIs executivos (Fase 1+7) + frase-resumo
         pf = ctx.get("perfil_familiar") or {}
         provisoes_mensal = pf.get("provisoes_total_mensal", 0.0)
-        executivo = summarize_executivo(ctx, income, provisoes_mensal)
+        executivo = summarize_executivo(ctx, dashboard_income, provisoes_mensal)
         patrimonio_liq = pf.get("patrimonio_consolidado", {}).get("patrimonio_liquido")
         _MESES = ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho",
                   "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
@@ -398,15 +603,17 @@ def create_app() -> FastAPI:
                 "renda_media": ctx["media_renda_mensal"],
                 "renda_informada": income,
                 "gasto_medio": ctx["media_gasto_mensal"],
+                "saldo_medio": round(periodo_income - ctx["media_gasto_mensal"], 2),
                 "investido_total": ctx["investido_total"],
                 "compromissos_futuros": futuros["total"],
                 "custo_financeiro": ctx["custo_financeiro"]["total"],
                 "pagamentos_cartao": ctx["pagamentos_cartao_total"],
                 "meses_cobertos": ctx["meses_cobertos"],
+                "periodo_meses": period_months,
             },
             "fluxo_mensal": fluxo,
             "gasto_por_categoria": gasto_cat,
-            "budget_5030": summarize_5030(ctx, income),
+            "budget_5030": summarize_5030(ctx, dashboard_income),
             "recorrencias": recorrencias,
             "compromissos_futuros": {
                 "total": futuros["total"],

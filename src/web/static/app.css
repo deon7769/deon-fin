@@ -100,6 +100,22 @@ code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
 .status { margin-top: 12px; min-height: 1.2em; font-size: 14px; }
 .status.ok { color: var(--good); }
 .status.err { color: var(--bad); }
+.sync-controls {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px;
+}
+.inline-field {
+  display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px;
+}
+.inline-field select {
+  font: inherit; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--fg);
+}
+.item-name { font-weight: 700; margin-bottom: 3px; }
+.account-list {
+  display: flex; flex-direction: column; gap: 3px; margin-top: 6px; color: var(--muted);
+  font-size: 12px;
+}
+.item-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .totals { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 4px; }
 .totals .pill { background: var(--bg); border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px; }
 .totals .pill strong { display: block; font-size: 18px; }

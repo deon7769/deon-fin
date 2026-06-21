@@ -29,13 +29,10 @@ def import_nubank_csv(
             description_col="title",
             date_format="%Y-%m-%d",
         )
-        result = import_csv(
+        return import_csv(
             path, db, mapping=mapping, account_id=acc_id,
             institution="Nubank", account_type="CREDIT",
         )
-        # Despesas em cartão são positivas no CSV; convertendo p/ negativo (saída de caixa)
-        _flip_credit_card_signs(db, acc_id)
-        return result
 
     if kind == "debit":
         acc_id = account_id or "nubank:checking"
@@ -51,11 +48,3 @@ def import_nubank_csv(
         )
 
     raise ValueError(f"kind inválido: {kind!r} (use 'credit' ou 'debit')")
-
-
-def _flip_credit_card_signs(db: Database, account_id: str) -> None:
-    with db._cursor() as cur:  # type: ignore[attr-defined]
-        cur.execute(
-            "UPDATE transactions SET amount = -ABS(amount) WHERE account_id=? AND amount > 0",
-            (account_id,),
-        )

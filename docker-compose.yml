@@ -17,6 +17,7 @@ services:
       - "traefik.http.routers.financas.middlewares=tailscale-only@docker"
       - "traefik.http.routers.financas.tls=true"
       - "traefik.http.routers.financas.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.financas.tls.domains[0].main=fin.deonlab.tech"
       - "traefik.http.routers.financas.service=financas"
       - "traefik.http.services.financas.loadbalancer.server.port=8000"
 

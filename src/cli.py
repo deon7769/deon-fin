@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
+from .agent.context import spending_value
 from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
 from .pluggy import PluggyClient
@@ -88,16 +89,37 @@ def report(days: int = 30) -> None:
     try:
         since = date.today() - timedelta(days=days)
         rows = db.list_transactions(since=since, limit=10_000)
-        by_cat: dict[str, float] = {}
+        account_types = {row["id"]: row["type"] for row in db.list_accounts()}
+
+        spend_by_cat: dict[str, float] = {}
         for r in rows:
-            if r["amount"] >= 0:
-                continue
-            by_cat[r["category"] or "(sem categoria)"] = by_cat.get(r["category"] or "(sem categoria)", 0.0) + r["amount"]
+            category = r["category"] or "(sem categoria)"
+            spent = spending_value(
+                float(r["amount"]),
+                account_types.get(r["account_id"]),
+                category,
+            )
+            if spent:
+                spend_by_cat[category] = spend_by_cat.get(category, 0.0) + spent
+
+        by_cat = [
+            (category, -total)
+            for category, total in sorted(
+                (
+                    (category, round(total, 2))
+                    for category, total in spend_by_cat.items()
+                ),
+                key=lambda kv: kv[1],
+                reverse=True,
+            )
+            if total > 0
+        ]
+
         table = Table("Categoria", "Total (R$)")
-        for cat, total in sorted(by_cat.items(), key=lambda kv: kv[1]):
+        for cat, total in by_cat:
             table.add_row(cat, f"{total:,.2f}")
         console.print(table)
-        console.print(f"[bold]Saída total:[/bold] R$ {sum(by_cat.values()):,.2f}")
+        console.print(f"[bold]Saída total:[/bold] R$ {sum(total for _, total in by_cat):,.2f}")
     finally:
         db.close()
 

@@ -29,16 +29,15 @@
       <div class="dash-toolbar">
         <label>Período do realizado:
           <select id="dash-period">
-            <option value="">Tudo</option>
             <option value="3">Últimos 3 meses</option>
             <option value="6">Últimos 6 meses</option>
-            <option value="12">Últimos 12 meses</option>
+            <option value="12" selected>Últimos 12 meses</option>
           </select>
         </label>
       </div>
       <!-- KPIs -->
       <div class="kpi-grid">
-        <div class="card kpi"><h3>Renda (informada)</h3><p id="kpi-renda">—</p></div>
+        <div class="card kpi"><h3>Entradas/mês</h3><p id="kpi-renda">—</p></div>
         <div class="card kpi"><h3>Gasto médio/mês</h3><p id="kpi-gasto" class="bad">—</p></div>
         <div class="card kpi"><h3>Saldo /mês</h3><p id="kpi-saldo">—</p></div>
         <div class="card kpi"><h3>Investido (total)</h3><p id="kpi-investido" class="good">—</p></div>
@@ -335,7 +334,15 @@
           As contas são atualizadas ao abrir o app e a cada intervalo configurado
           (<code>AUTO_SYNC_MINUTES</code> no .env). Você também pode forçar agora.
         </p>
-        <div style="display:flex; gap:12px; align-items:center; margin-top:10px;">
+        <div class="sync-controls">
+          <label class="inline-field">Período para sincronizar
+            <select id="sync-period">
+              <option value="90">3 meses</option>
+              <option value="180">6 meses</option>
+              <option value="365" selected>12 meses</option>
+              <option value="730">24 meses</option>
+            </select>
+          </label>
           <button id="btn-sync-all" class="primary">Sincronizar tudo agora</button>
           <span id="sync-status" class="status muted"></span>
         </div>
@@ -353,14 +360,14 @@
         <button id="btn-refresh-items" class="secondary">Atualizar lista</button>
         <table id="items-table" class="data-table">
           <thead>
-            <tr><th>Item ID</th><th>Conector</th><th>Status</th><th>Última sync</th><th>Ações</th></tr>
+            <tr><th>Conta / Item</th><th>Conector</th><th>Status</th><th>Última sync</th><th>Ações</th></tr>
           </thead>
           <tbody></tbody>
         </table>
       </section>
 
       <section class="card">
-        <h2>Resumo dos últimos 30 dias</h2>
+        <h2 id="summary-title">Resumo dos últimos 12 meses</h2>
         <button id="btn-refresh-summary" class="secondary">Atualizar resumo</button>
         <div id="summary-totals" class="totals"></div>
         <table id="summary-table" class="data-table">
