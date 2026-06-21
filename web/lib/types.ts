@@ -111,3 +111,43 @@ export type PainelByTag = {
   total: number;
   items: PainelTagSlice[];
 };
+
+export type BudgetIncomeSource =
+  | "transactions"
+  | "profile"
+  | "settings"
+  | "family_profile"
+  | "none";
+
+export type BudgetCategory = {
+  id: number;
+  key: string;
+  name: string;
+  color: string | null;
+  planned_kind: "percent" | "amount";
+  planned_value: number;
+  planned: number;
+  spent: number;
+  remaining: number;
+  used_pct: number | null;
+  exceeded: boolean;
+  tx_count: number;
+};
+
+export type BudgetUncategorized = {
+  id: string;
+  description: string;
+  date: string;
+  amount: number;
+};
+
+export type Budget = {
+  month: string;
+  income: number;
+  spent: number;
+  remaining: number;
+  used_pct: number | null;
+  income_source: BudgetIncomeSource;
+  categories: BudgetCategory[];
+  uncategorized: BudgetUncategorized[];
+};

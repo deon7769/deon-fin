@@ -6,6 +6,7 @@ import { usePeriod } from "@/providers/PeriodProvider";
 import {
   clampPageSize,
   hasTransactionFilters,
+  idsFilterFromSearch,
   semTagFilterFromSearch,
   type TransactionFilters,
 } from "@/lib/transactions";
@@ -37,7 +38,10 @@ export function useTransactionFilters() {
       q: searchParams.get("q") ?? "",
       type: parseType(searchParams.get("type")),
       hidden: parseHidden(searchParams.get("hidden")),
-      tagIds: semTagFilterFromSearch(searchParams.get("semTag")),
+      bucketIds: idsFilterFromSearch(searchParams.get("bucket_ids")),
+      tagIds:
+        semTagFilterFromSearch(searchParams.get("semTag")) ??
+        idsFilterFromSearch(searchParams.get("tag_ids")),
       page: parsePage(searchParams.get("page")),
       pageSize: clampPageSize(Number(searchParams.get("page_size") ?? 25)),
     }),
@@ -62,7 +66,16 @@ export function useTransactionFilters() {
 
   const clearFilters = () => {
     const params = new URLSearchParams(searchParams.toString());
-    for (const key of ["q", "type", "hidden", "page", "page_size", "semTag"]) {
+    for (const key of [
+      "q",
+      "type",
+      "hidden",
+      "page",
+      "page_size",
+      "semTag",
+      "bucket_ids",
+      "tag_ids",
+    ]) {
       params.delete(key);
     }
     const query = params.toString();

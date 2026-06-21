@@ -6,6 +6,10 @@ const PCT = new Intl.NumberFormat("pt-BR", {
   style: "percent",
   maximumFractionDigits: 1,
 });
+const BUDGET_PCT = new Intl.NumberFormat("pt-BR", {
+  style: "percent",
+  maximumFractionDigits: 2,
+});
 const DATE = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
@@ -30,6 +34,10 @@ export function formatDate(input: Date | string): string {
 
 export function formatPercent(value: number, asFraction = true): string {
   return PCT.format(asFraction ? value : value / 100);
+}
+
+export function formatBudgetPercent(value: number | null | undefined): string {
+  return value === null || value === undefined ? "--" : BUDGET_PCT.format(value / 100);
 }
 
 export function formatMonthYear(ym: string): string {

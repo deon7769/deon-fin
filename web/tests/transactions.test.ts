@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   clampPageSize,
   hasTransactionFilters,
+  idsFilterFromSearch,
   semTagFilterFromSearch,
   transactionQuery,
 } from "@/lib/transactions";
@@ -66,5 +67,11 @@ describe("transaction helpers", () => {
       tag_ids: "none",
     });
     expect(hasTransactionFilters(filters)).toBe(true);
+  });
+
+  it("parses bucket and tag ids from URL search params", () => {
+    expect(idsFilterFromSearch("1,none, 2")).toEqual([1, null, 2]);
+    expect(idsFilterFromSearch("x,0")).toBeUndefined();
+    expect(idsFilterFromSearch(null)).toBeUndefined();
   });
 });

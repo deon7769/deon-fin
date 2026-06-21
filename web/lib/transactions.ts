@@ -52,6 +52,30 @@ export function semTagFilterFromSearch(value: string | null): Array<number | nul
   return value === "1" || value === "true" ? [null] : undefined;
 }
 
+export function idsFilterFromSearch(value: string | null): Array<number | null> | undefined {
+  if (!value?.trim()) {
+    return undefined;
+  }
+
+  const parsed: Array<number | null> = [];
+  for (const rawToken of value.split(",")) {
+    const token = rawToken.trim();
+    if (!token) {
+      continue;
+    }
+    if (token === "none") {
+      parsed.push(null);
+      continue;
+    }
+    const numeric = Number(token);
+    if (Number.isInteger(numeric) && numeric > 0) {
+      parsed.push(numeric);
+    }
+  }
+
+  return parsed.length ? parsed : undefined;
+}
+
 export function transactionQuery(filters: TransactionFilters): TransactionQuery {
   const query: TransactionQuery = {};
   if (filters.range?.from && filters.range?.to) {

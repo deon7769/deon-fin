@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatBRL,
+  formatBudgetPercent,
   formatDate,
   formatMonthShort,
   formatMonthYear,
@@ -22,6 +23,11 @@ describe("format helpers", () => {
   it("formats percentages from fractions or percentage points", () => {
     expect(formatPercent(0.5)).toBe("50%");
     expect(formatPercent(12.5, false)).toBe("12,5%");
+  });
+
+  it("formats budget percentages from percentage points or null", () => {
+    expect(formatBudgetPercent(64.22)).toBe("64,22%");
+    expect(formatBudgetPercent(null)).toBe("--");
   });
 
   it("formats reference months in long pt-BR form", () => {
