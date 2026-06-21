@@ -8,6 +8,18 @@ Suporta:
 - **CSV Nubank** — fatura de cartão e extrato de conta
 - **CSV genérico** — qualquer banco, basta mapear colunas
 
+## Estado atual do projeto
+
+Status em **2026-06-21**:
+
+- Backend FastAPI + SQLite + Pluggy segue como núcleo operacional.
+- Frontend novo em Next.js vive em `web/` e já cobre Painel, Orçamento, Metas, Contas, Faturas, Transações, Tags, Perfil e FAQ.
+- As specs F0.1 até F2.7 foram implementadas, testadas e publicadas na `main`.
+- A VPS está em `/opt/projetos/financas-agent`, serviço Docker Compose `financas-agent`, com a imagem de produção recriada no commit `860ab57` (`feat: add F2.6 metas screen`).
+- Em desenvolvimento local, a API roda em `http://127.0.0.1:8000` e o Next em `http://127.0.0.1:3000`.
+- Em produção, a FastAPI ainda serve o front legado na raiz; a próxima sprint F3.1 move o Next para same-origin na própria imagem, com API em `/api`.
+- O workflow `.github/workflows/ci-cd.yml` roda pytest, testes/build do frontend e build Docker. O deploy automático para a VPS já existe e executa `scripts/vps_deploy.sh` quando os secrets SSH estiverem configurados.
+
 ## Setup rápido
 
 ```powershell
@@ -101,11 +113,14 @@ scripts/
 
 ## Próximos passos planejados
 
-- Detecção automática de recorrências (assinaturas, contas fixas)
-- Projeção de fluxo de caixa 30/60/90 dias
-- Migração SQLite → Supabase Postgres
-- UI web (Next.js) com widget Pluggy Connect
-- Categorização ML (fallback quando regras não casam)
+Ordem atual das próximas sprints:
+
+1. **F3.1 Deploy same-origin:** embutir o build estático do Next na imagem Docker e servir `/` pela FastAPI, mantendo `/api`, `/legacy`, Basic Auth, Traefik e backup do SQLite.
+2. **F3.2 Manutenção:** encaixar a tela de manutenção no novo layout, consumindo `/api/maintenance` e organizando os ajustes operacionais hoje legados.
+3. **F3.3 Simulador:** encaixar o simulador no novo layout, cobrindo `/api/simular` e `/api/amortizacao`.
+4. **Pluggy Connect no Next:** migrar o fluxo de conexão bancária do front legado para o frontend novo.
+5. **Consolidação técnica:** sunset gradual do legado, unificação de cálculos financeiros, WAL/busy timeout no SQLite e migração futura para Supabase/Postgres se necessário.
+6. **Inteligência financeira:** recorrências automáticas, projeção de fluxo 30/60/90 dias e categorização ML como fallback das regras.
 
 ## Segurança
 

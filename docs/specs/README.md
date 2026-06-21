@@ -2,7 +2,8 @@
 
 Backlog de especificações para evoluir o `deon-fin` (backend Python/FastAPI + SQLite + Pluggy) para a
 interface do print: dashboard dark com Painel, Orçamento, Metas, Contas, Faturas, Transações, Tags e Perfil,
-com um frontend **Next.js** consumindo a API.
+com um frontend **Next.js** consumindo a API. Após a paridade das telas principais, Manutenção e Simulador
+entram como extensões do mesmo layout.
 
 **Cada arquivo `Fx.y` é uma tarefa** — detalhada o suficiente para um agente/dev implementar de ponta a ponta
 (backend + frontend + testes). Comece sempre pelo **`00-contexto-e-arquitetura.md`** (o primer): ele fixa o
@@ -32,6 +33,28 @@ specs assumem.
 | F2.6 | `F2.6-metas.md` | **Metas** (previsto por pote + poupança) | F0.*, F1.1 |
 | F2.7 | `F2.7-perfil.md` | **Perfil** (nome, e-mail, renda, início do mês) | 00, F0.1, F0.2 |
 | F3.1 | `F3.1-deploy-vps-same-origin.md` | — (deploy: Next estático same-origin com `/api` na VPS) | 00, F0.1, F0.2 |
+| F3.2 | `F3.2-manutencao.md` | **Manutenção** (saúde, ajustes e rotinas operacionais) | F3.1 |
+| F3.3 | `F3.3-simulador.md` | **Simulador** (cenários e amortização) | F3.1 |
+
+## Status em 2026-06-21
+
+| Spec | Estado | Observação |
+|---|---|---|
+| F0.1 | ✅ entregue | API, migrations e convenções financeiras versionadas. |
+| F0.2 | ✅ entregue | App Next, design system, toolchain e shell implementados. |
+| F0.3 | ✅ entregue | Período global, ocultar valores e tema disponíveis no frontend. |
+| F1.1 | ✅ entregue | 6 potes, regras e aplicação no pipeline de sync. |
+| F1.2 | ✅ entregue | Tags no backend e frontend. |
+| F2.1 | ✅ entregue | Painel novo com KPIs e gráficos. |
+| F2.2 | ✅ entregue | Transações com filtros e edição. |
+| F2.3 | ✅ entregue | Orçamento por mês e potes. |
+| F2.4 | ✅ entregue | Faturas derivadas das transações de cartão. |
+| F2.5 | ✅ entregue | Contas, cartões, saldos e ações de sync/remover. |
+| F2.6 | ✅ entregue | Metas por pote e metas de poupança (`savings_goals`). |
+| F2.7 | ✅ entregue | Perfil familiar/renda exposto na nova UI. |
+| F3.1 | ⏭ próxima | Deploy same-origin do Next pela FastAPI/Docker. |
+| F3.2 | 📝 planejada | Manutenção ainda está só no endpoint legado `/api/maintenance`. |
+| F3.3 | 📝 planejada | Simulador ainda está nos endpoints legados `/api/simular` e `/api/amortizacao`. |
 
 ## Ordem de execução recomendada
 
@@ -41,7 +64,11 @@ specs assumem.
 4. **Núcleo:** F2.2 (Transações) valida edição inline e filtros.
 5. **Derivadas:** F2.1 (Painel), F2.3 (Orçamento), F2.6 (Metas).
 6. **Conexões:** F2.5 (Contas — preenche saldo) → F2.4 (Faturas — usa cartão).
-7. **Deploy:** F3.1 (Next estático servido pela FastAPI, same-origin, na VPS) — quando o front existir.
+7. **Deploy:** F3.1 (Next estático servido pela FastAPI, same-origin, na VPS).
+8. **Extensões do layout:** F3.2 (Manutenção) → F3.3 (Simulador).
+
+> Estado atual: F0.1 até F2.7 estão entregues e implantadas na `main`. A sequência agora é F3.1,
+> depois Manutenção e Simulador no novo layout.
 
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.
@@ -86,6 +113,7 @@ Estas são as divergências entre o "ideal de UI" e o código atual, e como cada
 - ✅ **Remover conexão (F2.5) mantém as transações** já importadas — a conta vira "desconectada", o histórico permanece. Sem opção destrutiva nesta versão.
 - ✅ **Deploy same-origin** — o build do Next é servido pela própria FastAPI sob o mesmo domínio/`/api`. Detalhado em `F3.1-deploy-vps-same-origin.md` (Next estático embutido na imagem, Traefik/Tailscale/TLS inalterados).
 - ✅ **CI do frontend já habilitado** — o workflow da `main` roda `npm ci`, testes, typecheck, lint e build em `web/`, além do pytest/Docker do backend.
+- ✅ **Manutenção e Simulador ficam no novo layout** — entrarão após F3.1 para reaproveitar o deploy same-origin e encerrar dependências visuais do legado.
 
 ## Perguntas em aberto (não bloqueiam; revisitar na implementação)
 

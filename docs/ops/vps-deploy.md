@@ -12,6 +12,16 @@ The running app is the Docker Compose service `financas-agent`, routed by Traefi
 https://fin.deonlab.tech
 ```
 
+## Current status
+
+Status em **2026-06-21**:
+
+- A `main` está alinhada com a VPS no commit `860ab57` (`feat: add F2.6 metas screen`).
+- O container de produção já foi recriado após esse commit, com backup do SQLite e pytest remoto passando.
+- O workflow ativo é `.github/workflows/ci-cd.yml`: pytest, testes/typecheck/lint/build do frontend e build Docker.
+- O job de deploy automático existe, mas só conecta na VPS quando os secrets SSH (`VPS_SSH_*`) estiverem configurados no GitHub.
+- O script atual faz smoke de `/api/health`; a sprint F3.1 deve adicionar smoke do frontend em `/` quando o Next passar a ser servido same-origin.
+
 ## Safe deploy
 
 Run from the VPS checkout:
@@ -34,7 +44,8 @@ If any step fails, the script stops before continuing.
 
 ## Automatic deploy from GitHub
 
-GitHub Actions runs CI for pull requests and every push para `main`. When CI passes on
+GitHub Actions runs CI for pull requests and every push para `main`. The workflow lives at
+`.github/workflows/ci-cd.yml`. When CI passes on
 `main`, the `deploy` job connects to the VPS over SSH, updates the checkout, and runs
 the same safe deploy script:
 
@@ -82,6 +93,27 @@ resp = request.urlopen("http://127.0.0.1:8000/api/health", timeout=5)
 print(resp.status, resp.read().decode())
 PY
 docker compose logs --tail=120 financas-agent
+```
+
+After F3.1, include a frontend smoke in the same manual check set:
+
+```bash
+docker compose exec -T financas-agent python - <<'PY'
+import os
+import urllib.request as request
+
+url = "http://127.0.0.1:8000/"
+username = os.environ.get("APP_USER", "admin")
+password = os.environ.get("APP_PASSWORD", "")
+req = request.Request(url)
+if password:
+    import base64
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    req.add_header("Authorization", f"Basic {token}")
+resp = request.urlopen(req, timeout=5)
+html = resp.read().decode("utf-8", errors="replace")
+print(resp.status, "deon-fin" in html or "/_next/" in html)
+PY
 ```
 
 ## VPS infra checks
