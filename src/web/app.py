@@ -29,31 +29,16 @@ from ..config import settings
 from ..importers import sync_pluggy_item
 from ..pluggy import PluggyAPIError, PluggyClient
 from ..storage import Database
+from .dependencies import get_db, get_pluggy
 from .errors import error_response, install_error_handlers
 from .repositories import profile_repo, transactions_repo
+from .routers import buckets, profile, tags, transactions
 
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 log = logging.getLogger(__name__)
 DEFAULT_DASHBOARD_MONTHS = 12
 DEFAULT_SYNC_DAYS = 365
-
-
-# ---------------------------------------------------------------- dependencies
-def get_db() -> Database:
-    db = Database(settings.database_path)
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def get_pluggy() -> PluggyClient:
-    client = PluggyClient(settings.client_id, settings.client_secret)
-    try:
-        yield client
-    finally:
-        client.close()
 
 
 # ---------------------------------------------------------------- pydantic
@@ -365,6 +350,10 @@ def create_app() -> FastAPI:
     )
 
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
+    app.include_router(buckets.router)
+    app.include_router(tags.router)
+    app.include_router(profile.router)
+    app.include_router(transactions.router)
 
     @app.middleware("http")
     async def _basic_auth(request: Request, call_next):

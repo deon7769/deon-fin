@@ -68,6 +68,24 @@ def test_error_envelope_422(client):
     assert "message" in r.json()["error"]
 
 
+def test_domain_router_stubs_return_empty_defaults(client):
+    buckets = client.get("/api/buckets")
+    tags = client.get("/api/tags")
+    profile = client.get("/api/profile")
+
+    assert buckets.status_code == 200
+    assert buckets.json() == {"items": []}
+
+    assert tags.status_code == 200
+    assert tags.json() == {"items": []}
+
+    assert profile.status_code == 200
+    assert profile.json()["id"] == 1
+    assert profile.json()["financial_month_start_day"] == 1
+    assert profile.json()["name"] is None
+    assert profile.json()["email"] is None
+
+
 def test_index_renders(client):
     r = client.get("/")
     assert r.status_code == 200
