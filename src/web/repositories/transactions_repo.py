@@ -6,7 +6,7 @@ from typing import Any
 from ...agent.buckets import match_key_for
 from ...storage import Database
 from ...storage.reference_month import reference_month
-from . import buckets_repo
+from . import buckets_repo, tags_repo
 
 
 class TransactionNotFoundError(ValueError):
@@ -14,6 +14,10 @@ class TransactionNotFoundError(ValueError):
 
 
 class BucketNotFoundError(ValueError):
+    pass
+
+
+class TagNotFoundError(ValueError):
     pass
 
 
@@ -145,3 +149,20 @@ def set_bucket(
         "similar_affected": len(similar_ids),
         "similar_ids": similar_ids,
     }
+
+
+def set_tag(db: Database, transaction_id: str, *, tag_id: int | None) -> dict[str, Any]:
+    if tag_id is not None and not tags_repo.tag_exists(db, tag_id):
+        raise TagNotFoundError(f"tag_id inválido: {tag_id}")
+
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute("SELECT id FROM transactions WHERE id=?", (transaction_id,))
+        if cur.fetchone() is None:
+            raise TransactionNotFoundError(transaction_id)
+
+        cur.execute(
+            "UPDATE transactions SET tag_id=? WHERE id=?",
+            (tag_id, transaction_id),
+        )
+
+    return {"updated": 1, "tag_id": tag_id}

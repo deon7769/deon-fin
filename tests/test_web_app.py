@@ -84,7 +84,15 @@ def test_domain_router_stubs_return_empty_defaults(client):
     ]
 
     assert tags.status_code == 200
-    assert tags.json() == {"items": []}
+    assert [item["name"] for item in tags.json()["items"]] == [
+        "Alimentação",
+        "Conforto",
+        "Educação",
+        "Lazer",
+        "Saúde",
+        "Transporte",
+        "Vestuário",
+    ]
 
     assert profile.status_code == 200
     assert profile.json()["id"] == 1

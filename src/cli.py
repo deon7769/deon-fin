@@ -14,7 +14,7 @@ from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
 from .pluggy import PluggyClient
 from .storage import Database
-from .web.repositories import buckets_repo, profile_repo, transactions_repo
+from .web.repositories import buckets_repo, profile_repo, tags_repo, transactions_repo
 
 
 def _fill_missing_reference_months(db: Database) -> int:
@@ -99,6 +99,17 @@ def seed_buckets() -> None:
     try:
         inserted = buckets_repo.seed_buckets(db)
         console.print(f"[green]{inserted} pote(s) inserido(s).[/green]")
+    finally:
+        db.close()
+
+
+@app.command("seed-tags")
+def seed_tags() -> None:
+    """Insere as 7 tags iniciais se ainda não existirem."""
+    db = _db()
+    try:
+        inserted = tags_repo.seed_tags(db)
+        console.print(f"[green]{inserted} tag(s) inserida(s).[/green]")
     finally:
         db.close()
 
