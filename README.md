@@ -110,4 +110,4 @@ scripts/
 ## Segurança
 
 - `.env` está no `.gitignore`. Nunca commite credenciais.
-- O Client Secret atual foi compartilhado em chat — **rotacione no painel do Pluggy** após validar.
+
