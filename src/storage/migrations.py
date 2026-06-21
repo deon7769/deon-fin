@@ -272,6 +272,31 @@ def m0012_account_connection_metadata(conn: sqlite3.Connection) -> None:
         )
 
 
+def m0013_savings_goals(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS savings_goals (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            name          TEXT NOT NULL,
+            target_amount REAL NOT NULL,
+            term_months   INTEGER NOT NULL DEFAULT 12,
+            saved_amount  REAL NOT NULL DEFAULT 0,
+            priority      INTEGER NOT NULL DEFAULT 99,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS savings_goals_import_state (
+            id          INTEGER PRIMARY KEY CHECK (id = 1),
+            imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -285,6 +310,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (10, "backfill_reference_month", m0010_backfill_reference_month),
     (11, "tx_filter_indexes", m0011_tx_filter_indexes),
     (12, "account_connection_metadata", m0012_account_connection_metadata),
+    (13, "savings_goals", m0013_savings_goals),
 ]
 
 

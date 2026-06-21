@@ -1,4 +1,4 @@
-from . import accounts, buckets, budget, invoices, painel, profile, tags, transactions
+from . import accounts, buckets, budget, invoices, painel, profile, savings, tags, transactions
 
 __all__ = [
     "accounts",
@@ -7,6 +7,7 @@ __all__ = [
     "invoices",
     "painel",
     "profile",
+    "savings",
     "tags",
     "transactions",
 ]

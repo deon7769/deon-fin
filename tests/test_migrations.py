@@ -45,13 +45,14 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
         "bucket_rules",
         "profile",
         "account_balances",
+        "savings_goals",
     }.issubset(_tables(conn))
 
     ids = [
         row[0]
         for row in conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
     ]
-    assert ids == list(range(1, 13))
+    assert ids == list(range(1, 14))
     assert "idx_tx_reference_month" in _indexes(conn, "transactions")
     assert "idx_tx_tag_id" in _indexes(conn, "transactions")
     assert "idx_tx_bucket_id" in _indexes(conn, "transactions")
@@ -70,6 +71,23 @@ def test_new_database_has_account_connection_columns(tmp_path: Path):
 
     assert {"sort_order", "pluggy_item_id"}.issubset(_columns(conn, "accounts"))
     assert {"brand", "last4"}.issubset(_columns(conn, "account_balances"))
+    db.close()
+
+
+def test_new_database_has_savings_goals_table(tmp_path: Path):
+    db = Database(tmp_path / "new.db")
+    conn = db._conn
+
+    assert {
+        "id",
+        "name",
+        "target_amount",
+        "term_months",
+        "saved_amount",
+        "priority",
+        "created_at",
+        "updated_at",
+    }.issubset(_columns(conn, "savings_goals"))
     db.close()
 
 
@@ -210,7 +228,7 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
     tmp_db._conn.execute("DELETE FROM schema_migrations")
     tmp_db._conn.commit()
 
-    assert apply_migrations(tmp_db._conn) == 12
+    assert apply_migrations(tmp_db._conn) == 13
     assert apply_migrations(tmp_db._conn) == 0
 
     ids = [
@@ -219,4 +237,4 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
             "SELECT id FROM schema_migrations ORDER BY id"
         ).fetchall()
     ]
-    assert ids == list(range(1, 13))
+    assert ids == list(range(1, 14))

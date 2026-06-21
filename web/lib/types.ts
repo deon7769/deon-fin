@@ -152,6 +152,54 @@ export type Budget = {
   uncategorized: BudgetUncategorized[];
 };
 
+export type BucketPlanWarning = {
+  code: string;
+  message: string;
+};
+
+export type BucketPlanItem = {
+  id: number;
+  key: string;
+  name: string;
+  color: string | null;
+  planned_kind: "percent" | "amount";
+  planned_value: number;
+  planned_amount: number;
+  spent_month: number;
+};
+
+export type BucketPlanResponse = {
+  month: string;
+  income: number;
+  income_source: BudgetIncomeSource;
+  buckets: BucketPlanItem[];
+  sum_percent: number;
+  sum_amount: number;
+  warning: BucketPlanWarning | null;
+};
+
+export type SavingsGoal = {
+  id: number;
+  name: string;
+  target_amount: number;
+  term_months: number;
+  saved_amount: number;
+  priority: number;
+  monthly_required: number;
+  progress_pct: number;
+  fits_surplus: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type SavingsGoalsResponse = {
+  month: string;
+  goals: SavingsGoal[];
+  total_monthly_required: number;
+  monthly_surplus: number;
+  surplus_after_goals: number;
+};
+
 export type CardItem = {
   id: string;
   name: string;

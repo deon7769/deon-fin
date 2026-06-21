@@ -5,6 +5,7 @@ from . import (
     invoices_repo,
     painel_repo,
     profile_repo,
+    savings_repo,
     tags_repo,
     transactions_repo,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "invoices_repo",
     "painel_repo",
     "profile_repo",
+    "savings_repo",
     "tags_repo",
     "transactions_repo",
 ]
