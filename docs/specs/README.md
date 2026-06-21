@@ -85,9 +85,9 @@ Estas são as divergências entre o "ideal de UI" e o código atual, e como cada
 - ✅ **F2.6 inclui metas de poupança** — além da distribuição por pote. Specado por inteiro (`savings_goals` + `summarize_wishlist`).
 - ✅ **Remover conexão (F2.5) mantém as transações** já importadas — a conta vira "desconectada", o histórico permanece. Sem opção destrutiva nesta versão.
 - ✅ **Deploy same-origin** — o build do Next é servido pela própria FastAPI sob o mesmo domínio/`/api`. Detalhado em `F3.1-deploy-vps-same-origin.md` (Next estático embutido na imagem, Traefik/Tailscale/TLS inalterados).
+- ✅ **CI do frontend já habilitado** — o workflow da `main` roda `npm ci`, testes, typecheck, lint e build em `web/`, além do pytest/Docker do backend.
 
 ## Perguntas em aberto (não bloqueiam; revisitar na implementação)
 
 - **Front legado:** manter em `/legacy` indefinidamente ou agendar descontinuação após paridade da nova UI? (spec à parte)
 - **Junção renda Perfil × perfil familiar:** hoje `profile.monthly_income` e `family_profile` coexistem (precedência em F2.3); unificar é follow-up.
-- **CI:** adicionar o workflow opcional de `F3.1 §3.6` (pytest + build do Next) agora ou depois?
