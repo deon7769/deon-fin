@@ -64,6 +64,26 @@ def test_get_or_create_profile_is_idempotent(tmp_db, monkeypatch):
     assert tmp_db._conn.execute("SELECT COUNT(*) FROM profile").fetchone()[0] == 1
 
 
+def test_get_or_create_profile_normalizes_legacy_null_singleton(tmp_db, monkeypatch):
+    monkeypatch.setattr(
+        profile_repo,
+        "settings",
+        SimpleNamespace(monthly_income=7777.0, financial_goals=["Nao deve sobrescrever"]),
+    )
+    monkeypatch.setattr(profile_repo.mnt, "load_family_profile", lambda: None)
+    tmp_db._conn.execute("INSERT OR IGNORE INTO profile (id) VALUES (1)")
+    tmp_db._conn.commit()
+
+    profile = profile_repo.get_or_create_profile(tmp_db)
+
+    assert profile["name"] == ""
+    assert profile["email"] == ""
+    assert profile["monthly_income"] == 0.0
+    assert profile["financial_month_start_day"] == 1
+    assert profile["goals_text"] == ""
+    assert profile["initials"] == "?"
+
+
 def test_update_profile_upserts_singleton_and_updates_initials(tmp_db):
     profile = profile_repo.update_profile(
         tmp_db,
