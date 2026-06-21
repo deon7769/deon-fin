@@ -8,13 +8,13 @@
 ## Veredito
 
 🟢 **Saudável e avançando bem.** A nova UI saiu da fase de preview e já cobre o núcleo do produto:
-Painel, Orçamento, Metas, Simulador, Contas, Faturas, Transações, Tags, Perfil, Manutenção e FAQ. O backend continua com a
+Painel, Orçamento, Metas, Simulador, Contas, Faturas, Transações, Tags, Perfil, Manutenção com editor e FAQ. O backend continua com a
 arquitetura esperada pelos specs: FastAPI com routers finos, repositórios por domínio, SQLite com migrations
 idempotentes e módulos de domínio em `src/agent`. O CI/CD está versionado, o deploy seguro da VPS foi
 executado e a F3.1 adicionou o build estático do Next dentro da imagem Docker.
 
-O próximo bloco de produto é **tirar edição e conexão do legado**. O principal cuidado técnico restante é manter o
-legado pequeno e isolado enquanto o editor completo de Manutenção, Pluggy Connect e rotas antigas migram para o Next.
+O próximo bloco de produto é **tirar conexão bancária do legado**. O principal cuidado técnico restante é manter o
+legado pequeno e isolado enquanto Pluggy Connect e rotas antigas migram para o Next.
 
 ---
 
@@ -28,6 +28,7 @@ legado pequeno e isolado enquanto o editor completo de Manutenção, Pluggy Conn
   O deploy automático existe e fica condicionado aos secrets SSH da VPS.
 - **F3.2 em código:** `/manutencao` no Next consome `/api/maintenance` em modo leitura/saúde operacional.
 - **F3.3 em código:** `/simulador` no Next consome `/api/simular` e `/api/amortizacao`.
+- **F3.4 em código:** `/manutencao` também edita e salva dados fixos pelo mesmo `/api/maintenance`.
 
 ### Specs → implementação
 
@@ -95,8 +96,9 @@ ingestão   ->  src/importers/* + Pluggy   OFX, CSV, Nubank e sync Open Finance
 | R4 | Dois fronts durante a transição | Média | O rollback existe (`LEGACY_UI=1` ou `/legacy`), mas ainda há duas experiências enquanto Pluggy Connect não migra. |
 | R5 | Export estático do Next 16 | Baixa | `output: 'export'`, rotas profundas, assets `/_next/*` e build Docker foram validados localmente. |
 | R6 | `@app.on_event("startup")` legado | Baixa | Migrar para lifespan depois que F3.1 estabilizar. |
-| R7 | Edição de Manutenção ainda no legado | Baixa-Média | A F3.2 trouxe leitura/saúde no Next; salvar dados fixos ainda depende de `/legacy`. |
-| R8 | Pluggy Connect ainda no legado | Baixa-Média | O fluxo de conexão bancária ainda depende do widget carregado pela página `/legacy`. |
+| R7 | Pluggy Connect ainda no legado | Baixa-Média | O fluxo de conexão bancária ainda depende do widget carregado pela página `/legacy`. |
+| R9 | Banco/cartão sem nome no novo layout | Baixa | Indica fallback incompleto de metadados Pluggy; investigar antes de fechar a migração de Conexões. |
+| R10 | Traduções de categorias incompletas | Baixa-Média | Parte do de/para útil do legado ainda precisa aparecer no editor novo e evoluir para sugestão automática. |
 
 ---
 
@@ -104,8 +106,10 @@ ingestão   ->  src/importers/* + Pluggy   OFX, CSV, Nubank e sync Open Finance
 
 **P1 — próxima sprint**
 
-- Migrar as ações de edição/salvamento de Manutenção para o Next.
 - Migrar Pluggy Connect do front legado para o Next para reduzir dependência da página antiga.
+- Preservar e complementar os resumos por categoria, pois seguem sendo uma leitura agregada valiosa dos gastos.
+- Investigar nomes ausentes em banco/cartão e criar fallback testado de display name.
+- Evoluir traduções/categorias em Manutenção com fluxo de edição em massa e, depois, sugestão automática.
 
 **P2 — consolidação**
 

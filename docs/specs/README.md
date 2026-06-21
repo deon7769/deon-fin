@@ -53,8 +53,9 @@ specs assumem.
 | F2.6 | ✅ entregue | Metas por pote e metas de poupança (`savings_goals`). |
 | F2.7 | ✅ entregue | Perfil familiar/renda exposto na nova UI. |
 | F3.1 | ✅ entregue | Next exportado na imagem Docker, servido pela FastAPI com `/legacy` e smoke de `/`. |
-| F3.2 | ✅ entregue | Tela Next de saúde/visão operacional sobre `/api/maintenance`; edição segue no legado. |
+| F3.2 | ✅ entregue | Tela Next de saúde/visão operacional sobre `/api/maintenance`. |
 | F3.3 | ✅ entregue | Simulador no Next com cenários e amortização sobre `/api/simular` e `/api/amortizacao`. |
+| F3.4 | ✅ entregue | Editor de Manutenção no Next com tabelas editáveis e save em `/api/maintenance`. |
 
 ## Ordem de execução recomendada
 
@@ -67,8 +68,23 @@ specs assumem.
 7. **Deploy:** F3.1 (Next estático servido pela FastAPI, same-origin, na VPS).
 8. **Extensões do layout:** F3.2 (Manutenção) → F3.3 (Simulador).
 
-> Estado atual: F0.1 até F3.3 estão entregues na `main`. A sequência agora é migração das ações de edição
-> ainda presas ao legado e Pluggy Connect no Next.
+> Estado atual: F0.1 até F3.4 estão entregues na `main`. A sequência agora é Pluggy Connect no Next,
+> melhorias de categorização/manutenção e fixes de display name nas conexões.
+
+## Notas de fixes observados em produção/preview
+
+Registradas em 2026-06-21 para encaixar nas próximas sprints:
+
+1. **Traduções em Manutenção:** parte do de/para de categorias ainda ficou abaixo do que já existia no legado.
+   O editor novo deve preservar os mapas existentes, facilitar edição em massa e deixar claro quais categorias
+   estão sem tradução.
+2. **Automação de tipos de gasto:** a manutenção manual deve caminhar para sugestão automática de categoria/tag/meta
+   a partir de descrição, recorrência e histórico, mantendo revisão humana para exceções.
+3. **Banco/cartão sem nome:** há pelo menos uma conta bancária e um cartão aparecendo sem nome. Investigar a cadeia
+   `Pluggy payload -> accounts.metadata_json -> accounts.name/institution -> /api/accounts -> UI` e adicionar
+   fallback testado.
+4. **Resumos por categoria:** os agregados por categoria continuam úteis para leitura rápida dos gastos e devem ser
+   preservados nas telas de Painel, Orçamento, Faturas e futuras telas de manutenção/categorização.
 
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.

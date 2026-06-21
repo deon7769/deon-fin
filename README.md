@@ -13,7 +13,7 @@ Suporta:
 Status em **2026-06-21**:
 
 - Backend FastAPI + SQLite + Pluggy segue como núcleo operacional.
-- Frontend novo em Next.js vive em `web/` e já cobre Painel, Orçamento, Metas, Simulador, Contas, Faturas, Transações, Tags, Perfil, Manutenção e FAQ.
+- Frontend novo em Next.js vive em `web/` e já cobre Painel, Orçamento, Metas, Simulador, Contas, Faturas, Transações, Tags, Perfil, Manutenção com editor e FAQ.
 - As specs F0.1 até F3.3 foram implementadas, testadas e publicadas na `main`.
 - A VPS está em `/opt/projetos/financas-agent`, serviço Docker Compose `financas-agent`, atualizada pelo fluxo seguro de backup, pytest, build Docker e smoke.
 - Em desenvolvimento local, a API roda em `http://127.0.0.1:8000` e o Next em `http://127.0.0.1:3000`.
@@ -115,10 +115,18 @@ scripts/
 
 Ordem atual das próximas sprints:
 
-1. **Editor de Manutenção no Next:** migrar as ações de edição/salvamento que ainda ficam no legado.
-2. **Pluggy Connect no Next:** migrar o fluxo de conexão bancária do front legado para o frontend novo.
-3. **Consolidação técnica:** sunset gradual do legado, unificação de cálculos financeiros, WAL/busy timeout no SQLite e migração futura para Supabase/Postgres se necessário.
-4. **Inteligência financeira:** recorrências automáticas, projeção de fluxo 30/60/90 dias e categorização ML como fallback das regras.
+1. **Pluggy Connect no Next:** migrar o fluxo de conexão bancária do front legado para o frontend novo.
+2. **Melhorias de categorização/manutenção:** completar traduções, sugerir tipos de gasto automaticamente e reduzir edição manual repetitiva.
+3. **Fixes de conexões:** investigar fallback de nome para banco/cartão sem nome.
+4. **Consolidação técnica:** sunset gradual do legado, unificação de cálculos financeiros, WAL/busy timeout no SQLite e migração futura para Supabase/Postgres se necessário.
+5. **Inteligência financeira:** recorrências automáticas, projeção de fluxo 30/60/90 dias e categorização ML como fallback das regras.
+
+Notas de fixes observados em 2026-06-21:
+
+- **Manutenção / traduções:** ainda faltam várias traduções e de/para de categorias que existiam no fluxo antigo; a próxima versão deve preservar o que já funcionava e facilitar complemento.
+- **Categorias automatizadas:** evoluir a classificação dos tipos de gastos de forma mais automática, usando regras/recorrências e revisão manual só para exceções.
+- **Conexões bancárias:** investigar por que há um banco e um cartão sem nome no novo layout; provavelmente falta fallback/normalização de metadados Pluggy.
+- **Resumos por categoria:** manter os agregados por categoria como visão importante para entender gastos consolidados.
 
 ## Segurança
 

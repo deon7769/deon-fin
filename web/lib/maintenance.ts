@@ -1,4 +1,4 @@
-import type { MaintenanceResponse } from "./types";
+import type { MaintenanceFamilyProfile, MaintenanceOverrides, MaintenanceResponse } from "./types";
 
 export type MaintenanceSummary = {
   incomeTotal: number;
@@ -30,6 +30,48 @@ export type MaintenanceHealth = {
   status: "ok" | "review";
   items: MaintenanceHealthItem[];
 };
+
+export type MaintenanceEditorState = {
+  receitas: Array<{ membro?: string; valor?: number }>;
+  caixa: Array<{ local?: string; valor?: number; aporte_mensal_recorrente?: number }>;
+  provisoes: Array<{
+    nome?: string;
+    mensal?: number;
+    alvo?: number;
+    periodicidade_meses?: number;
+    proxima_ocorrencia?: string;
+  }>;
+  metas: Array<{ nome?: string; alvo?: number; atual?: number; prazo?: string }>;
+  wishlist: Array<{
+    nome?: string;
+    valor_alvo?: number;
+    prazo_meses?: number;
+    guardado?: number;
+    prioridade?: number;
+  }>;
+  imoveis: Array<{
+    nome?: string;
+    valor_mercado?: number;
+    saldo_devedor?: number;
+    taxa_juros_anual?: number;
+    prazo_restante_meses?: number;
+    aluguel_receita?: number;
+    custo_financiamento?: number;
+    custo_condominio?: number;
+    custo_iptu_lixo?: number;
+  }>;
+  categorias: Array<{ en?: string; pt?: string }>;
+  recorrencias: Array<{ match?: string; tipo?: string; rotulo?: string }>;
+};
+
+export type MaintenanceSavePayload = {
+  family_profile: MaintenanceFamilyProfile;
+  overrides: MaintenanceOverrides;
+};
+
+type MaintenanceProperty = NonNullable<
+  NonNullable<MaintenanceFamilyProfile["patrimonio"]>["imoveis"]
+>[number];
 
 function asArray<T>(value: T[] | undefined): T[] {
   return Array.isArray(value) ? value : [];
@@ -201,4 +243,121 @@ export function recurrenceTypeLabel(type: string | undefined): string {
     return "Ignorar";
   }
   return type ?? "";
+}
+
+function cloneRows<T extends object>(rows: T[] | undefined): T[] {
+  return asArray(rows).map((row) => ({ ...row }));
+}
+
+function imovelToEditorRow(imovel: MaintenanceProperty): MaintenanceEditorState["imoveis"][number] {
+  const custos = imovel.custos ?? {};
+  return {
+    nome: imovel.nome,
+    valor_mercado: imovel.valor_mercado,
+    saldo_devedor: imovel.saldo_devedor,
+    taxa_juros_anual: imovel.taxa_juros_anual,
+    prazo_restante_meses: imovel.prazo_restante_meses,
+    aluguel_receita: imovel.aluguel_receita,
+    custo_financiamento: custos.financiamento,
+    custo_condominio: custos.condominio,
+    custo_iptu_lixo: custos.iptu_lixo,
+  };
+}
+
+function editorRowToImovel(row: MaintenanceEditorState["imoveis"][number]) {
+  return {
+    nome: row.nome,
+    valor_mercado: row.valor_mercado,
+    saldo_devedor: row.saldo_devedor,
+    taxa_juros_anual: row.taxa_juros_anual,
+    prazo_restante_meses: row.prazo_restante_meses,
+    aluguel_receita: row.aluguel_receita,
+    custos: {
+      financiamento: row.custo_financiamento,
+      condominio: row.custo_condominio,
+      iptu_lixo: row.custo_iptu_lixo,
+    },
+  };
+}
+
+export function hasMeaningfulRow(row: Record<string, unknown>): boolean {
+  return Object.values(row).some((value) => {
+    if (typeof value === "number") {
+      return value !== 0 && Number.isFinite(value);
+    }
+    if (typeof value === "string") {
+      return value.trim().length > 0;
+    }
+    return value !== null && value !== undefined;
+  });
+}
+
+function cleanRows<T extends Record<string, unknown>>(rows: T[]): T[] {
+  return rows.filter(hasMeaningfulRow).map((row) => ({ ...row }));
+}
+
+export function emptyMaintenanceRow<K extends keyof MaintenanceEditorState>(
+  kind: K,
+): MaintenanceEditorState[K][number] {
+  if (kind === "recorrencias") {
+    return { tipo: "recorrencia" } as MaintenanceEditorState[K][number];
+  }
+  return {} as MaintenanceEditorState[K][number];
+}
+
+export function maintenanceToEditorState(data: MaintenanceResponse): MaintenanceEditorState {
+  const profile = data.family_profile ?? {};
+  const patrimonio = profile.patrimonio ?? {};
+
+  return {
+    receitas: cloneRows(profile.receitas),
+    caixa: cloneRows(patrimonio.investimentos_caixa),
+    provisoes: cloneRows(profile.provisoes),
+    metas: cloneRows(profile.metas),
+    wishlist: cloneRows(profile.wishlist),
+    imoveis: asArray(patrimonio.imoveis).map(imovelToEditorRow),
+    categorias: Object.entries(data.overrides?.categorias_pt ?? {}).map(([en, pt]) => ({
+      en,
+      pt,
+    })),
+    recorrencias: cloneRows(data.overrides?.recorrencias),
+  };
+}
+
+export function buildMaintenanceSavePayload(
+  original: MaintenanceResponse,
+  editor: MaintenanceEditorState,
+): MaintenanceSavePayload {
+  const familyProfile: MaintenanceFamilyProfile = { ...(original.family_profile ?? {}) };
+  const patrimonio = { ...(familyProfile.patrimonio ?? {}) };
+
+  familyProfile.receitas = cleanRows(editor.receitas);
+  familyProfile.provisoes = cleanRows(editor.provisoes);
+  familyProfile.metas = cleanRows(editor.metas);
+  familyProfile.wishlist = cleanRows(editor.wishlist);
+  familyProfile.patrimonio = {
+    ...patrimonio,
+    investimentos_caixa: cleanRows(editor.caixa),
+    imoveis: cleanRows(editor.imoveis).map(editorRowToImovel),
+  };
+
+  const categorias_pt: Record<string, string> = {};
+  for (const row of cleanRows(editor.categorias)) {
+    const key = String(row.en ?? "").toLowerCase().trim();
+    const value = String(row.pt ?? "").trim();
+    if (key && value) {
+      categorias_pt[key] = value;
+    }
+  }
+
+  const recorrencias = cleanRows(editor.recorrencias).map((row) => ({
+    match: String(row.match ?? "").trim(),
+    tipo: String(row.tipo ?? "recorrencia").trim() || "recorrencia",
+    rotulo: String(row.rotulo ?? "").trim(),
+  }));
+
+  return {
+    family_profile: familyProfile,
+    overrides: { categorias_pt, recorrencias },
+  };
 }

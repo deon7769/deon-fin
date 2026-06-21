@@ -309,12 +309,14 @@ export type AccountsResponse = {
 };
 
 export type MaintenanceFamilyProfile = {
+  [key: string]: unknown;
   receitas?: Array<{ membro?: string; valor?: number }>;
   provisoes?: Array<{
     nome?: string;
     mensal?: number;
     alvo?: number;
     periodicidade_meses?: number;
+    proxima_ocorrencia?: string;
   }>;
   metas?: Array<{ nome?: string; alvo?: number; atual?: number; prazo?: string }>;
   wishlist?: Array<{
@@ -335,8 +337,14 @@ export type MaintenanceFamilyProfile = {
       valor_mercado?: number;
       saldo_devedor?: number;
       taxa_juros_anual?: number;
+      prazo_restante_meses?: number;
       aluguel_receita?: number;
-      custos?: Record<string, number | undefined>;
+      custos?: {
+        financiamento?: number;
+        condominio?: number;
+        iptu_lixo?: number;
+        [key: string]: number | undefined;
+      };
     }>;
   };
 };

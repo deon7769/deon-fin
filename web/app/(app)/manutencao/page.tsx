@@ -1,7 +1,19 @@
 "use client";
 
-import { useMemo } from "react";
-import { AlertCircle, DatabaseZap, Landmark, ListChecks, RefreshCw, Wallet } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  AlertCircle,
+  DatabaseZap,
+  Landmark,
+  ListChecks,
+  RefreshCw,
+  Save,
+  Wallet,
+} from "lucide-react";
+import {
+  EditableMaintenanceTable,
+  type EditableColumn,
+} from "@/components/manutencao/EditableMaintenanceTable";
 import { CategoryMapPreview } from "@/components/manutencao/CategoryMapPreview";
 import { HealthChecklist } from "@/components/manutencao/HealthChecklist";
 import { MaintenanceSectionTable } from "@/components/manutencao/MaintenanceSectionTable";
@@ -12,12 +24,117 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useMaintenance } from "@/hooks/useMaintenance";
+import { useMaintenance, useSaveMaintenance } from "@/hooks/useMaintenance";
 import {
+  buildMaintenanceSavePayload,
   buildMaintenanceHealth,
   buildMaintenanceSections,
+  maintenanceToEditorState,
   maintenanceSummary,
+  type MaintenanceEditorState,
 } from "@/lib/maintenance";
+
+type EditorSection<K extends keyof MaintenanceEditorState> = {
+  key: K;
+  title: string;
+  subtitle?: string;
+  columns: EditableColumn<MaintenanceEditorState[K][number] & Record<string, unknown>>[];
+};
+
+const editorSections: Array<EditorSection<keyof MaintenanceEditorState>> = [
+  {
+    key: "receitas",
+    title: "Receitas",
+    subtitle: "A soma vira a renda informada usada pelo dashboard.",
+    columns: [
+      { key: "membro", label: "Membro", type: "text" },
+      { key: "valor", label: "Valor (R$)", type: "number" },
+    ],
+  },
+  {
+    key: "caixa",
+    title: "Reserva e caixa",
+    columns: [
+      { key: "local", label: "Local / Conta", type: "text" },
+      { key: "valor", label: "Saldo (R$)", type: "number" },
+      { key: "aporte_mensal_recorrente", label: "Aporte/mês", type: "number" },
+    ],
+  },
+  {
+    key: "provisoes",
+    title: "Provisões mensais",
+    subtitle: "Revisão do carro, pneus, seguro, material escolar e afins.",
+    columns: [
+      { key: "nome", label: "Nome", type: "text" },
+      { key: "mensal", label: "Mensal", type: "number" },
+      { key: "alvo", label: "Alvo", type: "number" },
+      { key: "periodicidade_meses", label: "Period. (m)", type: "number" },
+      { key: "proxima_ocorrencia", label: "Próxima (AAAA-MM)", type: "text" },
+    ],
+  },
+  {
+    key: "metas",
+    title: "Metas de longo prazo",
+    columns: [
+      { key: "nome", label: "Nome", type: "text" },
+      { key: "alvo", label: "Alvo", type: "number" },
+      { key: "atual", label: "Atual", type: "number" },
+      { key: "prazo", label: "Prazo", type: "text" },
+    ],
+  },
+  {
+    key: "wishlist",
+    title: "Desejos de economia",
+    subtitle: "Prioridade menor significa mais importante.",
+    columns: [
+      { key: "nome", label: "Desejo", type: "text" },
+      { key: "valor_alvo", label: "Valor alvo", type: "number" },
+      { key: "prazo_meses", label: "Prazo (m)", type: "number" },
+      { key: "guardado", label: "Já guardado", type: "number" },
+      { key: "prioridade", label: "Prioridade", type: "number" },
+    ],
+  },
+  {
+    key: "imoveis",
+    title: "Patrimônio - Imóveis",
+    subtitle: "Custos mensais nas últimas colunas.",
+    columns: [
+      { key: "nome", label: "Imóvel", type: "text" },
+      { key: "valor_mercado", label: "Valor mercado", type: "number" },
+      { key: "saldo_devedor", label: "Saldo devedor", type: "number" },
+      { key: "taxa_juros_anual", label: "Juros % a.a.", type: "number" },
+      { key: "prazo_restante_meses", label: "Prazo (m)", type: "number" },
+      { key: "aluguel_receita", label: "Aluguel", type: "number" },
+      { key: "custo_financiamento", label: "Financiamento", type: "number" },
+      { key: "custo_condominio", label: "Condomínio", type: "number" },
+      { key: "custo_iptu_lixo", label: "IPTU/lixo", type: "number" },
+    ],
+  },
+  {
+    key: "categorias",
+    title: "Tradução de categorias",
+    subtitle: "Categoria de origem Pluggy em inglês para nome em português.",
+    columns: [
+      { key: "en", label: "Origem", type: "text" },
+      { key: "pt", label: "Tradução (PT)", type: "text" },
+    ],
+  },
+  {
+    key: "recorrencias",
+    title: "Classificação de recorrências",
+    subtitle: "Use ignorar para remover itens da lista de recorrências prováveis.",
+    columns: [
+      { key: "match", label: "Contém", type: "text" },
+      {
+        key: "tipo",
+        label: "Tipo",
+        type: "select",
+        options: ["assinatura", "recorrencia", "ignorar"],
+      },
+      { key: "rotulo", label: "Rótulo", type: "text" },
+    ],
+  },
+];
 
 function MaintenanceSkeleton() {
   return (
@@ -61,10 +178,60 @@ function RetryState({ error, onRetry }: { error: unknown; onRetry: () => void })
 
 export default function ManutencaoPage() {
   const maintenance = useMaintenance();
+  const saveMaintenance = useSaveMaintenance();
+  const [editorOverride, setEditorOverride] = useState<{
+    dataUpdatedAt: number;
+    value: MaintenanceEditorState;
+  } | null>(null);
+  const [editorStatus, setEditorStatus] = useState<string | null>(null);
   const data = maintenance.data;
   const summary = useMemo(() => (data ? maintenanceSummary(data) : null), [data]);
   const sections = useMemo(() => (data ? buildMaintenanceSections(data) : []), [data]);
   const health = useMemo(() => (data ? buildMaintenanceHealth(data) : null), [data]);
+  const editor = useMemo(() => {
+    if (!data) {
+      return null;
+    }
+    if (editorOverride?.dataUpdatedAt === maintenance.dataUpdatedAt) {
+      return editorOverride.value;
+    }
+    return maintenanceToEditorState(data);
+  }, [data, editorOverride, maintenance.dataUpdatedAt]);
+
+  const updateEditorSection = <K extends keyof MaintenanceEditorState>(
+    key: K,
+    rows: MaintenanceEditorState[K],
+  ) => {
+    if (!editor) {
+      return;
+    }
+    setEditorOverride({
+      dataUpdatedAt: maintenance.dataUpdatedAt,
+      value: { ...editor, [key]: rows },
+    });
+  };
+
+  const reloadEditor = async () => {
+    await maintenance.refetch();
+    setEditorOverride(null);
+    setEditorStatus("Dados recarregados.");
+  };
+
+  const saveEditor = async () => {
+    if (!data || !editor) {
+      setEditorStatus("Carregue os dados antes de salvar.");
+      return;
+    }
+    setEditorStatus("Salvando...");
+    try {
+      await saveMaintenance.mutateAsync(buildMaintenanceSavePayload(data, editor));
+      await maintenance.refetch();
+      setEditorOverride(null);
+      setEditorStatus("Salvo.");
+    } catch (error) {
+      setEditorStatus(error instanceof Error ? error.message : "Falha ao salvar.");
+    }
+  };
 
   return (
     <>
@@ -148,6 +315,62 @@ export default function ManutencaoPage() {
                 <RecurrenceRulesTable overrides={data.overrides} />
               </SectionCard>
             </div>
+
+            <SectionCard
+              title="Editar dados fixos"
+              subtitle="Altere as informações que não vêm da integração bancária."
+              actions={
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void reloadEditor()}
+                    disabled={maintenance.isFetching || saveMaintenance.isPending}
+                    className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium text-text transition hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <RefreshCw size={15} aria-hidden />
+                    Recarregar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void saveEditor()}
+                    disabled={!editor || saveMaintenance.isPending}
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Save size={15} aria-hidden />
+                    {saveMaintenance.isPending ? "Salvando..." : "Salvar tudo"}
+                  </button>
+                </div>
+              }
+            >
+              {editorStatus ? (
+                <p className="mb-4 rounded-md border border-border bg-surface2 px-3 py-2 text-sm text-muted">
+                  {editorStatus}
+                </p>
+              ) : null}
+              {editor ? (
+                <div className="space-y-6">
+                  {editorSections.map((section) => (
+                    <div key={section.key} className="space-y-2 border-b border-border pb-5 last:border-b-0 last:pb-0">
+                      <div>
+                        <h3 className="text-sm font-semibold text-text">{section.title}</h3>
+                        {section.subtitle ? (
+                          <p className="mt-1 text-sm text-muted">{section.subtitle}</p>
+                        ) : null}
+                      </div>
+                      <EditableMaintenanceTable
+                        section={section.key}
+                        title={section.title}
+                        rows={editor[section.key]}
+                        columns={section.columns}
+                        onChange={(rows) => updateEditorSection(section.key, rows)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Skeleton className="h-72 w-full" />
+              )}
+            </SectionCard>
           </>
         )}
       </div>
