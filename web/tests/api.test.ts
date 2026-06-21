@@ -45,6 +45,19 @@ describe("api client", () => {
     );
   });
 
+  it("defaults to same-origin API URLs", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(200, { status: "ok" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { api } = await import("@/lib/api");
+    await api.get("health");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/health",
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
   it("throws typed errors from the backend error envelope", async () => {
     process.env.NEXT_PUBLIC_API_URL = "http://api.test/api";
     vi.stubGlobal(

@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -96,6 +96,35 @@ def _normalized_days(days: int | None) -> int:
     if not days or days <= 0:
         return DEFAULT_SYNC_DAYS
     return min(days, 5 * 365)
+
+
+def _web_dist_dir() -> Path:
+    return Path(os.environ.get("WEB_DIST_DIR", "web_dist"))
+
+
+def _legacy_ui_enabled() -> bool:
+    value = os.environ.get("LEGACY_UI", "")
+    return value.lower() in {"1", "true", "yes"}
+
+
+def _next_index_exists() -> bool:
+    return (_web_dist_dir() / "index.html").is_file()
+
+
+def _safe_web_dist_path(full_path: str) -> Path | None:
+    web_dist = _web_dist_dir().resolve()
+    candidate = (web_dist / full_path).resolve()
+    try:
+        candidate.relative_to(web_dist)
+    except ValueError:
+        return None
+    return candidate
+
+
+def _html_file_response(path: Path) -> FileResponse:
+    response = FileResponse(path, media_type="text/html")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 def _metadata(row: Any) -> dict[str, Any]:
@@ -243,6 +272,14 @@ def _item_display_name(
     )
 
 
+def _render_legacy_index(request: Request) -> Response:
+    return TEMPLATES.TemplateResponse(
+        request,
+        "index.html",
+        {"sandbox": settings.use_sandbox},
+    )
+
+
 # ---------------------------------------------------------------- background
 def _fill_missing_reference_months(db: Database) -> int:
     profile = profile_repo.get_profile(db)
@@ -353,6 +390,9 @@ def create_app() -> FastAPI:
     )
 
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
+    next_assets = _web_dist_dir() / "_next"
+    if next_assets.exists():
+        app.mount("/_next", StaticFiles(directory=str(next_assets)), name="next-assets")
     app.include_router(accounts.router)
     app.include_router(buckets.router)
     app.include_router(budget.router)
@@ -397,12 +437,14 @@ def create_app() -> FastAPI:
             _start_auto_sync()
 
     @app.get("/", response_class=HTMLResponse)
-    def index(request: Request) -> HTMLResponse:
-        return TEMPLATES.TemplateResponse(
-            request,
-            "index.html",
-            {"sandbox": settings.use_sandbox},
-        )
+    def index(request: Request) -> Response:
+        if _legacy_ui_enabled() or not _next_index_exists():
+            return _render_legacy_index(request)
+        return _html_file_response(_web_dist_dir() / "index.html")
+
+    @app.get("/legacy", response_class=HTMLResponse, include_in_schema=False)
+    def legacy(request: Request) -> Response:
+        return _render_legacy_index(request)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:
@@ -739,6 +781,28 @@ def create_app() -> FastAPI:
                 "X-Accel-Buffering": "no",
             },
         )
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str) -> Response:
+        prefix = full_path.split("/", 1)[0]
+        if prefix in {"api", "static", "_next"}:
+            raise HTTPException(status_code=404)
+
+        if not _next_index_exists():
+            raise HTTPException(status_code=404)
+
+        candidate = _safe_web_dist_path(full_path)
+        if candidate and candidate.is_file():
+            if candidate.suffix.lower() == ".html":
+                return _html_file_response(candidate)
+            return FileResponse(candidate)
+
+        if candidate and candidate.is_dir():
+            route_index = candidate / "index.html"
+            if route_index.is_file():
+                return _html_file_response(route_index)
+
+        return _html_file_response(_web_dist_dir() / "index.html")
 
     return app
 

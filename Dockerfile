@@ -1,3 +1,16 @@
+FROM node:24-slim AS web
+
+WORKDIR /web
+
+COPY web/package*.json ./
+RUN npm ci
+
+COPY web/ ./
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_API_URL=/api
+RUN npm run build
+
+
 FROM python:3.12-slim-bookworm
 
 WORKDIR /app
@@ -14,6 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
 COPY scripts ./scripts
+COPY --from=web /web/out ./web_dist
 
 RUN mkdir -p /app/data
 

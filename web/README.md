@@ -20,6 +20,12 @@ npm run dev
 
 The app opens at `http://localhost:3000` and reads the API base URL from `NEXT_PUBLIC_API_URL`.
 
+## Production
+
+`next build` exports static files to `web/out`. The project Dockerfile copies that export to
+`/app/web_dist`, and FastAPI serves it at `/` with the API under `/api`. The legacy Pluggy UI remains
+available at `/legacy`.
+
 ## Checks
 
 ```bash

@@ -16,11 +16,11 @@ https://fin.deonlab.tech
 
 Status em **2026-06-21**:
 
-- A `main` está alinhada com a VPS no commit `860ab57` (`feat: add F2.6 metas screen`).
-- O container de produção já foi recriado após esse commit, com backup do SQLite e pytest remoto passando.
+- A VPS acompanha a `main` pelo safe deploy em `/opt/projetos/financas-agent`.
+- Cada deploy recria o container após backup do SQLite, pytest remoto, build Docker e smoke checks.
 - O workflow ativo é `.github/workflows/ci-cd.yml`: pytest, testes/typecheck/lint/build do frontend e build Docker.
 - O job de deploy automático existe, mas só conecta na VPS quando os secrets SSH (`VPS_SSH_*`) estiverem configurados no GitHub.
-- O script atual faz smoke de `/api/health`; a sprint F3.1 deve adicionar smoke do frontend em `/` quando o Next passar a ser servido same-origin.
+- O script faz smoke de `/api/health` e de `/`, validando também o frontend servido same-origin.
 
 ## Safe deploy
 
@@ -38,7 +38,8 @@ The script performs this sequence:
 3. Rebuilds the Docker image for `financas-agent`.
 4. Restarts the Compose service.
 5. Calls `http://127.0.0.1:8000/api/health` from inside the container.
-6. Prints the last 80 container log lines.
+6. Calls `http://127.0.0.1:8000/` from inside the container and validates a frontend marker.
+7. Prints the last 80 container log lines.
 
 If any step fails, the script stops before continuing.
 
@@ -95,7 +96,7 @@ PY
 docker compose logs --tail=120 financas-agent
 ```
 
-After F3.1, include a frontend smoke in the same manual check set:
+Frontend smoke used by the deploy script:
 
 ```bash
 docker compose exec -T financas-agent python - <<'PY'
