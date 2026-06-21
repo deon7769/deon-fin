@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -28,6 +29,7 @@ from ..config import settings
 from ..importers import sync_pluggy_item
 from ..pluggy import PluggyAPIError, PluggyClient
 from ..storage import Database
+from .errors import error_response, install_error_handlers
 from .repositories import profile_repo, transactions_repo
 
 WEB_DIR = Path(__file__).resolve().parent
@@ -353,6 +355,14 @@ def _start_auto_sync() -> None:
 # ---------------------------------------------------------------- factory
 def create_app() -> FastAPI:
     app = FastAPI(title="Financas — Pluggy Connect MVP", version="0.1.0")
+    install_error_handlers(app)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
@@ -371,11 +381,13 @@ def create_app() -> FastAPI:
                 except Exception:
                     ok = False
             if not ok:
-                return JSONResponse(
-                    {"detail": "Autenticação necessária"},
-                    status_code=401,
-                    headers={"WWW-Authenticate": 'Basic realm="Raio-X Financeiro"'},
+                response = error_response(
+                    401,
+                    "unauthorized",
+                    "Autenticação necessária",
                 )
+                response.headers["WWW-Authenticate"] = 'Basic realm="Raio-X Financeiro"'
+                return response
         return await call_next(request)
 
     @app.on_event("startup")

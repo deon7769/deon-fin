@@ -46,6 +46,28 @@ def test_health(client):
     assert client.get("/api/health").json() == {"status": "ok"}
 
 
+def test_cors_headers_allow_next_dev_origin(client):
+    r = client.get("/api/health", headers={"Origin": "http://localhost:3000"})
+
+    assert r.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_error_envelope_404(client):
+    r = client.get("/api/does-not-exist")
+
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "not_found"
+    assert "message" in r.json()["error"]
+
+
+def test_error_envelope_422(client):
+    r = client.post("/api/items", json={"connector_name": "missing item id"})
+
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "validation_error"
+    assert "message" in r.json()["error"]
+
+
 def test_index_renders(client):
     r = client.get("/")
     assert r.status_code == 200

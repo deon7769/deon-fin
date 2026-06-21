@@ -36,6 +36,7 @@ class Settings:
     # Login (Basic Auth) — se app_password vazio, autenticação fica DESLIGADA (uso local).
     app_user: str = "familia"
     app_password: str | None = None
+    cors_origins: list[str] | None = None
 
     @property
     def database_path(self) -> Path:
@@ -140,6 +141,14 @@ def load_settings() -> Settings:
         auto_sync_on_start=os.environ.get("AUTO_SYNC_ON_START", "true").lower() == "true",
         app_user=os.environ.get("APP_USER", "familia").strip() or "familia",
         app_password=(os.environ.get("APP_PASSWORD") or "").strip() or None,
+        cors_origins=[
+            origin.strip()
+            for origin in os.environ.get(
+                "CORS_ORIGINS",
+                "http://localhost:3000,http://127.0.0.1:3000",
+            ).split(",")
+            if origin.strip()
+        ],
     )
 
 
