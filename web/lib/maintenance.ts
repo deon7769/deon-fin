@@ -31,6 +31,12 @@ export type MaintenanceHealth = {
   items: MaintenanceHealthItem[];
 };
 
+export type MissingCategoryTranslationRow = {
+  category: string;
+  txCount: number;
+  totalAbs: number;
+};
+
 export type MaintenanceEditorState = {
   receitas: Array<{ membro?: string; valor?: number }>;
   caixa: Array<{ local?: string; valor?: number; aporte_mensal_recorrente?: number }>;
@@ -243,6 +249,16 @@ export function recurrenceTypeLabel(type: string | undefined): string {
     return "Ignorar";
   }
   return type ?? "";
+}
+
+export function missingCategoryTranslations(
+  data: MaintenanceResponse,
+): MissingCategoryTranslationRow[] {
+  return (data.category_audit?.missing ?? []).map((row) => ({
+    category: row.category,
+    txCount: row.tx_count,
+    totalAbs: row.total_abs,
+  }));
 }
 
 function cloneRows<T extends object>(rows: T[] | undefined): T[] {

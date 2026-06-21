@@ -6,6 +6,7 @@ import {
   buildMaintenanceSections,
   maintenanceToEditorState,
   maintenanceSummary,
+  missingCategoryTranslations,
   recurrenceTypeLabel,
 } from "@/lib/maintenance";
 import type { MaintenanceResponse } from "@/lib/types";
@@ -34,6 +35,11 @@ const sample: MaintenanceResponse = {
   overrides: {
     categorias_pt: { groceries: "Mercado", rent: "Aluguel" },
     recorrencias: [{ match: "netflix", tipo: "assinatura", rotulo: "Netflix" }],
+  },
+  category_audit: {
+    total_categories: 3,
+    translated: 2,
+    missing: [{ category: "Pet Shops", tx_count: 2, total_abs: 70 }],
   },
 };
 
@@ -128,5 +134,12 @@ describe("maintenance helpers", () => {
       nome: "Casa",
       custos: { financiamento: 1300, condominio: 500, iptu_lixo: 180 },
     });
+  });
+
+  it("maps missing category translations from the maintenance audit", () => {
+    expect(missingCategoryTranslations(sample)).toEqual([
+      { category: "Pet Shops", txCount: 2, totalAbs: 70 },
+    ]);
+    expect(missingCategoryTranslations({ family_profile: {}, overrides: {} })).toEqual([]);
   });
 });

@@ -17,6 +17,7 @@ import {
 import { CategoryMapPreview } from "@/components/manutencao/CategoryMapPreview";
 import { HealthChecklist } from "@/components/manutencao/HealthChecklist";
 import { MaintenanceSectionTable } from "@/components/manutencao/MaintenanceSectionTable";
+import { MissingCategoryTranslations } from "@/components/manutencao/MissingCategoryTranslations";
 import { RecurrenceRulesTable } from "@/components/manutencao/RecurrenceRulesTable";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -31,6 +32,7 @@ import {
   buildMaintenanceSections,
   maintenanceToEditorState,
   maintenanceSummary,
+  missingCategoryTranslations,
   type MaintenanceEditorState,
 } from "@/lib/maintenance";
 
@@ -188,6 +190,10 @@ export default function ManutencaoPage() {
   const summary = useMemo(() => (data ? maintenanceSummary(data) : null), [data]);
   const sections = useMemo(() => (data ? buildMaintenanceSections(data) : []), [data]);
   const health = useMemo(() => (data ? buildMaintenanceHealth(data) : null), [data]);
+  const missingCategoryRows = useMemo(
+    () => (data ? missingCategoryTranslations(data) : []),
+    [data],
+  );
   const editor = useMemo(() => {
     if (!data) {
       return null;
@@ -315,6 +321,17 @@ export default function ManutencaoPage() {
                 <RecurrenceRulesTable overrides={data.overrides} />
               </SectionCard>
             </div>
+
+            <SectionCard
+              title="Categorias sem tradução"
+              subtitle={
+                data.category_audit
+                  ? `${data.category_audit.translated} de ${data.category_audit.total_categories} categoria(s) vistas já traduzidas.`
+                  : "Auditoria indisponível."
+              }
+            >
+              <MissingCategoryTranslations rows={missingCategoryRows} />
+            </SectionCard>
 
             <SectionCard
               title="Editar dados fixos"

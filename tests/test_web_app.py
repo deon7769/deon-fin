@@ -332,6 +332,47 @@ def test_maintenance_endpoint_returns_profile_and_overrides(client, monkeypatch)
             "categorias_pt": {"groceries": "Mercado"},
             "recorrencias": [{"match": "netflix", "tipo": "assinatura", "rotulo": "Netflix"}],
         },
+        "category_audit": {
+            "total_categories": 0,
+            "translated": 0,
+            "missing": [],
+        },
+    }
+
+
+def test_maintenance_endpoint_reports_missing_category_translations(client, tmp_db, monkeypatch):
+    tmp_db.upsert_account(Account(id="bank1", source="test", name="Bank", type="BANK"))
+    tmp_db.insert_transactions([
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 6, 1),
+            amount=Decimal("-100.00"),
+            description="Mercado",
+            source="test",
+            category="Groceries",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 6, 2),
+            amount=Decimal("-35.00"),
+            description="Pet",
+            source="test",
+            category="Pet Shops",
+        ),
+    ])
+    monkeypatch.setattr("src.web.app.mnt.load_family_profile", lambda: {})
+    monkeypatch.setattr(
+        "src.web.app.mnt.load_overrides",
+        lambda: {"categorias_pt": {"groceries": "Mercado"}, "recorrencias": []},
+    )
+
+    response = client.get("/api/maintenance")
+
+    assert response.status_code == 200
+    assert response.json()["category_audit"] == {
+        "total_categories": 2,
+        "translated": 1,
+        "missing": [{"category": "Pet Shops", "tx_count": 1, "total_abs": 35.0}],
     }
 
 

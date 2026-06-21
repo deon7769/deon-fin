@@ -354,9 +354,16 @@ export type MaintenanceOverrides = {
   recorrencias?: Array<{ match?: string; tipo?: string; rotulo?: string }>;
 };
 
+export type MaintenanceCategoryAudit = {
+  total_categories: number;
+  translated: number;
+  missing: Array<{ category: string; tx_count: number; total_abs: number }>;
+};
+
 export type MaintenanceResponse = {
   family_profile: MaintenanceFamilyProfile;
   overrides: MaintenanceOverrides;
+  category_audit?: MaintenanceCategoryAudit;
 };
 
 export type ScenarioSimulationRequest = {

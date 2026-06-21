@@ -10,6 +10,40 @@ from . import painel_repo
 
 _YEAR_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 
+_BANK_CODE_NAMES = {
+    "001": "Banco do Brasil",
+    "033": "Santander",
+    "077": "Banco Inter",
+    "104": "Caixa",
+    "208": "BTG Pactual",
+    "237": "Bradesco",
+    "260": "Nubank",
+    "323": "Mercado Pago",
+    "341": "Itaú",
+}
+
+_GENERIC_ACCOUNT_NAMES = {
+    "conta",
+    "conta corrente",
+    "conta poupanca",
+    "conta poupança",
+    "poupanca",
+    "poupança",
+    "checking account",
+    "savings account",
+}
+
+_CARD_LEVEL_NAMES = {
+    "black",
+    "classic",
+    "gold",
+    "international",
+    "internacional",
+    "platinum",
+    "standard",
+    "universal",
+}
+
 
 def _money(value: float) -> float:
     return round(float(value), 2)
@@ -42,6 +76,46 @@ def _is_credit(account_type: str | None) -> bool:
     return (account_type or "").upper() in CREDIT_TYPES
 
 
+def _normalized_text(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _display_brand(value: Any) -> str | None:
+    text = str(value or "").replace("_", " ").strip()
+    return text.title() if text else None
+
+
+def _bank_code(meta: dict[str, Any], institution: str | None) -> str | None:
+    bank_data = meta.get("bankData") if isinstance(meta.get("bankData"), dict) else {}
+    raw = str(bank_data.get("transferNumber") or institution or "")
+    digits = "".join(ch for ch in raw.split("/", 1)[0] if ch.isdigit())
+    return digits[:3] if len(digits) >= 3 else None
+
+
+def _bank_name(meta: dict[str, Any], institution: str | None) -> str | None:
+    return _BANK_CODE_NAMES.get(_bank_code(meta, institution) or "")
+
+
+def _is_generic_account_name(value: Any) -> bool:
+    return _normalized_text(value) in _GENERIC_ACCOUNT_NAMES
+
+
+def _is_probably_person_name(value: Any) -> bool:
+    text = str(value or "").strip()
+    if not text or any(ch.isdigit() for ch in text):
+        return False
+    return len(text.split()) >= 2 and text.upper() == text
+
+
+def _is_card_level_name(value: Any) -> bool:
+    return _normalized_text(value) in _CARD_LEVEL_NAMES
+
+
+def _item_id(row: Any, meta: dict[str, Any]) -> str | None:
+    item_id = row["pluggy_item_id"] or meta.get("itemId") or meta.get("item_id")
+    return str(item_id) if item_id else None
+
+
 def _sort_key(row: Any) -> tuple[int, str, str]:
     sort_order = row["sort_order"]
     return (
@@ -57,6 +131,50 @@ def _last4(*values: Any) -> str | None:
         if len(digits) >= 4:
             return digits[-4:]
     return None
+
+
+def _bank_display_name(row: Any, meta: dict[str, Any]) -> str:
+    raw_name = row["name"] or row["institution"]
+    bank_name = _bank_name(meta, row["institution"])
+
+    if bank_name and _is_generic_account_name(raw_name):
+        return f"{bank_name} - {raw_name or _bank_type_label(row['type'])}"
+
+    marketing_name = str(meta.get("marketingName") or "").strip()
+    if marketing_name and not raw_name:
+        return marketing_name
+
+    return str(raw_name or bank_name or "Conta")
+
+
+def _item_bank_names(rows: list[Any]) -> dict[str, str]:
+    names: dict[str, str] = {}
+    for row in rows:
+        if _is_credit(row["type"]):
+            continue
+        meta = _load_meta(row["metadata_json"])
+        item_id = _item_id(row, meta)
+        if not item_id or item_id in names:
+            continue
+        names[item_id] = _bank_name(meta, row["institution"]) or _bank_display_name(row, meta)
+    return names
+
+
+def _card_display_name(row: Any, meta: dict[str, Any], item_bank_name: str | None) -> str:
+    raw_name = row["name"] or row["institution"]
+    if raw_name and not (
+        _is_generic_account_name(raw_name)
+        or _is_probably_person_name(raw_name)
+        or _is_card_level_name(raw_name)
+    ):
+        return str(raw_name)
+
+    credit_data = meta.get("creditData") if isinstance(meta.get("creditData"), dict) else {}
+    brand = _display_brand(row["brand"] or credit_data.get("brand"))
+    last4 = row["last4"] or _last4(meta.get("number"), raw_name)
+    parts = [item_bank_name, brand, f"final {last4}" if last4 else None]
+    label = " ".join(str(part) for part in parts if part)
+    return label or str(raw_name or "Cartão")
 
 
 def _bank_parts(meta: dict[str, Any], institution: str | None) -> tuple[str | None, str | None]:
@@ -263,10 +381,12 @@ def list_accounts_overview(db: Database, *, month: str) -> dict[str, Any]:
     cards: list[dict[str, Any]] = []
     accounts_balance = 0.0
     card_debt = 0.0
+    rows = sorted(_account_rows(db), key=_sort_key)
+    item_bank_names = _item_bank_names(rows)
 
-    for row in sorted(_account_rows(db), key=_sort_key):
+    for row in rows:
         meta = _load_meta(row["metadata_json"])
-        item_id = row["pluggy_item_id"] or meta.get("itemId") or meta.get("item_id")
+        item_id = _item_id(row, meta)
         if _is_credit(row["type"]):
             credit_limit = _number(row["credit_limit"])
             used = _number(row["used"])
@@ -277,7 +397,7 @@ def list_accounts_overview(db: Database, *, month: str) -> dict[str, Any]:
             cards.append(
                 {
                     "id": row["id"],
-                    "name": row["name"] or row["institution"] or "Cartão",
+                    "name": _card_display_name(row, meta, item_bank_names.get(item_id or "")),
                     "last4": last4,
                     "brand": brand,
                     "credit_limit": credit_limit,
@@ -305,7 +425,7 @@ def list_accounts_overview(db: Database, *, month: str) -> dict[str, Any]:
             {
                 "id": row["id"],
                 "institution": row["institution"],
-                "name": row["name"] or row["institution"] or "Conta",
+                "name": _bank_display_name(row, meta),
                 "type": _bank_type_label(row["type"]),
                 "agency": agency,
                 "number": number,

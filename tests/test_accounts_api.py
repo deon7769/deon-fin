@@ -126,7 +126,7 @@ def test_accounts_overview_groups_banks_cards_and_totals(tmp_db: Database):
         {
             "id": "pluggy:bank",
             "institution": "077/0001/12345-6",
-            "name": "Conta Corrente",
+            "name": "Banco Inter - Conta Corrente",
             "type": "Conta bancária",
             "agency": "077/0001",
             "number": "12345-6",
@@ -148,6 +148,46 @@ def test_accounts_overview_groups_banks_cards_and_totals(tmp_db: Database):
         "card_debt": 749.5,
         "period_result": 0.0,
     }
+
+
+def test_accounts_overview_uses_bank_code_and_card_fallback_names(tmp_db: Database):
+    tmp_db.upsert_pluggy_item(
+        "item-inter",
+        connector_name="MeuPluggy",
+        status="UPDATED",
+    )
+    tmp_db.upsert_account(
+        Account(
+            id="pluggy:inter-bank",
+            source="pluggy",
+            institution="077/0001/31238064-0",
+            name="Conta Corrente",
+            type="BANK",
+            metadata={
+                "itemId": "item-inter",
+                "bankData": {"transferNumber": "077/0001/31238064-0"},
+            },
+        )
+    )
+    tmp_db.upsert_account(
+        Account(
+            id="pluggy:inter-card",
+            source="pluggy",
+            institution="DAVI OLIVEIRA NETO",
+            name="DAVI OLIVEIRA NETO",
+            type="CREDIT",
+            metadata={
+                "itemId": "item-inter",
+                "number": "1122",
+                "creditData": {"brand": "MASTERCARD"},
+            },
+        )
+    )
+
+    overview = accounts_repo.list_accounts_overview(tmp_db, month="2026-06")
+
+    assert overview["banks"][0]["name"] == "Banco Inter - Conta Corrente"
+    assert overview["cards"][0]["name"] == "Banco Inter Mastercard final 1122"
 
 
 def test_manual_bank_without_snapshot_derives_balance(tmp_db: Database):

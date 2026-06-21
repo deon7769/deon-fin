@@ -68,8 +68,8 @@ specs assumem.
 7. **Deploy:** F3.1 (Next estático servido pela FastAPI, same-origin, na VPS).
 8. **Extensões do layout:** F3.2 (Manutenção) → F3.3 (Simulador).
 
-> Estado atual: F0.1 até F3.4 estão entregues na `main`. A sequência agora é Pluggy Connect no Next,
-> melhorias de categorização/manutenção e fixes de display name nas conexões.
+> Estado atual: F0.1 até F3.5 estão entregues na `main`. A sequência agora é Pluggy Connect no Next
+> e a automação assistida de categorização/tag/meta.
 
 ## Notas de fixes observados em produção/preview
 
@@ -85,6 +85,10 @@ Registradas em 2026-06-21 para encaixar nas próximas sprints:
    fallback testado.
 4. **Resumos por categoria:** os agregados por categoria continuam úteis para leitura rápida dos gastos e devem ser
    preservados nas telas de Painel, Orçamento, Faturas e futuras telas de manutenção/categorização.
+
+5. **F3.5 entregue:** `/api/accounts` passou a usar fallback de banco/cartão por código bancário, nome genérico,
+   nome de pessoa e bandeira/final do cartão; `/api/maintenance` passou a expor `category_audit` com categorias
+   vistas em transações que ainda não têm tradução no de/para, exibidas na tela Manutenção.
 
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.

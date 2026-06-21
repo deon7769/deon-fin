@@ -280,6 +280,46 @@ def _render_legacy_index(request: Request) -> Response:
     )
 
 
+def _category_translation_audit(db: Database, cat_map: dict[str, str]) -> dict[str, Any]:
+    translated_keys = {
+        str(key).lower().strip()
+        for key, value in cat_map.items()
+        if str(key).strip() and str(value).strip()
+    }
+    rows = db._conn.execute(
+        """
+        SELECT lower(trim(category)) AS key,
+               min(trim(category)) AS category,
+               count(*) AS tx_count,
+               round(sum(abs(amount)), 2) AS total_abs
+          FROM transactions
+         WHERE category IS NOT NULL
+           AND trim(category) <> ''
+         GROUP BY lower(trim(category))
+         ORDER BY count(*) DESC, sum(abs(amount)) DESC, lower(trim(category))
+        """
+    ).fetchall()
+    missing: list[dict[str, Any]] = []
+    translated = 0
+    for row in rows:
+        if row["key"] in translated_keys:
+            translated += 1
+            continue
+        missing.append(
+            {
+                "category": row["category"],
+                "tx_count": int(row["tx_count"]),
+                "total_abs": float(row["total_abs"] or 0.0),
+            }
+        )
+
+    return {
+        "total_categories": len(rows),
+        "translated": translated,
+        "missing": missing[:25],
+    }
+
+
 # ---------------------------------------------------------------- background
 def _fill_missing_reference_months(db: Database) -> int:
     profile = profile_repo.get_profile(db)
@@ -707,11 +747,13 @@ def create_app() -> FastAPI:
 
     # ---------------------------------------------------------- manutenção
     @app.get("/api/maintenance")
-    def get_maintenance() -> dict[str, Any]:
+    def get_maintenance(db: Database = Depends(get_db)) -> dict[str, Any]:
         """Dados editáveis: perfil familiar + de/para (tradução e recorrências)."""
+        overrides = mnt.load_overrides()
         return {
             "family_profile": mnt.load_family_profile() or {},
-            "overrides": mnt.load_overrides(),
+            "overrides": overrides,
+            "category_audit": _category_translation_audit(db, overrides.get("categorias_pt") or {}),
         }
 
     @app.post("/api/maintenance")
