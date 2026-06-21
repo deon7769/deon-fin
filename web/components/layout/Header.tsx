@@ -14,7 +14,7 @@ export function Header({ title, subtitle }: HeaderProps) {
   const label = hidden ? "Mostrar valores" : "Ocultar valores";
 
   return (
-    <header className="flex min-h-20 flex-col items-start justify-between gap-3 border-b border-border bg-bg px-4 py-4 sm:flex-row sm:items-center sm:px-6">
+    <header className="flex min-h-20 flex-col items-start justify-between gap-3 border-b border-border bg-bg py-4 pl-14 pr-4 sm:flex-row sm:items-center sm:px-6">
       <div className="min-w-0">
         <h1 className="break-words text-2xl font-semibold text-text">{title}</h1>
         {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}

@@ -60,8 +60,8 @@ function HistoryTooltip({ active, payload, label }: TooltipContentProps) {
 
 export function HistoryBarChart({ data }: HistoryBarChartProps) {
   return (
-    <div className="space-y-3">
-      <div className="h-[280px] w-full">
+    <div className="min-w-0 space-y-3">
+      <div className="h-[280px] min-h-[280px] min-w-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 8, right: 10, left: -8, bottom: 0 }} barGap={6}>
             <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" vertical={false} />

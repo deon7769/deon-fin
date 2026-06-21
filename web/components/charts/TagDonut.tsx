@@ -39,8 +39,8 @@ export function TagDonut({ items, total }: TagDonutProps) {
   const money = useMoneyFormatter();
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)] lg:items-center">
-      <div className="relative h-[260px] min-w-0">
+    <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)] lg:items-center">
+      <div className="relative h-[260px] min-h-[260px] min-w-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie

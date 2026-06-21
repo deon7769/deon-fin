@@ -436,13 +436,13 @@ def create_app() -> FastAPI:
         if settings.auto_sync_on_start or settings.auto_sync_minutes > 0:
             _start_auto_sync()
 
-    @app.get("/", response_class=HTMLResponse)
+    @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
     def index(request: Request) -> Response:
         if _legacy_ui_enabled() or not _next_index_exists():
             return _render_legacy_index(request)
         return _html_file_response(_web_dist_dir() / "index.html")
 
-    @app.get("/legacy", response_class=HTMLResponse, include_in_schema=False)
+    @app.api_route("/legacy", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False)
     def legacy(request: Request) -> Response:
         return _render_legacy_index(request)
 
@@ -782,7 +782,7 @@ def create_app() -> FastAPI:
             },
         )
 
-    @app.get("/{full_path:path}", include_in_schema=False)
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
     def spa_fallback(full_path: str) -> Response:
         prefix = full_path.split("/", 1)[0]
         if prefix in {"api", "static", "_next"}:
