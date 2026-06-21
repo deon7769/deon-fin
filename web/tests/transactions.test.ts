@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { clampPageSize, transactionQuery } from "@/lib/transactions";
+import {
+  clampPageSize,
+  hasTransactionFilters,
+  semTagFilterFromSearch,
+  transactionQuery,
+} from "@/lib/transactions";
 
 describe("transaction helpers", () => {
   it("serializes filters without empty values", () => {
@@ -48,5 +53,18 @@ describe("transaction helpers", () => {
     });
     expect(clampPageSize(25)).toBe(25);
     expect(clampPageSize(0)).toBe(10);
+  });
+
+  it("maps semTag=1 to the null tag filter", () => {
+    expect(semTagFilterFromSearch("1")).toEqual([null]);
+    expect(semTagFilterFromSearch("true")).toEqual([null]);
+    expect(semTagFilterFromSearch(null)).toBeUndefined();
+
+    const filters = { month: "2026-06", tagIds: semTagFilterFromSearch("1") };
+    expect(transactionQuery(filters)).toMatchObject({
+      month: "2026-06",
+      tag_ids: "none",
+    });
+    expect(hasTransactionFilters(filters)).toBe(true);
   });
 });

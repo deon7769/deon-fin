@@ -15,6 +15,9 @@ const MONTH_YEAR = new Intl.DateTimeFormat("pt-BR", {
   month: "long",
   year: "numeric",
 });
+const MONTH_SHORT = new Intl.DateTimeFormat("pt-BR", {
+  month: "short",
+});
 
 export function formatBRL(value: number): string {
   return BRL.format(Number.isFinite(value) ? value : 0).replace(/\u00a0/g, " ");
@@ -32,4 +35,11 @@ export function formatPercent(value: number, asFraction = true): string {
 export function formatMonthYear(ym: string): string {
   const [year, month] = ym.split("-").map(Number);
   return MONTH_YEAR.format(new Date(year, (month || 1) - 1, 1));
+}
+
+export function formatMonthShort(ym: string): string {
+  const [year, month] = ym.split("-").map(Number);
+  return MONTH_SHORT.format(new Date(year, (month || 1) - 1, 1))
+    .replace(".", "")
+    .toLowerCase();
 }

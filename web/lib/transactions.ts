@@ -48,6 +48,10 @@ export function clampPageSize(value: number | undefined): number {
   return Math.min(100, Math.floor(value as number));
 }
 
+export function semTagFilterFromSearch(value: string | null): Array<number | null> | undefined {
+  return value === "1" || value === "true" ? [null] : undefined;
+}
+
 export function transactionQuery(filters: TransactionFilters): TransactionQuery {
   const query: TransactionQuery = {};
   if (filters.range?.from && filters.range?.to) {

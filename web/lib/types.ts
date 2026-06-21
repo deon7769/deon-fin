@@ -78,3 +78,36 @@ export type Transaction = {
 export type TransactionPage = Page<Transaction> & {
   summary: TransactionSummary;
 };
+
+export type PainelSummary = {
+  month: string;
+  result: number;
+  income: number;
+  expense: number;
+  accounts_balance: number;
+  accounts_balance_available: boolean;
+};
+
+export type PainelHistoryWindow = "3m" | "6m" | "1a";
+
+export type PainelHistoryPoint = {
+  month: string;
+  income: number;
+  expense: number;
+};
+
+export type PainelTagType = "expense" | "income";
+
+export type PainelTagSlice = {
+  tag_id: number | null;
+  tag_name: string;
+  color: string | null;
+  total: number;
+};
+
+export type PainelByTag = {
+  month: string;
+  type: PainelTagType;
+  total: number;
+  items: PainelTagSlice[];
+};

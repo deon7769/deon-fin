@@ -8,6 +8,7 @@ def test_domain_router_modules_exist():
 
     assert (router_dir / "__init__.py").exists()
     assert (router_dir / "buckets.py").exists()
+    assert (router_dir / "painel.py").exists()
     assert (router_dir / "tags.py").exists()
     assert (router_dir / "profile.py").exists()
     assert (router_dir / "transactions.py").exists()

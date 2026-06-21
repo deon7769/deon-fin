@@ -4,17 +4,23 @@ import { Eye, EyeOff } from "lucide-react";
 import { MonthYearPicker } from "@/components/ui/MonthYearPicker";
 import { usePrivacy } from "@/providers/PrivacyProvider";
 
-export function Header({ title }: { title: string }) {
+type HeaderProps = {
+  title: string;
+  subtitle?: string;
+};
+
+export function Header({ title, subtitle }: HeaderProps) {
   const { hidden, toggle } = usePrivacy();
   const label = hidden ? "Mostrar valores" : "Ocultar valores";
 
   return (
-    <header className="flex min-h-20 items-center justify-between border-b border-border bg-bg px-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-text">{title}</h1>
+    <header className="flex min-h-20 flex-col items-start justify-between gap-3 border-b border-border bg-bg px-4 py-4 sm:flex-row sm:items-center sm:px-6">
+      <div className="min-w-0">
+        <h1 className="break-words text-2xl font-semibold text-text">{title}</h1>
+        {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
         <MonthYearPicker />
         <button
           type="button"

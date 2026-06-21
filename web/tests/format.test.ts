@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBRL, formatDate, formatMonthYear, formatPercent } from "@/lib/format";
+import {
+  formatBRL,
+  formatDate,
+  formatMonthShort,
+  formatMonthYear,
+  formatPercent,
+} from "@/lib/format";
 
 describe("format helpers", () => {
   it("formats money as Brazilian reais", () => {
@@ -21,5 +27,10 @@ describe("format helpers", () => {
   it("formats reference months in long pt-BR form", () => {
     expect(formatMonthYear("2026-06")).toBe("junho de 2026");
     expect(formatMonthYear("2026-12")).toBe("dezembro de 2026");
+  });
+
+  it("formats reference months in short pt-BR form", () => {
+    expect(formatMonthShort("2026-06")).toBe("jun");
+    expect(formatMonthShort("2026-12")).toBe("dez");
   });
 });
