@@ -26,6 +26,7 @@ export function useSetBucket() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["budget"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice"] });
       queryClient.invalidateQueries({ queryKey: ["painel"] });
     },
   });

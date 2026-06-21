@@ -151,3 +151,56 @@ export type Budget = {
   categories: BudgetCategory[];
   uncategorized: BudgetUncategorized[];
 };
+
+export type CardItem = {
+  id: string;
+  name: string;
+  brand: string | null;
+  last4: string | null;
+  credit_limit: number | null;
+  available: number | null;
+  currency: string;
+};
+
+export type InvoiceInstallment = {
+  n: number;
+  of: number;
+};
+
+export type Invoice = {
+  account_id: string;
+  account_name: string;
+  reference_month: string;
+  total: number;
+  closing_date: string;
+  due_date: string;
+  paid: boolean;
+  approximate_dates: boolean;
+  count: number;
+};
+
+export type InvoiceItem = {
+  id: string;
+  account_id: string;
+  date: string;
+  description: string;
+  amount: number;
+  signed_value: number;
+  category: string;
+  bucket: Pick<Bucket, "id" | "name" | "color"> | null;
+  bucket_source?: string | null;
+  tag: Pick<Tag, "id" | "name" | "color"> | null;
+  installment: InvoiceInstallment | null;
+};
+
+export type InvoiceCategory = {
+  name: string;
+  color: string | null;
+  total: number;
+};
+
+export type InvoiceResponse = {
+  invoice: Invoice;
+  items: InvoiceItem[];
+  by_category: InvoiceCategory[];
+};

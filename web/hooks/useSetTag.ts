@@ -18,6 +18,7 @@ export function useSetTag() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["invoice"] });
       queryClient.invalidateQueries({ queryKey: ["painel"] });
     },
   });
