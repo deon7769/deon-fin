@@ -32,6 +32,40 @@ The script performs this sequence:
 
 If any step fails, the script stops before continuing.
 
+## Automatic deploy from GitHub
+
+GitHub Actions runs CI for pull requests and every push para `main`. When CI passes on
+`main`, the `deploy` job connects to the VPS over SSH, updates the checkout, and runs
+the same safe deploy script:
+
+```bash
+cd /opt/projetos/financas-agent
+git fetch deon main
+git checkout main
+git pull --ff-only deon main
+./scripts/vps_deploy.sh
+```
+
+The job refuses to continue when the VPS checkout has tracked local changes. Untracked
+machine-local files such as `.cursor/` are ignored by that guard.
+The branch update must remain a fast-forward through `git pull --ff-only deon main`.
+
+Required repository secrets:
+
+- `VPS_SSH_HOST`: VPS hostname or IP.
+- `VPS_SSH_USER`: SSH user, currently `davi`.
+- `VPS_SSH_KEY`: private deploy key allowed to SSH into the VPS.
+- `VPS_SSH_FINGERPRINT`: SSH host fingerprint for the VPS.
+- `VPS_SSH_PORT`: optional SSH port; defaults to `22`.
+
+Until the required secrets are configured, the workflow keeps CI green and skips the SSH
+deploy step with a notice. Once the secrets exist, every successful push to `main`
+deploys automatically.
+
+The VPS repository remote used for deploy is `deon`, pointing at
+`git@github-deon-fin:deon7769/deon-fin.git`. Keep the production `.env` only on the VPS;
+GitHub Actions should not receive Pluggy or analyst provider credentials.
+
 ## Environment
 
 The VPS `.env` remains the only real runtime configuration file. Tests install harmless process-local defaults in pytest only so unit tests do not inherit production Basic Auth or call Pluggy unless real credentials are exported explicitly in the shell.
