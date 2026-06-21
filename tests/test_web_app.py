@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from src.storage import Account, Transaction
+from src.storage import Account, Database, Transaction
 from src.web.app import create_app, get_db, get_pluggy
 
 
@@ -163,6 +163,58 @@ def test_sync_all_uses_requested_period(client, monkeypatch):
     assert r.status_code == 200
     assert r.json() == {"scheduled": True, "days": 365}
     spy.assert_called_once_with(365)
+
+
+def test_background_sync_fills_missing_reference_month(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from src.web import app as web_app
+
+    db_path = tmp_path / "sync.db"
+    seed = Database(db_path)
+    seed.close()
+
+    class FakePluggy:
+        def close(self):
+            return None
+
+    class FakeCategorizer:
+        def apply_to_database(self, db):
+            return {"updated": 0}
+
+    def fake_sync(pc, db, item_id, *, since):
+        db.upsert_account(Account(id="acc-sync", source="pluggy", type="CHECKING"))
+        db.insert_transactions([
+            Transaction(
+                account_id="acc-sync",
+                posted_at=date(2026, 6, 14),
+                amount=Decimal("-10.00"),
+                description="Synced transaction",
+                source="pluggy",
+            )
+        ])
+
+    monkeypatch.setattr(
+        web_app,
+        "settings",
+        SimpleNamespace(
+            database_path=db_path,
+            client_id="client",
+            client_secret="secret",
+        ),
+    )
+    monkeypatch.setattr(web_app, "PluggyClient", lambda *args, **kwargs: FakePluggy())
+    monkeypatch.setattr(web_app, "Categorizer", FakeCategorizer)
+    monkeypatch.setattr(web_app, "sync_pluggy_item", fake_sync)
+
+    web_app._background_sync("item-sync", 30)
+
+    check = Database(db_path)
+    value = check._conn.execute(
+        "SELECT reference_month FROM transactions WHERE description='Synced transaction'"
+    ).fetchone()[0]
+    assert value == "2026-06"
+    check.close()
 
 
 def test_sync_unknown_item_returns_404(client):

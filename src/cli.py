@@ -13,6 +13,13 @@ from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
 from .pluggy import PluggyClient
 from .storage import Database
+from .web.repositories import profile_repo, transactions_repo
+
+
+def _fill_missing_reference_months(db: Database) -> int:
+    profile = profile_repo.get_profile(db)
+    start_day = int(profile["financial_month_start_day"] or 1)
+    return transactions_repo.fill_missing_reference_months(db, start_day)
 
 app = typer.Typer(help="Gestão financeira pessoal — agente CLI")
 console = Console()
@@ -77,7 +84,24 @@ def categorize() -> None:
     db = _db()
     try:
         stats = Categorizer().apply_to_database(db)
+        _fill_missing_reference_months(db)
         console.print(stats)
+    finally:
+        db.close()
+
+
+@app.command("recompute-reference-month")
+def recompute_reference_month() -> None:
+    """Recalcula o mês de competência de todas as transações."""
+    db = _db()
+    try:
+        profile = profile_repo.get_profile(db)
+        start_day = int(profile["financial_month_start_day"] or 1)
+        updated = transactions_repo.recompute_reference_months(db, start_day)
+        console.print(
+            f"[green]{updated} transação(ões) recalculada(s) "
+            f"com início no dia {start_day}.[/green]"
+        )
     finally:
         db.close()
 

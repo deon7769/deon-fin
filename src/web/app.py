@@ -28,6 +28,7 @@ from ..config import settings
 from ..importers import sync_pluggy_item
 from ..pluggy import PluggyAPIError, PluggyClient
 from ..storage import Database
+from .repositories import profile_repo, transactions_repo
 
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
@@ -255,6 +256,12 @@ def _item_display_name(
 
 
 # ---------------------------------------------------------------- background
+def _fill_missing_reference_months(db: Database) -> int:
+    profile = profile_repo.get_profile(db)
+    start_day = int(profile["financial_month_start_day"] or 1)
+    return transactions_repo.fill_missing_reference_months(db, start_day)
+
+
 def _background_sync(item_id: str, days: int) -> None:
     """Roda em thread pool do FastAPI (BackgroundTasks) — não bloqueia request."""
     db = Database(settings.database_path)
@@ -263,6 +270,7 @@ def _background_sync(item_id: str, days: int) -> None:
         since = date.today() - timedelta(days=days)
         sync_pluggy_item(pc, db, item_id, since=since)
         Categorizer().apply_to_database(db)
+        _fill_missing_reference_months(db)
         db.upsert_pluggy_item(item_id, mark_synced=True)
     finally:
         pc.close()
@@ -306,6 +314,7 @@ def _sync_all_items(days: int) -> str:
                 errors.append(msg)
                 log.exception("sync falhou para item %s", it["id"])
         Categorizer().apply_to_database(db)
+        _fill_missing_reference_months(db)
         result = f"{ok} conta(s) sincronizada(s)" + (f", {err} com erro" if err else "")
         if errors:
             result += " — " + "; ".join(errors[:3])

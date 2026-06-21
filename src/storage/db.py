@@ -9,6 +9,8 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from .migrations import apply_migrations
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
     id              TEXT PRIMARY KEY,
@@ -110,6 +112,7 @@ class Database:
         self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(SCHEMA)
+        apply_migrations(self._conn)
         self._conn.commit()
 
     @contextmanager
