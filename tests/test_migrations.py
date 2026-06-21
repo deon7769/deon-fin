@@ -50,8 +50,10 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
         row[0]
         for row in conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
     ]
-    assert ids == list(range(1, 11))
+    assert ids == list(range(1, 12))
     assert "idx_tx_reference_month" in _indexes(conn, "transactions")
+    assert "idx_tx_tag_id" in _indexes(conn, "transactions")
+    assert "idx_tx_bucket_id" in _indexes(conn, "transactions")
 
     hidden = {
         row[1]: row for row in conn.execute("PRAGMA table_info(transactions)").fetchall()
@@ -121,7 +123,7 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
     tmp_db._conn.execute("DELETE FROM schema_migrations")
     tmp_db._conn.commit()
 
-    assert apply_migrations(tmp_db._conn) == 10
+    assert apply_migrations(tmp_db._conn) == 11
     assert apply_migrations(tmp_db._conn) == 0
 
     ids = [
@@ -130,4 +132,4 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
             "SELECT id FROM schema_migrations ORDER BY id"
         ).fetchall()
     ]
-    assert ids == list(range(1, 11))
+    assert ids == list(range(1, 12))

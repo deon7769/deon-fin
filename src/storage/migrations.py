@@ -143,6 +143,11 @@ def m0010_backfill_reference_month(conn: sqlite3.Connection) -> None:
     )
 
 
+def m0011_tx_filter_indexes(conn: sqlite3.Connection) -> None:
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_tag_id ON transactions(tag_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_bucket_id ON transactions(bucket_id)")
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -154,6 +159,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (8, "profile", m0008_profile),
     (9, "account_balances", m0009_account_balances),
     (10, "backfill_reference_month", m0010_backfill_reference_month),
+    (11, "tx_filter_indexes", m0011_tx_filter_indexes),
 ]
 
 

@@ -39,3 +39,42 @@ export type Profile = {
   initials: string;
   updated_at?: string | null;
 };
+
+export type TransactionType = "income" | "expense";
+
+export type TransactionHiddenFilter = "exclude" | "include" | "only";
+
+export type TransactionSummary = {
+  income: number;
+  expense: number;
+  balance: number;
+};
+
+export type Transaction = {
+  id: string;
+  account_id: string;
+  posted_at: string;
+  amount: number;
+  description: string;
+  raw_description?: string | null;
+  category?: string | null;
+  category_source?: string | null;
+  source: string;
+  external_id?: string | null;
+  bucket_id?: number | null;
+  bucket_source?: string | null;
+  bucket?: Pick<Bucket, "id" | "name" | "color"> | null;
+  tag_id?: number | null;
+  tag?: Pick<Tag, "id" | "name" | "color"> | null;
+  reference_month?: string | null;
+  hidden: boolean;
+  note?: string | null;
+  account_name?: string | null;
+  account_type?: string | null;
+  signed_value: number;
+  type: TransactionType;
+};
+
+export type TransactionPage = Page<Transaction> & {
+  summary: TransactionSummary;
+};
