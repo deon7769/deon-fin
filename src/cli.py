@@ -8,12 +8,13 @@ from rich.console import Console
 from rich.table import Table
 
 from .agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
+from .agent.buckets import apply_buckets_to_database
 from .agent.context import spending_value
 from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
 from .pluggy import PluggyClient
 from .storage import Database
-from .web.repositories import profile_repo, transactions_repo
+from .web.repositories import buckets_repo, profile_repo, transactions_repo
 
 
 def _fill_missing_reference_months(db: Database) -> int:
@@ -84,8 +85,20 @@ def categorize() -> None:
     db = _db()
     try:
         stats = Categorizer().apply_to_database(db)
+        bucket_stats = apply_buckets_to_database(db)
         _fill_missing_reference_months(db)
-        console.print(stats)
+        console.print({"categories": stats, "buckets": bucket_stats})
+    finally:
+        db.close()
+
+
+@app.command("seed-buckets")
+def seed_buckets() -> None:
+    """Insere os 6 potes de Meta se ainda não existirem."""
+    db = _db()
+    try:
+        inserted = buckets_repo.seed_buckets(db)
+        console.print(f"[green]{inserted} pote(s) inserido(s).[/green]")
     finally:
         db.close()
 

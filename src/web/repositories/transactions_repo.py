@@ -1,9 +1,20 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Any
 
+from ...agent.buckets import match_key_for
 from ...storage import Database
 from ...storage.reference_month import reference_month
+from . import buckets_repo
+
+
+class TransactionNotFoundError(ValueError):
+    pass
+
+
+class BucketNotFoundError(ValueError):
+    pass
 
 
 def _parse_posted_at(value: str) -> date:
@@ -36,3 +47,101 @@ def fill_missing_reference_months(db: Database, start_day: int) -> int:
         )
     db._conn.commit()
     return len(rows)
+
+
+def set_bucket(
+    db: Database,
+    transaction_id: str,
+    *,
+    bucket_id: int | None,
+    apply_to_similar: bool = False,
+) -> dict[str, Any]:
+    if bucket_id is not None and not buckets_repo.bucket_exists(db, bucket_id):
+        raise BucketNotFoundError(f"bucket_id inválido: {bucket_id}")
+
+    rule_upserted = False
+    rule_deleted = False
+    similar_ids: list[str] = []
+
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute(
+            """
+            SELECT id, amount, raw_description, description
+              FROM transactions
+             WHERE id=?
+            """,
+            (transaction_id,),
+        )
+        target = cur.fetchone()
+        if target is None:
+            raise TransactionNotFoundError(transaction_id)
+
+        match_key = match_key_for(
+            target["raw_description"] or target["description"],
+            float(target["amount"]),
+        )
+
+        cur.execute(
+            """
+            UPDATE transactions
+               SET bucket_id=?, bucket_source='manual'
+             WHERE id=?
+            """,
+            (bucket_id, transaction_id),
+        )
+
+        if match_key:
+            if bucket_id is None:
+                cur.execute("DELETE FROM bucket_rules WHERE match_key=?", (match_key,))
+                rule_deleted = cur.rowcount > 0
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO bucket_rules (match_key, bucket_id)
+                    VALUES (?, ?)
+                    ON CONFLICT(match_key) DO UPDATE SET bucket_id=excluded.bucket_id
+                    """,
+                    (match_key, bucket_id),
+                )
+                rule_upserted = True
+
+            if apply_to_similar and bucket_id is not None:
+                cur.execute(
+                    """
+                    SELECT id, amount, raw_description, description
+                      FROM transactions
+                     WHERE id != ?
+                       AND bucket_id IS NULL
+                       AND (bucket_source IS NULL OR bucket_source != 'manual')
+                    """,
+                    (transaction_id,),
+                )
+                candidates = cur.fetchall()
+                for row in candidates:
+                    candidate_key = match_key_for(
+                        row["raw_description"] or row["description"],
+                        float(row["amount"]),
+                    )
+                    if candidate_key != match_key:
+                        continue
+
+                    cur.execute(
+                        """
+                        UPDATE transactions
+                           SET bucket_id=?, bucket_source='rule'
+                         WHERE id=?
+                        """,
+                        (bucket_id, row["id"]),
+                    )
+                    similar_ids.append(row["id"])
+
+    return {
+        "updated": 1,
+        "bucket_id": bucket_id,
+        "bucket_source": "manual",
+        "match_key": match_key,
+        "rule_upserted": rule_upserted,
+        "rule_deleted": rule_deleted,
+        "similar_affected": len(similar_ids),
+        "similar_ids": similar_ids,
+    }

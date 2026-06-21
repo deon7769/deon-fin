@@ -13,6 +13,8 @@ def _code_for_status(status_code: int) -> str:
         return "unauthorized"
     if status_code == 403:
         return "forbidden"
+    if status_code == 422:
+        return "validation_error"
     return "http_error"
 
 

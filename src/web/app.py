@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from starlette.requests import Request
 
 from ..agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
+from ..agent.buckets import apply_buckets_to_database
 from ..agent.budget import summarize_5030, summarize_executivo, summarize_wishlist
 from ..agent.context import income_value, spending_value
 from ..agent.simulator import simular_amortizacao, simular_compra
@@ -257,6 +258,7 @@ def _background_sync(item_id: str, days: int) -> None:
         since = date.today() - timedelta(days=days)
         sync_pluggy_item(pc, db, item_id, since=since)
         Categorizer().apply_to_database(db)
+        apply_buckets_to_database(db)
         _fill_missing_reference_months(db)
         db.upsert_pluggy_item(item_id, mark_synced=True)
     finally:
@@ -301,6 +303,7 @@ def _sync_all_items(days: int) -> str:
                 errors.append(msg)
                 log.exception("sync falhou para item %s", it["id"])
         Categorizer().apply_to_database(db)
+        apply_buckets_to_database(db)
         _fill_missing_reference_months(db)
         result = f"{ok} conta(s) sincronizada(s)" + (f", {err} com erro" if err else "")
         if errors:

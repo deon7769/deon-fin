@@ -74,7 +74,14 @@ def test_domain_router_stubs_return_empty_defaults(client):
     profile = client.get("/api/profile")
 
     assert buckets.status_code == 200
-    assert buckets.json() == {"items": []}
+    assert [item["key"] for item in buckets.json()["items"]] == [
+        "liberdade_financeira",
+        "custos_fixos",
+        "conforto",
+        "metas",
+        "prazeres",
+        "conhecimento",
+    ]
 
     assert tags.status_code == 200
     assert tags.json() == {"items": []}
@@ -220,6 +227,14 @@ def test_background_sync_fills_missing_reference_month(tmp_path, monkeypatch):
 
     class FakeCategorizer:
         def apply_to_database(self, db):
+            db._conn.execute(
+                """
+                UPDATE transactions
+                   SET category='Alimentação - Mercado', category_source='rule'
+                 WHERE description='Synced transaction'
+                """
+            )
+            db._conn.commit()
             return {"updated": 0}
 
     def fake_sync(pc, db, item_id, *, since):
@@ -250,10 +265,16 @@ def test_background_sync_fills_missing_reference_month(tmp_path, monkeypatch):
     web_app._background_sync("item-sync", 30)
 
     check = Database(db_path)
-    value = check._conn.execute(
-        "SELECT reference_month FROM transactions WHERE description='Synced transaction'"
-    ).fetchone()[0]
-    assert value == "2026-06"
+    row = check._conn.execute(
+        """
+        SELECT reference_month, bucket_id, bucket_source
+          FROM transactions
+         WHERE description='Synced transaction'
+        """
+    ).fetchone()
+    assert row["reference_month"] == "2026-06"
+    assert row["bucket_id"] is not None
+    assert row["bucket_source"] == "auto"
     check.close()
 
 
