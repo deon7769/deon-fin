@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 from src.storage import Account, Transaction
 from src.web.repositories import buckets_repo, profile_repo, tags_repo, transactions_repo
@@ -71,7 +72,14 @@ def test_empty_bucket_and_tag_repositories_have_no_seed_data(tmp_db):
     assert tags_repo.list_tags(tmp_db) == []
 
 
-def test_get_profile_returns_default_singleton_idempotently(tmp_db):
+def test_get_profile_returns_default_singleton_idempotently(tmp_db, monkeypatch):
+    monkeypatch.setattr(
+        profile_repo,
+        "settings",
+        SimpleNamespace(monthly_income=None, financial_goals=[]),
+    )
+    monkeypatch.setattr(profile_repo.mnt, "load_family_profile", lambda: None)
+
     first = profile_repo.get_profile(tmp_db)
     second = profile_repo.get_profile(tmp_db)
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +14,14 @@ from src.web.app import create_app, get_db, get_pluggy
 @pytest.fixture
 def client(tmp_db, monkeypatch):
     monkeypatch.setattr("src.web.app._background_sync", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        "src.web.repositories.profile_repo.settings",
+        SimpleNamespace(monthly_income=None, financial_goals=[]),
+    )
+    monkeypatch.setattr(
+        "src.web.repositories.profile_repo.mnt.load_family_profile",
+        lambda: None,
+    )
     app = create_app()
 
     def _override_db():

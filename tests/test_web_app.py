@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +17,14 @@ def client(tmp_db, monkeypatch):
     # Pluggy nos testes. Testes que quiserem checar o agendamento podem
     # patchar src.web.app._background_sync localmente.
     monkeypatch.setattr("src.web.app._background_sync", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        "src.web.repositories.profile_repo.settings",
+        SimpleNamespace(monthly_income=None, financial_goals=[]),
+    )
+    monkeypatch.setattr(
+        "src.web.repositories.profile_repo.mnt.load_family_profile",
+        lambda: None,
+    )
 
     app = create_app()
 
