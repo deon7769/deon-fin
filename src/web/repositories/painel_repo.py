@@ -4,7 +4,7 @@ import re
 from datetime import date
 from typing import Any, Literal
 
-from ...agent.context import income_value, spending_value
+from ...agent.context import income_value, internal_transfer_credit_ids, spending_value
 from ...storage import Database
 from ...storage.reference_month import reference_month
 from . import profile_repo
@@ -56,7 +56,10 @@ def _visible_transactions_for_months(db: Database, months: list[str]) -> list[An
     placeholders = ",".join("?" for _ in months)
     return db._conn.execute(
         f"""
-        SELECT t.reference_month,
+        SELECT t.id,
+               t.account_id,
+               t.posted_at,
+               t.reference_month,
                t.amount,
                t.category,
                t.tag_id,
@@ -84,9 +87,16 @@ def month_summary(db: Database, month: str) -> dict[str, Any]:
     income = 0.0
     expense = 0.0
 
-    for row in _visible_transactions_for_months(db, [month]):
+    rows = _visible_transactions_for_months(db, [month])
+    internal_transfer_income_ids = internal_transfer_credit_ids(rows)
+    for row in rows:
         amount = float(row["amount"])
-        income += income_value(amount, row["account_type"], row["category"])
+        income += income_value(
+            amount,
+            row["account_type"],
+            row["category"],
+            external_transfer_income=row["id"] not in internal_transfer_income_ids,
+        )
         expense += spending_value(amount, row["account_type"], row["category"])
 
     accounts_balance, accounts_balance_available = _accounts_balance(db)
@@ -113,10 +123,17 @@ def history(db: Database, months: int) -> list[dict[str, Any]]:
         for month in month_keys
     }
 
-    for row in _visible_transactions_for_months(db, month_keys):
+    rows = _visible_transactions_for_months(db, month_keys)
+    internal_transfer_income_ids = internal_transfer_credit_ids(rows)
+    for row in rows:
         month = row["reference_month"]
         amount = float(row["amount"])
-        totals[month]["income"] += income_value(amount, row["account_type"], row["category"])
+        totals[month]["income"] += income_value(
+            amount,
+            row["account_type"],
+            row["category"],
+            external_transfer_income=row["id"] not in internal_transfer_income_ids,
+        )
         totals[month]["expense"] += spending_value(amount, row["account_type"], row["category"])
 
     return [
@@ -134,12 +151,19 @@ def by_tag(db: Database, month: str, type: Literal["expense", "income"]) -> dict
         raise ValueError("type inválido")
 
     grouped: dict[int | None, dict[str, Any]] = {}
-    for row in _visible_transactions_for_months(db, [month]):
+    rows = _visible_transactions_for_months(db, [month])
+    internal_transfer_income_ids = internal_transfer_credit_ids(rows)
+    for row in rows:
         amount = float(row["amount"])
         value = (
             spending_value(amount, row["account_type"], row["category"])
             if type == "expense"
-            else income_value(amount, row["account_type"], row["category"])
+            else income_value(
+                amount,
+                row["account_type"],
+                row["category"],
+                external_transfer_income=row["id"] not in internal_transfer_income_ids,
+            )
         )
         if value == 0:
             continue

@@ -368,6 +368,54 @@ def test_budget_income_transactions_have_priority(tmp_db, monkeypatch):
     assert result["income_source"] == "transactions"
 
 
+def test_budget_income_counts_external_pix_without_counting_mirrored_own_pix(
+    tmp_db, monkeypatch
+):
+    _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="budget-bank-2",
+            source="test",
+            institution="Banco Teste 2",
+            name="Conta Secundaria",
+            type="CHECKING",
+        )
+    )
+    monkeypatch.setattr(
+        budget_repo,
+        "settings",
+        SimpleNamespace(monthly_income=None, financial_goals=[]),
+    )
+    monkeypatch.setattr(budget_repo.mnt, "load_family_profile", lambda: None)
+    _insert_tx(
+        tmp_db,
+        external_id="budget-external-pix-income",
+        amount="7845.40",
+        description="Pix recebido cliente externo",
+        category="Transfer - PIX",
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="budget-own-pix-out",
+        amount="-5400.00",
+        description="Pix enviado conta propria",
+        category="Same person transfer",
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="budget-own-pix-in",
+        account_id="budget-bank-2",
+        amount="5400.00",
+        description="Pix recebido conta propria",
+        category="Transfer - PIX",
+    )
+
+    result = budget_repo.budget_for_month(tmp_db, "2026-06")
+
+    assert result["income"] == 7845.4
+    assert result["income_source"] == "transactions"
+
+
 def test_resolve_month_uses_profile_start_day(tmp_db, monkeypatch):
     monkeypatch.setattr(
         budget_repo,

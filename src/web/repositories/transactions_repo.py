@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Literal
 
-from ...agent.context import CREDIT_TYPES, income_value, spending_value
+from ...agent.context import CREDIT_TYPES, income_value, internal_transfer_credit_ids, spending_value
 from ...agent.buckets import match_key_for
 from ...storage import Database, Transaction
 from ...storage.reference_month import reference_month
@@ -60,13 +60,24 @@ def _display_type(amount: float, account_type: str | None) -> Literal["income", 
     return "income" if amount > 0 else "expense"
 
 
-def _signed_value(amount: float, account_type: str | None, category: str | None) -> float:
-    income = income_value(amount, account_type, category)
+def _signed_value(
+    amount: float,
+    account_type: str | None,
+    category: str | None,
+    *,
+    external_transfer_income: bool = False,
+) -> float:
+    income = income_value(
+        amount,
+        account_type,
+        category,
+        external_transfer_income=external_transfer_income,
+    )
     expense = spending_value(amount, account_type, category)
     return round(income - expense, 2)
 
 
-def _serialize_item(row: Any) -> dict[str, Any]:
+def _serialize_item(row: Any, *, external_transfer_income: bool = False) -> dict[str, Any]:
     amount = float(row["amount"])
     bucket = None
     if row["bucket_id"] is not None:
@@ -105,7 +116,12 @@ def _serialize_item(row: Any) -> dict[str, Any]:
         "note": row["note"],
         "account_name": row["account_name"],
         "account_type": row["account_type"],
-        "signed_value": _signed_value(amount, row["account_type"], row["category"]),
+        "signed_value": _signed_value(
+            amount,
+            row["account_type"],
+            row["category"],
+            external_transfer_income=external_transfer_income,
+        ),
         "type": _display_type(amount, row["account_type"]),
     }
 
@@ -230,7 +246,7 @@ def _compute_summary(
     )
     rows = db._conn.execute(
         f"""
-        SELECT t.amount, t.category, a.type AS account_type
+        SELECT t.id, t.account_id, t.posted_at, t.amount, t.category, a.type AS account_type
           FROM transactions t
           LEFT JOIN accounts a ON a.id = t.account_id
          WHERE {where}
@@ -240,9 +256,15 @@ def _compute_summary(
 
     income = 0.0
     expense = 0.0
+    internal_transfer_income_ids = internal_transfer_credit_ids(rows)
     for row in rows:
         amount = float(row["amount"])
-        income += income_value(amount, row["account_type"], row["category"])
+        income += income_value(
+            amount,
+            row["account_type"],
+            row["category"],
+            external_transfer_income=row["id"] not in internal_transfer_income_ids,
+        )
         expense += spending_value(amount, row["account_type"], row["category"])
 
     return {
@@ -308,9 +330,16 @@ def list_transactions(
         f"{SELECT_COLS} WHERE {where} ORDER BY t.posted_at DESC, t.id DESC LIMIT ? OFFSET ?",
         (*params, page_size, offset),
     ).fetchall()
+    internal_transfer_income_ids = internal_transfer_credit_ids(rows)
 
     return {
-        "items": [_serialize_item(row) for row in rows],
+        "items": [
+            _serialize_item(
+                row,
+                external_transfer_income=row["id"] not in internal_transfer_income_ids,
+            )
+            for row in rows
+        ],
         "page": page,
         "page_size": page_size,
         "total": int(total),

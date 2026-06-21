@@ -5,7 +5,7 @@ from datetime import date
 from typing import Any, Literal
 
 from ...agent import maintenance as mnt
-from ...agent.context import income_value, spending_value
+from ...agent.context import income_value, internal_transfer_credit_ids, spending_value
 from ...config import settings
 from ...storage import Database
 from ...storage.reference_month import reference_month
@@ -63,6 +63,7 @@ def _visible_transactions_for_month(db: Database, month: str) -> list[Any]:
     return db._conn.execute(
         """
         SELECT t.id,
+               t.account_id,
                t.posted_at,
                t.amount,
                t.description,
@@ -97,8 +98,14 @@ def _income_from_fallbacks(db: Database) -> tuple[float, IncomeSource]:
 
 def _resolve_income(db: Database, rows: list[Any]) -> tuple[float, IncomeSource]:
     total = 0.0
+    internal_transfer_income_ids = internal_transfer_credit_ids(rows)
     for row in rows:
-        total += income_value(float(row["amount"]), row["account_type"], row["category"])
+        total += income_value(
+            float(row["amount"]),
+            row["account_type"],
+            row["category"],
+            external_transfer_income=row["id"] not in internal_transfer_income_ids,
+        )
     total = _money(total)
     if total > 0:
         return total, "transactions"

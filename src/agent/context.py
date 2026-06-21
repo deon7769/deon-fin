@@ -57,6 +57,23 @@ NON_SPENDING_CATEGORIES = {
     "Investimentos",
 }
 
+PIX_TRANSFER_INCOME_CATEGORIES = {"transfer - pix", "transferência - pix"}
+
+INTERNAL_TRANSFER_MATCH_CATEGORIES = {
+    "same person transfer",
+    "transfer - bank slip",
+    "transfer - internal",
+    "transfer - pix",
+    "transferência - pix",
+    "transferência - ted/doc",
+    "transferência entre contas",
+    "transferência interna",
+    "transferências",
+    "transferências - pix",
+    "transferências - ted/doc",
+    "transfers",
+}
+
 INVESTMENT_CATEGORIES = {"Investments", "Investimentos"}
 CARD_PAYMENT_CATEGORIES = {"Credit card payment", "Pagamento de fatura", "Payment"}
 _DEFAULT_PROFILE = object()
@@ -82,6 +99,109 @@ def _category_name(category: str | None) -> str:
     return category or "(sem categoria)"
 
 
+def _normalized_category(category: str | None) -> str:
+    return _category_name(category).strip().lower()
+
+
+def _is_non_credit_account(account_type: str | None) -> bool:
+    return (account_type or "").upper() not in CREDIT_TYPES
+
+
+def _is_pix_transfer_income_candidate(
+    amount: float,
+    account_type: str | None,
+    category: str | None,
+) -> bool:
+    return (
+        float(amount) > 0
+        and _is_non_credit_account(account_type)
+        and _normalized_category(category) in PIX_TRANSFER_INCOME_CATEGORIES
+    )
+
+
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        pass
+    if hasattr(row, "get"):
+        return row.get(key, default)
+    return default
+
+
+def _row_account_type(row: Any, account_types: dict[str, str] | None) -> str | None:
+    account_type = _row_value(row, "account_type")
+    if account_type:
+        return str(account_type)
+    account_id = _row_value(row, "account_id")
+    if account_types and account_id:
+        return account_types.get(str(account_id))
+    return None
+
+
+def _row_date(row: Any) -> date | None:
+    raw = _row_value(row, "posted_at")
+    if raw is None:
+        return None
+    try:
+        return date.fromisoformat(str(raw)[:10])
+    except ValueError:
+        return None
+
+
+def internal_transfer_credit_ids(
+    rows: list[Any],
+    *,
+    account_types: dict[str, str] | None = None,
+    day_window: int = 2,
+) -> set[Any]:
+    """Return positive PIX transfer row ids that have a mirrored connected-account debit."""
+    credits: list[dict[str, Any]] = []
+    debits: list[dict[str, Any]] = []
+
+    for row in rows:
+        account_type = _row_account_type(row, account_types)
+        if not _is_non_credit_account(account_type):
+            continue
+
+        try:
+            amount = float(_row_value(row, "amount", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            continue
+
+        category = _row_value(row, "category")
+        row_id = _row_value(row, "id")
+        account_id = _row_value(row, "account_id")
+        posted = _row_date(row)
+        if row_id is None or account_id is None or posted is None:
+            continue
+
+        normalized_category = _normalized_category(category)
+        payload = {
+            "id": row_id,
+            "account_id": str(account_id),
+            "posted": posted,
+            "amount_abs": round(abs(amount), 2),
+        }
+        if amount > 0 and normalized_category in PIX_TRANSFER_INCOME_CATEGORIES:
+            credits.append(payload)
+        elif amount < 0 and normalized_category in INTERNAL_TRANSFER_MATCH_CATEGORIES:
+            debits.append(payload)
+
+    matched: set[Any] = set()
+    for credit in credits:
+        for debit in debits:
+            if credit["account_id"] == debit["account_id"]:
+                continue
+            if abs(credit["amount_abs"] - debit["amount_abs"]) > 0.01:
+                continue
+            if abs((credit["posted"] - debit["posted"]).days) > day_window:
+                continue
+            matched.add(credit["id"])
+            break
+    return matched
+
+
 def spending_value(amount: float, account_type: str | None, category: str | None) -> float:
     """Return positive spending impact for expenses and negative impact for refunds."""
     category_name = _category_name(category)
@@ -94,15 +214,27 @@ def spending_value(amount: float, account_type: str | None, category: str | None
     return -value if value < 0 else 0.0
 
 
-def income_value(amount: float, account_type: str | None, category: str | None) -> float:
+def income_value(
+    amount: float,
+    account_type: str | None,
+    category: str | None,
+    *,
+    external_transfer_income: bool = False,
+) -> float:
     """Return income from bank accounts only, excluding internal movements."""
     category_name = _category_name(category)
+    value = float(amount)
     if category_name in NON_SPENDING_CATEGORIES:
+        if external_transfer_income and _is_pix_transfer_income_candidate(
+            value,
+            account_type,
+            category,
+        ):
+            return value
         return 0.0
     if (account_type or "").upper() in CREDIT_TYPES:
         return 0.0
 
-    value = float(amount)
     return value if value > 0 else 0.0
 
 
@@ -227,6 +359,7 @@ def build_financial_context(
 
     acct_type = {a["id"]: (a["type"] or "").upper() for a in db.list_accounts()}
     rows = db.list_transactions(limit=100_000)
+    internal_transfer_income_ids = internal_transfer_credit_ids(rows, account_types=acct_type)
 
     realized_months: dict[str, dict[str, float]] = defaultdict(
         lambda: {"renda": 0.0, "gasto": 0.0, "investido": 0.0}
@@ -264,7 +397,12 @@ def build_financial_context(
         mk = _month_key(posted)
 
         # Renda: entradas em conta (não-cartão) que não são transferência interna.
-        income_val = income_value(amount, account_type, category)
+        income_val = income_value(
+            amount,
+            account_type,
+            category,
+            external_transfer_income=r["id"] not in internal_transfer_income_ids,
+        )
         if income_val:
             realized_months[mk]["renda"] += income_val
 

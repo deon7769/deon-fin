@@ -372,6 +372,46 @@ def test_by_tag_excludes_hidden_and_other_type(tmp_db):
     assert income["items"][0]["total"] == 500.0
 
 
+def test_month_summary_counts_external_pix_without_counting_mirrored_own_pix(tmp_db):
+    _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="painel-bank-2",
+            source="test",
+            institution="Banco Teste 2",
+            name="Conta Secundaria",
+            type="CHECKING",
+        )
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="painel-external-pix-income",
+        amount="7845.40",
+        description="Pix recebido cliente externo",
+        category="Transfer - PIX",
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="painel-own-pix-out",
+        amount="-5400.00",
+        description="Pix enviado conta propria",
+        category="Same person transfer",
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="painel-own-pix-in",
+        account_id="painel-bank-2",
+        amount="5400.00",
+        description="Pix recebido conta propria",
+        category="Transfer - PIX",
+    )
+
+    summary = painel_repo.month_summary(tmp_db, "2026-06")
+
+    assert summary["income"] == 7845.4
+    assert summary["expense"] == 0.0
+
+
 def test_by_tag_applies_refunds_to_tag_total(tmp_db):
     _seed_accounts(tmp_db)
     tag = _tag_by_name(tmp_db, "Lazer")

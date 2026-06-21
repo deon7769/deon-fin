@@ -162,3 +162,47 @@ def test_context_tracks_portuguese_non_spending_aliases(tmp_db):
     assert ctx["gasto_por_categoria"] == [
         {"categoria": "Shopping", "total": 100.0, "qtd": 1, "media_mensal": 100.0}
     ]
+
+
+def test_context_counts_external_pix_income_without_counting_mirrored_own_pix(tmp_db):
+    tmp_db.upsert_account(Account(id="bank1", source="test", name="Bank 1", type="BANK"))
+    tmp_db.upsert_account(Account(id="bank2", source="test", name="Bank 2", type="BANK"))
+    tmp_db.insert_transactions([
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 6, 12),
+            amount=Decimal("7845.40"),
+            description="Pix recebido cliente externo",
+            source="test",
+            category="Transfer - PIX",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 6, 12),
+            amount=Decimal("-5400.00"),
+            description="Pix enviado conta propria",
+            source="test",
+            category="Same person transfer",
+        ),
+        Transaction(
+            account_id="bank2",
+            posted_at=date(2026, 6, 12),
+            amount=Decimal("5400.00"),
+            description="Pix recebido conta propria",
+            source="test",
+            category="Transfer - PIX",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=date(2026, 6, 13),
+            amount=Decimal("-100.00"),
+            description="Mercado",
+            source="test",
+            category="Groceries",
+        ),
+    ])
+
+    ctx = build_financial_context(tmp_db, today=date(2026, 6, 21)).to_dict()
+
+    assert ctx["fluxo_mensal"]["2026-06"]["renda"] == 7845.4
+    assert ctx["fluxo_mensal"]["2026-06"]["gasto"] == 100.0
