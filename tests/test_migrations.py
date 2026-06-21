@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 from pathlib import Path
 
 from src.storage.db import SCHEMA, Database
@@ -50,7 +51,7 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
         row[0]
         for row in conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
     ]
-    assert ids == list(range(1, 12))
+    assert ids == list(range(1, 13))
     assert "idx_tx_reference_month" in _indexes(conn, "transactions")
     assert "idx_tx_tag_id" in _indexes(conn, "transactions")
     assert "idx_tx_bucket_id" in _indexes(conn, "transactions")
@@ -60,6 +61,15 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
     }["hidden"]
     assert hidden[3] == 1
     assert hidden[4] == "0"
+    db.close()
+
+
+def test_new_database_has_account_connection_columns(tmp_path: Path):
+    db = Database(tmp_path / "new.db")
+    conn = db._conn
+
+    assert {"sort_order", "pluggy_item_id"}.issubset(_columns(conn, "accounts"))
+    assert {"brand", "last4"}.issubset(_columns(conn, "account_balances"))
     db.close()
 
 
@@ -112,6 +122,83 @@ def test_backfill_reference_month_on_legacy_database(tmp_path: Path):
     db.close()
 
 
+def test_backfill_account_balances_from_legacy_pluggy_metadata(tmp_path: Path):
+    path = tmp_path / "legacy-accounts.db"
+    conn = sqlite3.connect(path)
+    conn.executescript(SCHEMA)
+    conn.execute(
+        """
+        INSERT INTO pluggy_items (id, connector_name, status, last_synced_at)
+        VALUES ('item-bank', 'Banco Inter', 'UPDATED', '2026-06-20T10:00:00')
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO accounts (id, source, institution, name, type, currency, metadata_json)
+        VALUES (?, 'pluggy', '077/0001/12345-6', 'Conta Corrente', 'BANK', 'BRL', ?)
+        """,
+        (
+            "pluggy:bank",
+            json.dumps(
+                {
+                    "itemId": "item-bank",
+                    "balance": 58.77,
+                    "bankData": {"transferNumber": "077/0001/12345-6"},
+                }
+            ),
+        ),
+    )
+    conn.execute(
+        """
+        INSERT INTO accounts (id, source, institution, name, type, currency, metadata_json)
+        VALUES (?, 'pluggy', 'Cartao Black', 'Cartao Black', 'CREDIT', 'BRL', ?)
+        """,
+        (
+            "pluggy:card",
+            json.dumps(
+                {
+                    "itemId": "item-bank",
+                    "number": "550000001234",
+                    "creditData": {
+                        "brand": "MASTERCARD",
+                        "creditLimit": 4000.0,
+                        "availableCreditLimit": 3250.5,
+                    },
+                }
+            ),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    db = Database(path)
+    bank = db._conn.execute(
+        "SELECT pluggy_item_id FROM accounts WHERE id='pluggy:bank'"
+    ).fetchone()
+    card_balance = db._conn.execute(
+        """
+        SELECT credit_limit, available, used, brand, last4, sync_status
+          FROM account_balances
+         WHERE account_id='pluggy:card'
+        """
+    ).fetchone()
+    bank_balance = db._conn.execute(
+        "SELECT balance, sync_status FROM account_balances WHERE account_id='pluggy:bank'"
+    ).fetchone()
+
+    assert bank["pluggy_item_id"] == "item-bank"
+    assert bank_balance["balance"] == 58.77
+    assert bank_balance["sync_status"] == "UPDATED"
+    assert card_balance["credit_limit"] == 4000.0
+    assert card_balance["available"] == 3250.5
+    assert card_balance["used"] == 749.5
+    assert card_balance["brand"] == "MASTERCARD"
+    assert card_balance["last4"] == "1234"
+    assert card_balance["sync_status"] == "UPDATED"
+    assert apply_migrations(db._conn) == 0
+    db.close()
+
+
 def test_add_column_guard_is_safe_when_column_exists(tmp_db):
     _add_column(tmp_db._conn, "transactions", "note", "TEXT")
     _add_column(tmp_db._conn, "transactions", "note", "TEXT")
@@ -123,7 +210,7 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
     tmp_db._conn.execute("DELETE FROM schema_migrations")
     tmp_db._conn.commit()
 
-    assert apply_migrations(tmp_db._conn) == 11
+    assert apply_migrations(tmp_db._conn) == 12
     assert apply_migrations(tmp_db._conn) == 0
 
     ids = [
@@ -132,4 +219,4 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
             "SELECT id FROM schema_migrations ORDER BY id"
         ).fetchall()
     ]
-    assert ids == list(range(1, 12))
+    assert ids == list(range(1, 13))

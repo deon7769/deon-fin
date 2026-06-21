@@ -204,3 +204,77 @@ export type InvoiceResponse = {
   items: InvoiceItem[];
   by_category: InvoiceCategory[];
 };
+
+export type AccountBank = {
+  id: string;
+  institution: string | null;
+  name: string;
+  type: string;
+  agency: string | null;
+  number: string | null;
+  balance: number;
+  currency: string;
+  pluggy_item_id: string | null;
+  connector_name: string | null;
+  last_sync_at: string | null;
+  sync_status: string;
+  manual: boolean;
+};
+
+export type AccountCard = {
+  id: string;
+  name: string;
+  last4: string | null;
+  brand: string | null;
+  credit_limit: number | null;
+  used: number | null;
+  available: number | null;
+  usage_pct: number | null;
+  currency: string;
+  pluggy_item_id: string | null;
+  connector_name: string | null;
+  last_sync_at: string | null;
+  sync_status: string;
+  manual: boolean;
+};
+
+export type AccountsTotals = {
+  accounts_balance: number;
+  card_debt: number;
+  period_result: number;
+};
+
+export type AccountsSync = {
+  running: boolean;
+  last_started: string | null;
+  last_finished: string | null;
+  last_result: string | null;
+  scheduler_on: boolean;
+  auto_sync_minutes: number;
+};
+
+export type AccountsResponse = {
+  banks: AccountBank[];
+  cards: AccountCard[];
+  totals: AccountsTotals;
+  sync: AccountsSync;
+};
+
+export type AccountSyncResponse = {
+  account_id: string;
+  item_id: string;
+  sync_scheduled: boolean;
+  days: number;
+  detail?: string;
+};
+
+export type AccountCredentialsResponse = {
+  accessToken: string;
+};
+
+export type AccountDeleteResponse = {
+  deleted: boolean;
+  item_id: string;
+  kept_transactions: boolean;
+  accounts_disconnected: string[];
+};

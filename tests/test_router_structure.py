@@ -7,6 +7,7 @@ def test_domain_router_modules_exist():
     router_dir = Path("src/web/routers")
 
     assert (router_dir / "__init__.py").exists()
+    assert (router_dir / "accounts.py").exists()
     assert (router_dir / "buckets.py").exists()
     assert (router_dir / "budget.py").exists()
     assert (router_dir / "invoices.py").exists()

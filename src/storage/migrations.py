@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Callable
+from typing import Any
 
 
 Migration = Callable[[sqlite3.Connection], None]
@@ -148,6 +150,128 @@ def m0011_tx_filter_indexes(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_tx_bucket_id ON transactions(bucket_id)")
 
 
+def _json_obj(raw: str | None) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _last4(*values: Any) -> str | None:
+    for value in values:
+        digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+        if len(digits) >= 4:
+            return digits[-4:]
+    return None
+
+
+def m0012_account_connection_metadata(conn: sqlite3.Connection) -> None:
+    _add_column(conn, "accounts", "sort_order", "INTEGER")
+    _add_column(conn, "accounts", "pluggy_item_id", "TEXT")
+    _add_column(conn, "account_balances", "brand", "TEXT")
+    _add_column(conn, "account_balances", "last4", "TEXT")
+
+    items = {
+        row[0]: {"status": row[1], "last_synced_at": row[2], "updated_at": row[3]}
+        for row in conn.execute(
+            "SELECT id, status, last_synced_at, updated_at FROM pluggy_items"
+        ).fetchall()
+    }
+
+    for account_id, source, account_type, metadata_json in conn.execute(
+        "SELECT id, source, type, metadata_json FROM accounts"
+    ).fetchall():
+        meta = _json_obj(metadata_json)
+        item_id = meta.get("itemId") or meta.get("item_id")
+        if item_id:
+            conn.execute(
+                "UPDATE accounts SET pluggy_item_id=? WHERE id=?",
+                (str(item_id), account_id),
+            )
+
+        if source != "pluggy":
+            continue
+
+        credit_data = meta.get("creditData") if isinstance(meta.get("creditData"), dict) else {}
+        bank_data = meta.get("bankData") if isinstance(meta.get("bankData"), dict) else {}
+        is_credit = (account_type or "").upper() in {"CREDIT", "CREDIT_CARD"}
+        credit_limit = _number(
+            credit_data.get("creditLimit")
+            or credit_data.get("credit_limit")
+            or credit_data.get("limit")
+        )
+        available = _number(
+            credit_data.get("availableCreditLimit")
+            or credit_data.get("available_credit_limit")
+            or credit_data.get("available")
+        )
+        used = (
+            round(credit_limit - available, 2)
+            if credit_limit is not None and available is not None
+            else _number(credit_data.get("balance") or credit_data.get("used"))
+        )
+        balance = None if is_credit else _number(meta.get("balance"))
+        brand = (
+            credit_data.get("brand")
+            or credit_data.get("network")
+            or meta.get("brand")
+            or meta.get("network")
+        )
+        last4 = _last4(
+            meta.get("last4"),
+            meta.get("lastFourDigits"),
+            meta.get("number"),
+            credit_data.get("last4"),
+            credit_data.get("lastFourDigits"),
+            credit_data.get("number"),
+            bank_data.get("transferNumber"),
+        )
+        item = items.get(str(item_id)) if item_id else None
+        sync_status = (item or {}).get("status") or "UPDATED"
+        last_sync_at = (item or {}).get("last_synced_at") or (item or {}).get("updated_at")
+
+        conn.execute(
+            """
+            INSERT INTO account_balances (
+                account_id, balance, credit_limit, used, available, brand, last4,
+                last_sync_at, sync_status, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(account_id) DO UPDATE SET
+                balance=excluded.balance,
+                credit_limit=excluded.credit_limit,
+                used=excluded.used,
+                available=excluded.available,
+                brand=excluded.brand,
+                last4=excluded.last4,
+                last_sync_at=COALESCE(excluded.last_sync_at, account_balances.last_sync_at),
+                sync_status=COALESCE(excluded.sync_status, account_balances.sync_status),
+                updated_at=datetime('now')
+            """,
+            (
+                account_id,
+                balance,
+                credit_limit,
+                used,
+                available,
+                str(brand).strip() if brand else None,
+                last4,
+                last_sync_at,
+                sync_status,
+            ),
+        )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -160,6 +284,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (9, "account_balances", m0009_account_balances),
     (10, "backfill_reference_month", m0010_backfill_reference_month),
     (11, "tx_filter_indexes", m0011_tx_filter_indexes),
+    (12, "account_connection_metadata", m0012_account_connection_metadata),
 ]
 
 

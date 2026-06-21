@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
+from typing import Any
 
+from ..agent.cards import CREDIT_TYPES
 from ..pluggy import PluggyClient
 from ..storage import Account, Database, Transaction
+from ..web.repositories import accounts_repo
 from .base import ImportResult
 
 log = logging.getLogger(__name__)
@@ -41,6 +44,7 @@ def _sync_account(
 ) -> ImportResult:
     acc_id = f"pluggy:{acc['id']}"
     bank_data = acc.get("bankData") or {}
+    item_id = acc.get("itemId")
     db.upsert_account(
         Account(
             id=acc_id,
@@ -52,6 +56,9 @@ def _sync_account(
             metadata={k: v for k, v in acc.items() if k not in {"id", "name", "type"}},
         )
     )
+    if item_id:
+        accounts_repo.set_account_item(db, acc_id, str(item_id))
+    _upsert_account_balance(db, acc_id, acc)
 
     txs: list[Transaction] = []
     for tx in client.list_transactions(
@@ -80,3 +87,51 @@ def _sync_account(
 
 def _parse_date(value: str) -> date:
     return date.fromisoformat(value.split("T")[0])
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _last4(*values: Any) -> str | None:
+    for value in values:
+        digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+        if len(digits) >= 4:
+            return digits[-4:]
+    return None
+
+
+def _upsert_account_balance(db: Database, account_id: str, acc: dict[str, Any]) -> None:
+    item_id = acc.get("itemId")
+    item = db.get_pluggy_item(str(item_id)) if item_id else None
+    account_type = (acc.get("type") or "").upper()
+    is_credit = account_type in CREDIT_TYPES
+    credit_data = acc.get("creditData") or {}
+    limit = _number(credit_data.get("creditLimit") or credit_data.get("credit_limit"))
+    available = _number(
+        credit_data.get("availableCreditLimit") or credit_data.get("available_credit_limit")
+    )
+    used = (
+        round(limit - available, 2)
+        if limit is not None and available is not None
+        else _number(credit_data.get("balance") or credit_data.get("used"))
+    )
+    accounts_repo.upsert_balance(
+        db,
+        account_id=account_id,
+        balance=None if is_credit else _number(acc.get("balance")),
+        credit_limit=limit,
+        used=used if is_credit else None,
+        available=available if is_credit else None,
+        brand=credit_data.get("brand") or credit_data.get("network"),
+        last4=_last4(acc.get("number"), credit_data.get("last4"), credit_data.get("number")),
+        last_sync_at=(
+            item["last_synced_at"]
+            if item is not None and item["last_synced_at"]
+            else datetime.now().isoformat(timespec="seconds")
+        ),
+        sync_status=item["status"] if item is not None and item["status"] else "UPDATED",
+    )
