@@ -310,6 +310,31 @@ def test_delete_item(client):
     assert client.get("/api/items").json() == []
 
 
+def test_maintenance_endpoint_returns_profile_and_overrides(client, monkeypatch):
+    monkeypatch.setattr(
+        "src.web.app.mnt.load_family_profile",
+        lambda: {"receitas": [{"membro": "Davi", "valor": 1000}]},
+    )
+    monkeypatch.setattr(
+        "src.web.app.mnt.load_overrides",
+        lambda: {
+            "categorias_pt": {"groceries": "Mercado"},
+            "recorrencias": [{"match": "netflix", "tipo": "assinatura", "rotulo": "Netflix"}],
+        },
+    )
+
+    response = client.get("/api/maintenance")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "family_profile": {"receitas": [{"membro": "Davi", "valor": 1000}]},
+        "overrides": {
+            "categorias_pt": {"groceries": "Mercado"},
+            "recorrencias": [{"match": "netflix", "tipo": "assinatura", "rotulo": "Netflix"}],
+        },
+    }
+
+
 def test_summary_empty(client):
     s = client.get("/api/summary?days=30").json()
     assert s["transactions"] == 0

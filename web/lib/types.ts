@@ -308,6 +308,48 @@ export type AccountsResponse = {
   sync: AccountsSync;
 };
 
+export type MaintenanceFamilyProfile = {
+  receitas?: Array<{ membro?: string; valor?: number }>;
+  provisoes?: Array<{
+    nome?: string;
+    mensal?: number;
+    alvo?: number;
+    periodicidade_meses?: number;
+  }>;
+  metas?: Array<{ nome?: string; alvo?: number; atual?: number; prazo?: string }>;
+  wishlist?: Array<{
+    nome?: string;
+    valor_alvo?: number;
+    prazo_meses?: number;
+    guardado?: number;
+    prioridade?: number;
+  }>;
+  patrimonio?: {
+    investimentos_caixa?: Array<{
+      local?: string;
+      valor?: number;
+      aporte_mensal_recorrente?: number;
+    }>;
+    imoveis?: Array<{
+      nome?: string;
+      valor_mercado?: number;
+      saldo_devedor?: number;
+      aluguel_receita?: number;
+      custos?: Record<string, number | undefined>;
+    }>;
+  };
+};
+
+export type MaintenanceOverrides = {
+  categorias_pt?: Record<string, string>;
+  recorrencias?: Array<{ match?: string; tipo?: string; rotulo?: string }>;
+};
+
+export type MaintenanceResponse = {
+  family_profile: MaintenanceFamilyProfile;
+  overrides: MaintenanceOverrides;
+};
+
 export type AccountSyncResponse = {
   account_id: string;
   item_id: string;

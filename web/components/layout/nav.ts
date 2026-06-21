@@ -8,6 +8,7 @@ import {
   Target,
   User,
   Wallet,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -29,5 +30,6 @@ export const menuItems: NavItem[] = [
 
 export const otherItems: NavItem[] = [
   { href: "/perfil", label: "Perfil", icon: User },
+  { href: "/manutencao", label: "Manutenção", icon: Wrench },
   { href: "/faq", label: "FAQ", icon: CircleHelp },
 ];
