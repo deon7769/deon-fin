@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  Calculator,
   CircleHelp,
   Landmark,
   LayoutDashboard,
@@ -22,6 +23,7 @@ export const menuItems: NavItem[] = [
   { href: "/", label: "Painel", icon: LayoutDashboard },
   { href: "/orcamento", label: "Orçamento", icon: Wallet },
   { href: "/metas", label: "Metas", icon: Target },
+  { href: "/simulador", label: "Simulador", icon: Calculator },
   { href: "/contas", label: "Contas", icon: Landmark },
   { href: "/faturas", label: "Faturas", icon: ReceiptText },
   { href: "/transacoes", label: "Transações", icon: ArrowLeftRight },

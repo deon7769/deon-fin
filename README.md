@@ -13,8 +13,8 @@ Suporta:
 Status em **2026-06-21**:
 
 - Backend FastAPI + SQLite + Pluggy segue como núcleo operacional.
-- Frontend novo em Next.js vive em `web/` e já cobre Painel, Orçamento, Metas, Contas, Faturas, Transações, Tags, Perfil e FAQ.
-- As specs F0.1 até F3.2 foram implementadas, testadas e publicadas na `main`.
+- Frontend novo em Next.js vive em `web/` e já cobre Painel, Orçamento, Metas, Simulador, Contas, Faturas, Transações, Tags, Perfil, Manutenção e FAQ.
+- As specs F0.1 até F3.3 foram implementadas, testadas e publicadas na `main`.
 - A VPS está em `/opt/projetos/financas-agent`, serviço Docker Compose `financas-agent`, atualizada pelo fluxo seguro de backup, pytest, build Docker e smoke.
 - Em desenvolvimento local, a API roda em `http://127.0.0.1:8000` e o Next em `http://127.0.0.1:3000`.
 - A partir da F3.1, a imagem Docker embute o build estático do Next: `/` serve a nova UI, `/api` segue na FastAPI e o legado fica em `/legacy` com rollback via `LEGACY_UI=1`.
@@ -115,11 +115,10 @@ scripts/
 
 Ordem atual das próximas sprints:
 
-1. **F3.3 Simulador:** encaixar o simulador no novo layout, cobrindo `/api/simular` e `/api/amortizacao`.
-2. **Editor de Manutenção no Next:** migrar as ações de edição/salvamento que ainda ficam no legado.
-3. **Pluggy Connect no Next:** migrar o fluxo de conexão bancária do front legado para o frontend novo.
-4. **Consolidação técnica:** sunset gradual do legado, unificação de cálculos financeiros, WAL/busy timeout no SQLite e migração futura para Supabase/Postgres se necessário.
-5. **Inteligência financeira:** recorrências automáticas, projeção de fluxo 30/60/90 dias e categorização ML como fallback das regras.
+1. **Editor de Manutenção no Next:** migrar as ações de edição/salvamento que ainda ficam no legado.
+2. **Pluggy Connect no Next:** migrar o fluxo de conexão bancária do front legado para o frontend novo.
+3. **Consolidação técnica:** sunset gradual do legado, unificação de cálculos financeiros, WAL/busy timeout no SQLite e migração futura para Supabase/Postgres se necessário.
+4. **Inteligência financeira:** recorrências automáticas, projeção de fluxo 30/60/90 dias e categorização ML como fallback das regras.
 
 ## Segurança
 

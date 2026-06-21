@@ -335,6 +335,42 @@ def test_maintenance_endpoint_returns_profile_and_overrides(client, monkeypatch)
     }
 
 
+def test_simular_endpoint_returns_purchase_strategies(client):
+    response = client.post(
+        "/api/simular",
+        json={
+            "preco": 50000,
+            "entrada": 10000,
+            "prazo_meses": 48,
+            "juros_aa": 24,
+            "sobra_mensal": 2000,
+            "rendimento_aa": 0,
+            "taxa_adm_consorcio": 18,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["valor_financiado"] == 40000
+    assert data["financiar"]["price"]["parcela"] > 0
+    assert data["financiar"]["sac"]["primeira_parcela"] > data["financiar"]["sac"]["ultima_parcela"]
+    assert data["consorcio"]["sistema"] == "consorcio"
+    assert data["juntar_a_vista"]["meses_para_juntar"] == 25
+
+
+def test_amortizacao_endpoint_returns_extra_payment_savings(client):
+    response = client.post(
+        "/api/amortizacao",
+        json={"saldo": 30000, "juros_aa": 12, "parcela": 1000, "aporte_extra": 500},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["sem_extra"]["meses"] > data["com_extra"]["meses"]
+    assert data["meses_economizados"] > 0
+    assert data["juros_economizados"] > 0
+
+
 def test_summary_empty(client):
     s = client.get("/api/summary?days=30").json()
     assert s["transactions"] == 0

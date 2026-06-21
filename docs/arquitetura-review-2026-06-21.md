@@ -8,12 +8,12 @@
 ## Veredito
 
 🟢 **Saudável e avançando bem.** A nova UI saiu da fase de preview e já cobre o núcleo do produto:
-Painel, Orçamento, Metas, Contas, Faturas, Transações, Tags, Perfil, Manutenção e FAQ. O backend continua com a
+Painel, Orçamento, Metas, Simulador, Contas, Faturas, Transações, Tags, Perfil, Manutenção e FAQ. O backend continua com a
 arquitetura esperada pelos specs: FastAPI com routers finos, repositórios por domínio, SQLite com migrations
 idempotentes e módulos de domínio em `src/agent`. O CI/CD está versionado, o deploy seguro da VPS foi
 executado e a F3.1 adicionou o build estático do Next dentro da imagem Docker.
 
-O próximo bloco de produto é **Simulador no layout novo**. O principal cuidado técnico restante é manter o
+O próximo bloco de produto é **tirar edição e conexão do legado**. O principal cuidado técnico restante é manter o
 legado pequeno e isolado enquanto o editor completo de Manutenção, Pluggy Connect e rotas antigas migram para o Next.
 
 ---
@@ -27,6 +27,7 @@ legado pequeno e isolado enquanto o editor completo de Manutenção, Pluggy Conn
 - **CI/CD:** `.github/workflows/ci-cd.yml` roda pytest, Vitest, typecheck, lint, build Next e build Docker.
   O deploy automático existe e fica condicionado aos secrets SSH da VPS.
 - **F3.2 em código:** `/manutencao` no Next consome `/api/maintenance` em modo leitura/saúde operacional.
+- **F3.3 em código:** `/simulador` no Next consome `/api/simular` e `/api/amortizacao`.
 
 ### Specs → implementação
 
@@ -46,7 +47,7 @@ legado pequeno e isolado enquanto o editor completo de Manutenção, Pluggy Conn
 | F2.7 Perfil | renda, e-mail/nome e início de mês | ✅ entregue |
 | F3.1 Deploy same-origin | Next estático servido pela FastAPI em `/`, API em `/api`, legado em `/legacy` | ✅ entregue |
 | F3.2 Manutenção | nova tela para `/api/maintenance` | ✅ entregue |
-| F3.3 Simulador | nova tela para `/api/simular` e `/api/amortizacao` | ⏭ próxima |
+| F3.3 Simulador | nova tela para `/api/simular` e `/api/amortizacao` | ✅ entregue |
 
 ---
 
@@ -70,7 +71,7 @@ ingestão   ->  src/importers/* + Pluggy   OFX, CSV, Nubank e sync Open Finance
 ### Frontend
 
 - `web/` usa Next.js App Router, React Query, Recharts, Tailwind e componentes locais reutilizáveis.
-- O layout novo já cobre as telas principais e a visão de Manutenção; Simulador ainda não entrou no menu principal.
+- O layout novo já cobre as telas principais, a visão de Manutenção e o Simulador no menu principal.
 - Em dev, o Next roda em `:3000` consumindo a API em `:8000`. Na imagem Docker, o build estático do Next é
   servido same-origin em `/`, com API em `/api` e legado em `/legacy`.
 
@@ -94,8 +95,8 @@ ingestão   ->  src/importers/* + Pluggy   OFX, CSV, Nubank e sync Open Finance
 | R4 | Dois fronts durante a transição | Média | O rollback existe (`LEGACY_UI=1` ou `/legacy`), mas ainda há duas experiências enquanto Pluggy Connect não migra. |
 | R5 | Export estático do Next 16 | Baixa | `output: 'export'`, rotas profundas, assets `/_next/*` e build Docker foram validados localmente. |
 | R6 | `@app.on_event("startup")` legado | Baixa | Migrar para lifespan depois que F3.1 estabilizar. |
-| R7 | Simulador fora do novo layout | Baixa-Média | Funcionalidade existe nos endpoints, mas ainda sem experiência visual alinhada ao app novo. |
-| R8 | Edição de Manutenção ainda no legado | Baixa-Média | A F3.2 trouxe leitura/saúde no Next; salvar dados fixos ainda depende de `/legacy`. |
+| R7 | Edição de Manutenção ainda no legado | Baixa-Média | A F3.2 trouxe leitura/saúde no Next; salvar dados fixos ainda depende de `/legacy`. |
+| R8 | Pluggy Connect ainda no legado | Baixa-Média | O fluxo de conexão bancária ainda depende do widget carregado pela página `/legacy`. |
 
 ---
 
@@ -103,7 +104,6 @@ ingestão   ->  src/importers/* + Pluggy   OFX, CSV, Nubank e sync Open Finance
 
 **P1 — próxima sprint**
 
-- Especificar e implementar F3.3 Simulador, consumindo `/api/simular` e `/api/amortizacao`.
 - Migrar as ações de edição/salvamento de Manutenção para o Next.
 - Migrar Pluggy Connect do front legado para o Next para reduzir dependência da página antiga.
 
@@ -120,4 +120,5 @@ ingestão   ->  src/importers/* + Pluggy   OFX, CSV, Nubank e sync Open Finance
 
 O projeto está em bom estado dentro da fase F3. A operação da nova UI agora tem **Next same-origin, smoke de
 frontend, rollback claro e CI/CD sem intervenção manual**. Manutenção já entrou como visão operacional, e
-Simulador é a próxima tela nova sobre endpoints já existentes.
+Simulador já está no novo layout sobre endpoints existentes. A próxima pressão útil é remover edição e conexão
+bancária da página legada.

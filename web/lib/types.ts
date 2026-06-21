@@ -334,6 +334,7 @@ export type MaintenanceFamilyProfile = {
       nome?: string;
       valor_mercado?: number;
       saldo_devedor?: number;
+      taxa_juros_anual?: number;
       aluguel_receita?: number;
       custos?: Record<string, number | undefined>;
     }>;
@@ -348,6 +349,83 @@ export type MaintenanceOverrides = {
 export type MaintenanceResponse = {
   family_profile: MaintenanceFamilyProfile;
   overrides: MaintenanceOverrides;
+};
+
+export type ScenarioSimulationRequest = {
+  preco: number;
+  entrada: number;
+  prazo_meses: number;
+  juros_aa: number;
+  sobra_mensal: number;
+  rendimento_aa: number;
+  taxa_adm_consorcio: number;
+};
+
+export type PriceSimulation = {
+  sistema: "price";
+  parcela: number;
+  total_parcelas: number;
+  total_juros: number;
+};
+
+export type SacSimulation = {
+  sistema: "sac";
+  primeira_parcela: number;
+  ultima_parcela: number;
+  total_parcelas: number;
+  total_juros: number;
+};
+
+export type ConsortiumSimulation = {
+  sistema: "consorcio";
+  taxa_adm_pct: number;
+  parcela: number;
+  total_parcelas: number;
+  custo_taxa_adm: number;
+};
+
+export type CashSavingSimulation = {
+  aporte_mensal: number;
+  rendimento_aa: number;
+  meses_para_juntar: number | null;
+  anos_para_juntar: number | null;
+  custo_total: number;
+};
+
+export type ScenarioSimulationResponse = {
+  entrada: number;
+  valor_financiado: number;
+  financiar: {
+    price: PriceSimulation;
+    sac: SacSimulation;
+    custo_total_price: number;
+    custo_total_sac: number;
+  };
+  consorcio: ConsortiumSimulation;
+  juntar_a_vista: CashSavingSimulation;
+  economia_juntando_vs_price: number;
+};
+
+export type AmortizationRequest = {
+  saldo: number;
+  juros_aa: number;
+  parcela: number;
+  aporte_extra: number;
+};
+
+export type PayoffResult = {
+  meses: number;
+  juros_pagos: number;
+};
+
+export type AmortizationResponse = {
+  saldo: number;
+  parcela_atual: number;
+  aporte_extra: number;
+  sem_extra: PayoffResult | null;
+  com_extra: PayoffResult | null;
+  meses_economizados: number | null;
+  juros_economizados: number | null;
 };
 
 export type AccountSyncResponse = {

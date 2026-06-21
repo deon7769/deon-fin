@@ -54,7 +54,7 @@ specs assumem.
 | F2.7 | ✅ entregue | Perfil familiar/renda exposto na nova UI. |
 | F3.1 | ✅ entregue | Next exportado na imagem Docker, servido pela FastAPI com `/legacy` e smoke de `/`. |
 | F3.2 | ✅ entregue | Tela Next de saúde/visão operacional sobre `/api/maintenance`; edição segue no legado. |
-| F3.3 | ⏭ próxima | Simulador ainda está nos endpoints legados `/api/simular` e `/api/amortizacao`. |
+| F3.3 | ✅ entregue | Simulador no Next com cenários e amortização sobre `/api/simular` e `/api/amortizacao`. |
 
 ## Ordem de execução recomendada
 
@@ -67,8 +67,8 @@ specs assumem.
 7. **Deploy:** F3.1 (Next estático servido pela FastAPI, same-origin, na VPS).
 8. **Extensões do layout:** F3.2 (Manutenção) → F3.3 (Simulador).
 
-> Estado atual: F0.1 até F3.2 estão entregues na `main`. A sequência agora é Simulador no novo layout,
-> depois migração das ações de edição ainda presas ao legado.
+> Estado atual: F0.1 até F3.3 estão entregues na `main`. A sequência agora é migração das ações de edição
+> ainda presas ao legado e Pluggy Connect no Next.
 
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.
