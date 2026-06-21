@@ -28,3 +28,14 @@ export type Tag = {
   color?: string | null;
   tx_count?: number;
 };
+
+export type Profile = {
+  id: number;
+  name: string;
+  email: string;
+  monthly_income: number;
+  financial_month_start_day: number;
+  goals_text: string;
+  initials: string;
+  updated_at?: string | null;
+};

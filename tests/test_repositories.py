@@ -78,7 +78,11 @@ def test_get_profile_returns_default_singleton_idempotently(tmp_db):
     assert first == second
     assert first["id"] == 1
     assert first["financial_month_start_day"] == 1
-    assert first["name"] is None
+    assert first["name"] == ""
+    assert first["email"] == ""
+    assert first["goals_text"] == ""
+    assert first["monthly_income"] == 0.0
+    assert first["initials"] == "?"
 
     count = tmp_db._conn.execute("SELECT COUNT(*) FROM profile").fetchone()[0]
     assert count == 1

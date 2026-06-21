@@ -76,6 +76,7 @@ export const api = {
   get: <T>(path: string, query?: Query, signal?: AbortSignal) =>
     apiFetch<T>(path, { query, signal }),
   post: <T>(path: string, body?: unknown) => apiFetch<T>(path, { method: "POST", body }),
+  put: <T>(path: string, body?: unknown) => apiFetch<T>(path, { method: "PUT", body }),
   patch: <T>(path: string, body?: unknown) => apiFetch<T>(path, { method: "PATCH", body }),
   del: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
 };

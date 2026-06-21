@@ -97,8 +97,11 @@ def test_domain_router_stubs_return_empty_defaults(client):
     assert profile.status_code == 200
     assert profile.json()["id"] == 1
     assert profile.json()["financial_month_start_day"] == 1
-    assert profile.json()["name"] is None
-    assert profile.json()["email"] is None
+    assert profile.json()["name"] == ""
+    assert profile.json()["email"] == ""
+    assert profile.json()["monthly_income"] == 0.0
+    assert profile.json()["goals_text"] == ""
+    assert profile.json()["initials"] == "?"
 
 
 def test_index_renders(client):
