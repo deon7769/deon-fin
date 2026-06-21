@@ -1,7 +1,10 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { ThemeProvider } from "next-themes";
+import { Suspense, useState, type ReactNode } from "react";
+import { PeriodProvider } from "./PeriodProvider";
+import { PrivacyProvider } from "./PrivacyProvider";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -16,5 +19,20 @@ export function Providers({ children }: { children: ReactNode }) {
       }),
   );
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  return (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      enableSystem={false}
+      disableTransitionOnChange
+    >
+      <QueryClientProvider client={queryClient}>
+        <PrivacyProvider>
+          <Suspense fallback={null}>
+            <PeriodProvider>{children}</PeriodProvider>
+          </Suspense>
+        </PrivacyProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
+  );
 }

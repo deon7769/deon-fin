@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Eye, Moon } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { menuItems, otherItems, type NavItem } from "./nav";
+import { SidebarFooter } from "./SidebarFooter";
 
 function isActive(pathname: string, href: string) {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -54,26 +54,7 @@ export function Sidebar() {
         <NavGroup title="Outros" items={otherItems} />
       </div>
 
-      <div className="space-y-2 border-t border-border p-3">
-        <button
-          type="button"
-          disabled
-          title="F0.3"
-          className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-muted opacity-70"
-        >
-          <Moon size={18} aria-hidden />
-          <span>Tema</span>
-        </button>
-        <button
-          type="button"
-          disabled
-          title="F0.3"
-          className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-muted opacity-70"
-        >
-          <Eye size={18} aria-hidden />
-          <span>Ocultar</span>
-        </button>
-      </div>
+      <SidebarFooter />
     </aside>
   );
 }

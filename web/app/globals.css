@@ -15,13 +15,13 @@
 }
 
 .light {
-  --color-bg: #f7f7f8;
+  --color-bg: #f6f7f9;
   --color-surface: #ffffff;
-  --color-surface2: #f0f0f2;
-  --color-border: #e2e2e6;
-  --color-text: #161618;
-  --color-muted: #6b6b73;
-  --color-accent: #c98a00;
+  --color-surface2: #eef0f3;
+  --color-border: #d9dce1;
+  --color-text: #16181d;
+  --color-muted: #5b6470;
+  --color-accent: #b57e00;
   --color-positive: #15803d;
   --color-negative: #b91c1c;
 }
