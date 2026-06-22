@@ -27,7 +27,7 @@ export function WindowToggle({ value, onChange }: WindowToggleProps) {
             aria-pressed={active}
             className={cn(
               "h-8 min-w-10 rounded-md px-2 text-xs font-semibold transition",
-              active ? "bg-accent text-black" : "text-muted hover:bg-surface2 hover:text-text",
+              active ? "bg-accent text-accentFg" : "text-muted hover:bg-surface2 hover:text-text",
             )}
           >
             {option.label}

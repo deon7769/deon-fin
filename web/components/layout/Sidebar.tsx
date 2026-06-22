@@ -65,7 +65,7 @@ function NavGroup({
                 "flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition",
                 collapsed && "md:justify-center md:px-0",
                 active
-                  ? "bg-accent text-black"
+                  ? "bg-accent text-accentFg"
                   : "text-muted hover:bg-surface2 hover:text-text",
               )}
             >
@@ -113,7 +113,7 @@ function SidebarContent({
             className={cn(
               "inline-flex min-w-0 items-center rounded-md text-text transition hover:text-accent",
               desktopCollapsed
-                ? "h-9 w-9 justify-center bg-accent text-sm font-bold text-black hover:text-black"
+                ? "h-9 w-9 justify-center bg-accent text-sm font-bold text-accentFg hover:text-accentFg"
                 : "text-lg font-semibold",
             )}
           >

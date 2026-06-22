@@ -131,7 +131,7 @@ export function BucketSelect({
                 <button
                   type="button"
                   onClick={() => commit(pending.bucketId, true)}
-                  className="h-8 flex-1 rounded-md bg-accent px-2 text-xs font-semibold text-black transition hover:brightness-95"
+                  className="h-8 flex-1 rounded-md bg-accent px-2 text-xs font-semibold text-accentFg transition hover:brightness-95"
                 >
                   Aplicar similares
                 </button>

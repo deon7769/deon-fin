@@ -79,7 +79,7 @@ function IncomeEmptyState() {
         action={
           <Link
             href="/perfil"
-            className="inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-semibold text-black transition hover:brightness-95"
+            className="inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:brightness-95"
           >
             Abrir perfil
           </Link>
@@ -265,7 +265,7 @@ export default function MetasPage() {
               <button
                 type="button"
                 onClick={openCreateModal}
-                className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-black transition hover:brightness-95"
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-accentFg transition hover:brightness-95"
               >
                 <Plus size={16} aria-hidden />
                 Nova meta

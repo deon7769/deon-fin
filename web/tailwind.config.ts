@@ -13,6 +13,7 @@ const config: Config = {
         text: "var(--color-text)",
         muted: "var(--color-muted)",
         accent: "var(--color-accent)",
+        accentFg: "var(--color-accent-fg)",
         positive: "var(--color-positive)",
         negative: "var(--color-negative)",
       },

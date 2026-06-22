@@ -7,7 +7,7 @@ from typing import Any, Literal
 from ...agent.context import income_value, internal_transfer_credit_ids, spending_value
 from ...storage import Database
 from ...storage.reference_month import reference_month
-from . import profile_repo
+from . import profile_repo, system_totals_repo
 
 _YEAR_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 _WINDOWS = {"3m": 3, "6m": 6, "1a": 12}
@@ -54,7 +54,7 @@ def _visible_transactions_for_months(db: Database, months: list[str]) -> list[An
         return []
 
     placeholders = ",".join("?" for _ in months)
-    return db._conn.execute(
+    rows = db._conn.execute(
         f"""
         SELECT t.id,
                t.account_id,
@@ -69,15 +69,25 @@ def _visible_transactions_for_months(db: Database, months: list[str]) -> list[An
           FROM transactions t
           LEFT JOIN accounts a ON a.id = t.account_id
           LEFT JOIN tags tg ON tg.id = t.tag_id
+          {system_totals_repo.account_transaction_policy_join("t", "tx_total_settings")}
          WHERE t.reference_month IN ({placeholders})
            AND COALESCE(t.hidden, 0) = 0
+           AND {system_totals_repo.account_transaction_policy_where("tx_total_settings")}
         """,
         months,
     ).fetchall()
+    return system_totals_repo.filter_rows_by_movement_policy(db, rows)
 
 
 def _accounts_balance(db: Database) -> tuple[float, bool]:
-    rows = db._conn.execute("SELECT balance FROM account_balances").fetchall()
+    rows = db._conn.execute(
+        """
+        SELECT b.balance
+          FROM account_balances b
+          LEFT JOIN account_total_settings s ON s.account_id = b.account_id
+         WHERE COALESCE(s.include_balance, 1) = 1
+        """
+    ).fetchall()
     if not rows:
         return 0.0, False
     return _money(sum(float(row["balance"] or 0.0) for row in rows)), True

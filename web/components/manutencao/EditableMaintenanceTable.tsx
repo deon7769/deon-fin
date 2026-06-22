@@ -38,6 +38,8 @@ export function EditableMaintenanceTable<K extends keyof MaintenanceEditorState>
   onChange,
 }: EditableMaintenanceTableProps<K>) {
   const typedRows = rows as Array<Record<string, unknown>>;
+  const inputClass =
+    "h-9 w-full rounded-md border border-border bg-surface px-2 text-sm text-text outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20";
 
   const updateCell = (rowIndex: number, key: string, value: unknown) => {
     const nextRows = typedRows.map((row, index) =>
@@ -53,6 +55,84 @@ export function EditableMaintenanceTable<K extends keyof MaintenanceEditorState>
   const addRow = () => {
     onChange([...typedRows, emptyMaintenanceRow(section)] as MaintenanceEditorState[K]);
   };
+
+  const renderControl = (
+    row: Record<string, unknown>,
+    rowIndex: number,
+    column: EditableColumn<Record<string, unknown>>,
+    className?: string,
+  ) => {
+    const value = row[column.key];
+    if (column.type === "select") {
+      return (
+        <select
+          aria-label={`${title}: ${column.label}`}
+          value={String(value ?? column.options?.[0] ?? "")}
+          onChange={(event) => updateCell(rowIndex, column.key, event.currentTarget.value)}
+          className={cn(inputClass, className)}
+        >
+          {(column.options ?? []).map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      );
+    }
+    return (
+      <input
+        aria-label={`${title}: ${column.label}`}
+        type={column.type}
+        step={column.type === "number" ? "0.01" : undefined}
+        value={String(value ?? "")}
+        onChange={(event) =>
+          updateCell(rowIndex, column.key, parseInputValue(column.type, event.currentTarget.value))
+        }
+        className={cn(inputClass, className)}
+      />
+    );
+  };
+
+  if (columns.length > 4) {
+    return (
+      <div className="space-y-3" data-layout="cards">
+        <div className="space-y-3">
+          {typedRows.map((row, rowIndex) => (
+            <div key={rowIndex} className="rounded-md border border-border bg-surface2 p-3">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-text">Linha {rowIndex + 1}</p>
+                <button
+                  type="button"
+                  onClick={() => removeRow(rowIndex)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted transition hover:bg-negative/10 hover:text-negative"
+                  title="Remover linha"
+                  aria-label={`Remover linha de ${title}`}
+                >
+                  <Trash2 size={15} aria-hidden />
+                </button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {columns.map((column) => (
+                  <label key={column.key} className="space-y-1 text-xs font-medium text-muted">
+                    <span>{column.label}</span>
+                    {renderControl(row, rowIndex, column)}
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={addRow}
+          className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium text-text transition hover:bg-surface2"
+        >
+          <Plus size={15} aria-hidden />
+          Adicionar linha
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -72,42 +152,9 @@ export function EditableMaintenanceTable<K extends keyof MaintenanceEditorState>
             {typedRows.map((row, rowIndex) => (
               <tr key={rowIndex} className="border-b border-border last:border-b-0">
                 {columns.map((column) => {
-                  const value = row[column.key];
-                  const inputClass =
-                    "h-9 w-full min-w-28 rounded-md border border-border bg-surface px-2 text-sm text-text outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20";
                   return (
                     <td key={column.key} className="py-2 pr-3">
-                      {column.type === "select" ? (
-                        <select
-                          aria-label={`${title}: ${column.label}`}
-                          value={String(value ?? column.options?.[0] ?? "")}
-                          onChange={(event) =>
-                            updateCell(rowIndex, column.key, event.currentTarget.value)
-                          }
-                          className={cn(inputClass, "min-w-36")}
-                        >
-                          {(column.options ?? []).map((option) => (
-                            <option key={option} value={option}>
-                              {option}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          aria-label={`${title}: ${column.label}`}
-                          type={column.type}
-                          step={column.type === "number" ? "0.01" : undefined}
-                          value={String(value ?? "")}
-                          onChange={(event) =>
-                            updateCell(
-                              rowIndex,
-                              column.key,
-                              parseInputValue(column.type, event.currentTarget.value),
-                            )
-                          }
-                          className={inputClass}
-                        />
-                      )}
+                      {renderControl(row, rowIndex, column, "min-w-28")}
                     </td>
                   );
                 })}

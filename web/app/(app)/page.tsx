@@ -179,7 +179,7 @@ export default function PainelPage() {
                 {showCategorizeCta ? (
                   <Link
                     href="/transacoes?semTag=1"
-                    className="inline-flex h-10 w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-black transition hover:opacity-90"
+                    className="inline-flex h-10 w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:opacity-90"
                   >
                     Categorize todas as transações
                   </Link>

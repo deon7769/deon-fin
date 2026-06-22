@@ -580,6 +580,40 @@ export type MaintenanceResponse = {
   category_audit?: MaintenanceCategoryAudit;
 };
 
+export type MaintenanceSystemAccountSetting = {
+  id: string;
+  name: string;
+  institution?: string | null;
+  type?: string | null;
+  source?: string | null;
+  include_balance: boolean;
+  include_transactions: boolean;
+};
+
+export type MaintenanceSystemMovementSetting = {
+  key: string;
+  label: string;
+  include_in_totals: boolean;
+  sort_order: number;
+};
+
+export type MaintenanceSystemTotalsResponse = {
+  accounts: MaintenanceSystemAccountSetting[];
+  movements: MaintenanceSystemMovementSetting[];
+};
+
+export type MaintenanceSystemTotalsPayload = {
+  accounts: Array<{
+    account_id: string;
+    include_balance: boolean;
+    include_transactions: boolean;
+  }>;
+  movements: Array<{
+    movement_type: string;
+    include_in_totals: boolean;
+  }>;
+};
+
 export type ScenarioSimulationRequest = {
   preco: number;
   entrada: number;

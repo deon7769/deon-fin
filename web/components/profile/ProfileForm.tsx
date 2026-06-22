@@ -69,7 +69,7 @@ export function ProfileForm({
   return (
     <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[160px_minmax(0,1fr)]">
       <div className="flex flex-col items-center gap-3 rounded-md border border-border bg-bg p-5">
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-accent text-2xl font-semibold text-black">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-accent text-2xl font-semibold text-accentFg">
           {initials}
         </div>
         <p className="text-center text-sm font-medium text-text">{name.trim() || "Perfil"}</p>
@@ -147,7 +147,7 @@ export function ProfileForm({
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save size={17} aria-hidden />
             <span>{saving ? "Salvando..." : "Salvar"}</span>

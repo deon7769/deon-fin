@@ -108,7 +108,7 @@ export function CardPicker({
             type="button"
             onClick={onSaveOrder}
             disabled={savingOrder || !canSaveOrder}
-            className="inline-flex h-9 items-center rounded-md bg-accent px-3 text-sm font-semibold text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 items-center rounded-md bg-accent px-3 text-sm font-semibold text-accentFg transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {savingOrder ? "Salvando..." : "Salvar ordem"}
           </button>

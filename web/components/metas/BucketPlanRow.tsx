@@ -131,7 +131,7 @@ export function BucketPlanRow({
             disabled={saving}
             aria-label={`Salvar ${bucket.name}`}
             title="Salvar"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent text-accentFg transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save size={15} aria-hidden />
           </button>

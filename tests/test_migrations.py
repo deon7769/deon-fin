@@ -53,13 +53,15 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
         "investment_profile",
         "asset_questions",
         "asset_answers",
+        "account_total_settings",
+        "movement_total_settings",
     }.issubset(_tables(conn))
 
     ids = [
         row[0]
         for row in conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
     ]
-    assert ids == list(range(1, 19))
+    assert ids == list(range(1, 20))
     assert "idx_tx_reference_month" in _indexes(conn, "transactions")
     assert "idx_tx_tag_id" in _indexes(conn, "transactions")
     assert "idx_tx_bucket_id" in _indexes(conn, "transactions")
@@ -69,6 +71,32 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
     }["hidden"]
     assert hidden[3] == 1
     assert hidden[4] == "0"
+    db.close()
+
+
+def test_new_database_has_system_total_settings_tables(tmp_path: Path):
+    db = Database(tmp_path / "new.db")
+    conn = db._conn
+
+    assert {
+        "account_id",
+        "include_balance",
+        "include_transactions",
+        "updated_at",
+    }.issubset(_columns(conn, "account_total_settings"))
+    assert {
+        "movement_type",
+        "label",
+        "include_in_totals",
+        "sort_order",
+        "updated_at",
+    }.issubset(_columns(conn, "movement_total_settings"))
+    assert "sqlite_autoindex_account_total_settings_1" in _indexes(
+        conn, "account_total_settings"
+    )
+    assert "sqlite_autoindex_movement_total_settings_1" in _indexes(
+        conn, "movement_total_settings"
+    )
     db.close()
 
 
@@ -405,7 +433,7 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
     tmp_db._conn.execute("DELETE FROM schema_migrations")
     tmp_db._conn.commit()
 
-    assert apply_migrations(tmp_db._conn) == 18
+    assert apply_migrations(tmp_db._conn) == 19
     assert apply_migrations(tmp_db._conn) == 0
 
     ids = [
@@ -414,4 +442,4 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
             "SELECT id FROM schema_migrations ORDER BY id"
         ).fetchall()
     ]
-    assert ids == list(range(1, 19))
+    assert ids == list(range(1, 20))

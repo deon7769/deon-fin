@@ -67,7 +67,7 @@ function CustomRange({ initial, setCustomOpen, onApply }: CustomRangeProps) {
           type="button"
           disabled={!valid}
           onClick={() => valid && onApply({ from, to })}
-          className="h-8 rounded-md bg-accent px-3 text-xs font-semibold text-black transition disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-8 rounded-md bg-accent px-3 text-xs font-semibold text-accentFg transition disabled:cursor-not-allowed disabled:opacity-50"
         >
           Aplicar
         </button>
@@ -196,7 +196,7 @@ export function MonthYearPicker() {
                   className={cn(
                     "h-9 rounded-md text-xs font-medium capitalize transition",
                     selected
-                      ? "bg-accent text-black"
+                      ? "bg-accent text-accentFg"
                       : "text-muted hover:bg-surface2 hover:text-text",
                   )}
                 >

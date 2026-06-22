@@ -12,7 +12,7 @@ from src.agent.context import build_financial_context
 from src.storage import Account, Transaction
 from src.storage.reference_month import reference_month
 from src.web.app import create_app, get_db, get_pluggy
-from src.web.repositories import painel_repo, profile_repo, tags_repo
+from src.web.repositories import painel_repo, profile_repo, system_totals_repo, tags_repo
 
 
 @pytest.fixture
@@ -200,6 +200,76 @@ def test_summary_excludes_hidden(tmp_db):
 
     assert summary["expense"] == 100.0
     assert summary["result"] == -100.0
+
+
+def test_summary_respects_account_total_policy(tmp_db):
+    _seed_accounts(tmp_db)
+    tmp_db._conn.execute(
+        """
+        INSERT INTO account_total_settings (
+            account_id, include_balance, include_transactions
+        )
+        VALUES ('painel-bank', 0, 0)
+        """
+    )
+    tmp_db._conn.execute(
+        """
+        INSERT INTO account_balances (account_id, balance)
+        VALUES ('painel-bank', 1000.0), ('painel-card', 250.0)
+        """
+    )
+    tmp_db._conn.commit()
+    _insert_tx(
+        tmp_db,
+        external_id="policy-excluded-income",
+        amount="5000.00",
+        description="Salario excluido",
+        category="Salario",
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="policy-excluded-expense",
+        amount="-100.00",
+        description="Compra excluida",
+        category="Mercado",
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="policy-included-card",
+        account_id="painel-card",
+        amount="200.00",
+        description="Compra cartao",
+        category="Lazer",
+    )
+
+    summary = painel_repo.month_summary(tmp_db, "2026-06")
+
+    assert summary["income"] == 0.0
+    assert summary["expense"] == 200.0
+    assert summary["result"] == -200.0
+    assert summary["accounts_balance"] == 250.0
+    assert summary["accounts_balance_available"] is True
+
+
+def test_summary_keeps_external_pix_income_when_internal_transfers_are_excluded(tmp_db):
+    _seed_accounts(tmp_db)
+    system_totals_repo.update_movement_settings(
+        tmp_db,
+        [{"movement_type": "internal_transfer", "include_in_totals": False}],
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="external-pix-income",
+        amount="5000.00",
+        description="Pix recebido de cliente",
+        category="Transfer - PIX",
+    )
+
+    summary = painel_repo.month_summary(tmp_db, "2026-06")
+
+    assert summary["income"] == 5000.0
+    assert summary["expense"] == 0.0
+    assert summary["result"] == 5000.0
 
 
 def test_summary_balance_unavailable_and_available(tmp_db):

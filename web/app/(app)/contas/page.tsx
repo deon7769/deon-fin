@@ -168,7 +168,7 @@ export default function ContasPage() {
               type="button"
               onClick={() => setViewMode("list")}
               className={`inline-flex h-9 items-center gap-2 rounded px-3 text-sm transition ${
-                viewMode === "list" ? "bg-accent text-black" : "text-muted hover:text-text"
+                viewMode === "list" ? "bg-accent text-accentFg" : "text-muted hover:text-text"
               }`}
             >
               <List size={16} aria-hidden />
@@ -178,7 +178,7 @@ export default function ContasPage() {
               type="button"
               onClick={() => setViewMode("cards")}
               className={`inline-flex h-9 items-center gap-2 rounded px-3 text-sm transition ${
-                viewMode === "cards" ? "bg-accent text-black" : "text-muted hover:text-text"
+                viewMode === "cards" ? "bg-accent text-accentFg" : "text-muted hover:text-text"
               }`}
             >
               <SquareStack size={16} aria-hidden />
@@ -281,7 +281,7 @@ export default function ContasPage() {
                           type="button"
                           disabled={reorder.isPending}
                           onClick={saveOrder}
-                          className="h-9 rounded-md bg-accent px-3 text-sm font-semibold text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="h-9 rounded-md bg-accent px-3 text-sm font-semibold text-accentFg transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           Salvar ordem
                         </button>

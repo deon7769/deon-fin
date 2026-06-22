@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { createElement, type ComponentType } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
+import { EditableMaintenanceTable } from "@/components/manutencao/EditableMaintenanceTable";
 import {
   buildMaintenanceSavePayload,
   buildMaintenanceHealth,
@@ -141,5 +144,43 @@ describe("maintenance helpers", () => {
       { category: "Pet Shops", txCount: 2, totalAbs: 70 },
     ]);
     expect(missingCategoryTranslations({ family_profile: {}, overrides: {} })).toEqual([]);
+  });
+
+  it("renders wide editable sections as responsive field groups", () => {
+    const Component = EditableMaintenanceTable as ComponentType<Record<string, unknown>>;
+    const html = renderToStaticMarkup(
+      createElement(Component, {
+        section: "imoveis",
+        title: "Imoveis",
+        rows: [
+          {
+            nome: "Casa",
+            valor_mercado: 300000,
+            saldo_devedor: 120000,
+            taxa_juros_anual: 8.5,
+            prazo_restante_meses: 180,
+            aluguel_receita: 0,
+            custo_financiamento: 1200,
+            custo_condominio: 450,
+            custo_iptu_lixo: 150,
+          },
+        ],
+        columns: [
+          { key: "nome", label: "Imovel", type: "text" },
+          { key: "valor_mercado", label: "Valor mercado", type: "number" },
+          { key: "saldo_devedor", label: "Saldo devedor", type: "number" },
+          { key: "taxa_juros_anual", label: "Juros", type: "number" },
+          { key: "prazo_restante_meses", label: "Prazo", type: "number" },
+          { key: "aluguel_receita", label: "Aluguel", type: "number" },
+          { key: "custo_financiamento", label: "Financiamento", type: "number" },
+          { key: "custo_condominio", label: "Condominio", type: "number" },
+          { key: "custo_iptu_lixo", label: "IPTU", type: "number" },
+        ],
+        onChange: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('data-layout="cards"');
+    expect(html).not.toContain("<table");
   });
 });

@@ -363,9 +363,11 @@ def _account_rows(db: Database) -> list[Any]:
                b.last4,
                b.last_sync_at,
                b.sync_status,
+               COALESCE(s.include_balance, 1) AS include_balance_in_totals,
                p.connector_name
           FROM accounts a
           LEFT JOIN account_balances b ON b.account_id = a.id
+          LEFT JOIN account_total_settings s ON s.account_id = a.id
           LEFT JOIN pluggy_items p
             ON p.id = COALESCE(
                 a.pluggy_item_id,
@@ -387,13 +389,15 @@ def list_accounts_overview(db: Database, *, month: str) -> dict[str, Any]:
     for row in rows:
         meta = _load_meta(row["metadata_json"])
         item_id = _item_id(row, meta)
+        include_balance_in_totals = bool(row["include_balance_in_totals"])
         if _is_credit(row["type"]):
             credit_limit = _number(row["credit_limit"])
             used = _number(row["used"])
             available = _number(row["available"])
             brand = row["brand"]
             last4 = row["last4"] or _last4(meta.get("number"))
-            card_debt += used or 0.0
+            if include_balance_in_totals:
+                card_debt += used or 0.0
             cards.append(
                 {
                     "id": row["id"],
@@ -420,7 +424,8 @@ def list_accounts_overview(db: Database, *, month: str) -> dict[str, Any]:
             balance = _derived_balance(db, row["id"])
             status = status or "DERIVED"
         agency, number = _bank_parts(meta, row["institution"])
-        accounts_balance += balance or 0.0
+        if include_balance_in_totals:
+            accounts_balance += balance or 0.0
         banks.append(
             {
                 "id": row["id"],

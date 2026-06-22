@@ -33,7 +33,7 @@ from ..storage import Database
 from .dependencies import get_db, get_pluggy
 from .errors import error_response, install_error_handlers
 from .repositories import profile_repo, transactions_repo
-from .routers import accounts, buckets, budget, invoices, painel, portfolio, profile, savings, simulations, tags, transactions
+from .routers import accounts, buckets, budget, invoices, maintenance, painel, portfolio, profile, savings, simulations, tags, transactions
 
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
@@ -437,6 +437,7 @@ def create_app() -> FastAPI:
     app.include_router(buckets.router)
     app.include_router(budget.router)
     app.include_router(invoices.router)
+    app.include_router(maintenance.router)
     app.include_router(painel.router)
     app.include_router(portfolio.router)
     app.include_router(savings.router)

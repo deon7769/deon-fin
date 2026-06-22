@@ -77,7 +77,7 @@ function IncomeEmptyState() {
           <div className="flex flex-wrap items-center justify-center gap-2">
             <Link
               href="/perfil"
-              className="inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-semibold text-black transition hover:brightness-95"
+              className="inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:brightness-95"
             >
               Abrir perfil
             </Link>

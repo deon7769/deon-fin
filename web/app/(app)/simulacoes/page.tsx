@@ -76,7 +76,7 @@ function SimulationForm({
                   type="checkbox"
                   checked={Boolean(fieldValue)}
                   onChange={(event) => onChange({ ...value, [field.key]: event.target.checked })}
-                  className="h-4 w-4 accent-[var(--accent)]"
+                  className="h-4 w-4 accent-accent"
                 />
                 {field.label}
               </label>

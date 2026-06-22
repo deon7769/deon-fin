@@ -8,7 +8,7 @@ export default function NotFound() {
         <p className="mt-2 text-sm text-muted">O endereço informado não existe.</p>
         <Link
           href="/"
-          className="mt-5 inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-semibold text-black"
+          className="mt-5 inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-semibold text-accentFg"
         >
           Ir para o Painel
         </Link>

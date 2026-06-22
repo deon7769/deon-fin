@@ -516,6 +516,30 @@ def m0018_investment_etf_asset_class(conn: sqlite3.Connection) -> None:
     )
 
 
+def m0019_system_total_settings(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS account_total_settings (
+            account_id            TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+            include_balance       INTEGER NOT NULL DEFAULT 1 CHECK (include_balance IN (0, 1)),
+            include_transactions  INTEGER NOT NULL DEFAULT 1 CHECK (include_transactions IN (0, 1)),
+            updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS movement_total_settings (
+            movement_type       TEXT PRIMARY KEY,
+            label               TEXT NOT NULL,
+            include_in_totals   INTEGER NOT NULL DEFAULT 1 CHECK (include_in_totals IN (0, 1)),
+            sort_order          INTEGER NOT NULL DEFAULT 0,
+            updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -535,6 +559,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (16, "investment_allocation_targets", m0016_investment_allocation_targets),
     (17, "asset_questions_answers", m0017_asset_questions_answers),
     (18, "investment_etf_asset_class", m0018_investment_etf_asset_class),
+    (19, "system_total_settings", m0019_system_total_settings),
 ]
 
 

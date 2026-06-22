@@ -257,6 +257,59 @@ def test_budget_for_month_aggregates_buckets_and_uncategorized(tmp_db, monkeypat
     ]
 
 
+def test_budget_respects_account_total_policy(tmp_db, monkeypatch):
+    monkeypatch.setattr(
+        budget_repo,
+        "settings",
+        SimpleNamespace(monthly_income=None, financial_goals=[]),
+    )
+    monkeypatch.setattr(budget_repo.mnt, "load_family_profile", lambda: None)
+    _seed_accounts(tmp_db)
+    pleasures = _bucket_by_key(tmp_db, "prazeres")
+    tmp_db._conn.execute(
+        """
+        INSERT INTO account_total_settings (
+            account_id, include_balance, include_transactions
+        )
+        VALUES ('budget-bank', 1, 0)
+        """
+    )
+    tmp_db._conn.commit()
+    _insert_tx(
+        tmp_db,
+        external_id="budget-policy-income",
+        amount="1000.00",
+        description="Salario excluido",
+        category="Salario",
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="budget-policy-bank-expense",
+        amount="-300.00",
+        description="Mercado excluido",
+        category="Mercado",
+        bucket_id=pleasures["id"],
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="budget-policy-card-expense",
+        account_id="budget-card",
+        amount="200.00",
+        description="Cinema",
+        category="Lazer",
+        bucket_id=pleasures["id"],
+    )
+
+    result = budget_repo.budget_for_month(tmp_db, "2026-06")
+    category = next(item for item in result["categories"] if item["key"] == "prazeres")
+
+    assert result["income"] == 0.0
+    assert result["income_source"] == "none"
+    assert result["spent"] == 200.0
+    assert category["spent"] == 200.0
+    assert category["tx_count"] == 1
+
+
 def test_budget_income_falls_back_to_profile_settings_family_profile_and_none(tmp_db, monkeypatch):
     _seed_accounts(tmp_db)
     monkeypatch.setattr(budget_repo.mnt, "load_family_profile", lambda: None)

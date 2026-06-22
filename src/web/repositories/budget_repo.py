@@ -9,7 +9,7 @@ from ...agent.context import income_value, internal_transfer_credit_ids, spendin
 from ...config import settings
 from ...storage import Database
 from ...storage.reference_month import reference_month
-from . import buckets_repo, profile_repo
+from . import buckets_repo, profile_repo, system_totals_repo
 
 IncomeSource = Literal["transactions", "profile", "settings", "family_profile", "none"]
 
@@ -60,8 +60,8 @@ def resolve_month(db: Database, month: str | None) -> str | None:
 
 
 def _visible_transactions_for_month(db: Database, month: str) -> list[Any]:
-    return db._conn.execute(
-        """
+    rows = db._conn.execute(
+        f"""
         SELECT t.id,
                t.account_id,
                t.posted_at,
@@ -72,12 +72,15 @@ def _visible_transactions_for_month(db: Database, month: str) -> list[Any]:
                a.type AS account_type
           FROM transactions t
           LEFT JOIN accounts a ON a.id = t.account_id
+          {system_totals_repo.account_transaction_policy_join("t", "tx_total_settings")}
          WHERE t.reference_month = ?
            AND COALESCE(t.hidden, 0) = 0
+           AND {system_totals_repo.account_transaction_policy_where("tx_total_settings")}
          ORDER BY t.posted_at DESC, t.id DESC
         """,
         (month,),
     ).fetchall()
+    return system_totals_repo.filter_rows_by_movement_policy(db, rows)
 
 
 def _income_from_fallbacks(db: Database) -> tuple[float, IncomeSource]:

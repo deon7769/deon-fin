@@ -8,6 +8,7 @@ from . import (
     profile_repo,
     savings_repo,
     score_repo,
+    system_totals_repo,
     tags_repo,
     transactions_repo,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "profile_repo",
     "savings_repo",
     "score_repo",
+    "system_totals_repo",
     "tags_repo",
     "transactions_repo",
 ]

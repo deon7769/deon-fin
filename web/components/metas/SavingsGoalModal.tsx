@@ -173,7 +173,7 @@ function SavingsGoalModalContent({
             <button
               type="submit"
               disabled={saving}
-              className="h-10 rounded-md bg-accent px-4 text-sm font-semibold text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+              className="h-10 rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitLabel}
             </button>

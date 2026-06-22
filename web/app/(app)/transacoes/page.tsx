@@ -96,7 +96,7 @@ function NoteCell({
       <button
         type="submit"
         disabled={saving}
-        className="inline-flex h-8 items-center rounded-md bg-accent px-2 text-xs font-semibold text-black disabled:opacity-60"
+        className="inline-flex h-8 items-center rounded-md bg-accent px-2 text-xs font-semibold text-accentFg disabled:opacity-60"
       >
         OK
       </button>
@@ -319,7 +319,7 @@ function NewTransactionPanel({
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-black transition hover:brightness-95 disabled:opacity-60"
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:brightness-95 disabled:opacity-60"
           >
             <Plus size={16} aria-hidden />
             <span>{saving ? "Salvando..." : "Criar"}</span>
@@ -477,7 +477,7 @@ export default function TransacoesPage() {
             className={cn(
               "inline-flex h-9 w-9 items-center justify-center rounded-md border border-border transition",
               tx.hidden
-                ? "bg-accent text-black"
+                ? "bg-accent text-accentFg"
                 : "bg-surface2 text-muted hover:bg-surface hover:text-text",
             )}
           >
@@ -541,7 +541,7 @@ export default function TransacoesPage() {
               createTx.reset();
               setNewOpen(true);
             }}
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-black transition hover:brightness-95"
+            className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:brightness-95"
           >
             <Plus size={17} aria-hidden />
             <span>Nova transação</span>
@@ -676,7 +676,7 @@ export default function TransacoesPage() {
                       <button
                         type="button"
                         onClick={() => setNewOpen(true)}
-                        className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-black transition hover:brightness-95"
+                        className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:brightness-95"
                       >
                         <Plus size={17} aria-hidden />
                         <span>Nova transação</span>

@@ -309,7 +309,7 @@ export default function InvestimentosPage() {
               type="checkbox"
               checked={includeInactive}
               onChange={(event) => setIncludeInactive(event.target.checked)}
-              className="h-4 w-4 accent-[var(--accent)]"
+              className="h-4 w-4 accent-accent"
             />
             Incluir encerrados
           </label>

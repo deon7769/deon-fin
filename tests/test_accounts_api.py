@@ -150,6 +150,28 @@ def test_accounts_overview_groups_banks_cards_and_totals(tmp_db: Database):
     }
 
 
+def test_accounts_overview_respects_balance_total_policy(tmp_db: Database):
+    _seed_connected_accounts(tmp_db)
+    tmp_db._conn.execute(
+        """
+        INSERT INTO account_total_settings (
+            account_id, include_balance, include_transactions
+        )
+        VALUES ('pluggy:bank', 0, 1)
+        """
+    )
+    tmp_db._conn.commit()
+
+    overview = accounts_repo.list_accounts_overview(tmp_db, month="2026-06")
+
+    assert overview["banks"][0]["balance"] == 58.77
+    assert overview["totals"] == {
+        "accounts_balance": 0.0,
+        "card_debt": 749.5,
+        "period_result": 0.0,
+    }
+
+
 def test_accounts_overview_uses_bank_code_and_card_fallback_names(tmp_db: Database):
     tmp_db.upsert_pluggy_item(
         "item-inter",

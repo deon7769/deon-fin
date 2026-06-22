@@ -19,13 +19,19 @@ import { HealthChecklist } from "@/components/manutencao/HealthChecklist";
 import { MaintenanceSectionTable } from "@/components/manutencao/MaintenanceSectionTable";
 import { MissingCategoryTranslations } from "@/components/manutencao/MissingCategoryTranslations";
 import { RecurrenceRulesTable } from "@/components/manutencao/RecurrenceRulesTable";
+import { SystemTotalsPolicyPanel } from "@/components/manutencao/SystemTotalsPolicyPanel";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useMaintenance, useSaveMaintenance } from "@/hooks/useMaintenance";
+import {
+  useMaintenance,
+  useMaintenanceSystemTotals,
+  useSaveMaintenance,
+  useSaveMaintenanceSystemTotals,
+} from "@/hooks/useMaintenance";
 import {
   buildMaintenanceSavePayload,
   buildMaintenanceHealth,
@@ -138,6 +144,13 @@ const editorSections: Array<EditorSection<keyof MaintenanceEditorState>> = [
   },
 ];
 
+const profileEditorSections = editorSections.filter(
+  (section) => section.key !== "categorias" && section.key !== "recorrencias",
+);
+const rulesEditorSections = editorSections.filter(
+  (section) => section.key === "categorias" || section.key === "recorrencias",
+);
+
 function MaintenanceSkeleton() {
   return (
     <>
@@ -181,6 +194,8 @@ function RetryState({ error, onRetry }: { error: unknown; onRetry: () => void })
 export default function ManutencaoPage() {
   const maintenance = useMaintenance();
   const saveMaintenance = useSaveMaintenance();
+  const systemTotals = useMaintenanceSystemTotals();
+  const saveSystemTotals = useSaveMaintenanceSystemTotals();
   const [editorOverride, setEditorOverride] = useState<{
     dataUpdatedAt: number;
     value: MaintenanceEditorState;
@@ -237,6 +252,36 @@ export default function ManutencaoPage() {
     } catch (error) {
       setEditorStatus(error instanceof Error ? error.message : "Falha ao salvar.");
     }
+  };
+
+  const renderEditorSections = (sectionsToRender: typeof editorSections) => {
+    if (!editor) {
+      return <Skeleton className="h-72 w-full" />;
+    }
+    return (
+      <div className="space-y-6">
+        {sectionsToRender.map((section) => (
+          <div
+            key={section.key}
+            className="space-y-2 border-b border-border pb-5 last:border-b-0 last:pb-0"
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-text">{section.title}</h3>
+              {section.subtitle ? (
+                <p className="mt-1 text-sm text-muted">{section.subtitle}</p>
+              ) : null}
+            </div>
+            <EditableMaintenanceTable
+              section={section.key}
+              title={section.title}
+              rows={editor[section.key]}
+              columns={section.columns}
+              onChange={(rows) => updateEditorSection(section.key, rows)}
+            />
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -306,6 +351,16 @@ export default function ManutencaoPage() {
               <MaintenanceSectionTable rows={sections} />
             </SectionCard>
 
+            <SystemTotalsPolicyPanel
+              data={systemTotals.data}
+              loading={systemTotals.isLoading}
+              saving={saveSystemTotals.isPending}
+              error={systemTotals.error}
+              onSave={async (payload) => {
+                await saveSystemTotals.mutateAsync(payload);
+              }}
+            />
+
             <div className="grid gap-5 xl:grid-cols-2">
               <SectionCard
                 title="Tradução de categorias"
@@ -333,10 +388,14 @@ export default function ManutencaoPage() {
               <MissingCategoryTranslations rows={missingCategoryRows} />
             </SectionCard>
 
-            <SectionCard
-              title="Editar dados fixos"
-              subtitle="Altere as informações que não vêm da integração bancária."
-              actions={
+            <div className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-text">Editar dados fixos</h2>
+                  <p className="mt-1 text-sm text-muted">
+                    Altere as informações que não vêm da integração bancária.
+                  </p>
+                </div>
                 <div className="flex flex-wrap justify-end gap-2">
                   <button
                     type="button"
@@ -351,43 +410,27 @@ export default function ManutencaoPage() {
                     type="button"
                     onClick={() => void saveEditor()}
                     disabled={!editor || saveMaintenance.isPending}
-                    className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-accentFg transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Save size={15} aria-hidden />
                     {saveMaintenance.isPending ? "Salvando..." : "Salvar tudo"}
                   </button>
                 </div>
-              }
-            >
+              </div>
               {editorStatus ? (
-                <p className="mb-4 rounded-md border border-border bg-surface2 px-3 py-2 text-sm text-muted">
+                <p className="rounded-md border border-border bg-surface2 px-3 py-2 text-sm text-muted">
                   {editorStatus}
                 </p>
               ) : null}
-              {editor ? (
-                <div className="space-y-6">
-                  {editorSections.map((section) => (
-                    <div key={section.key} className="space-y-2 border-b border-border pb-5 last:border-b-0 last:pb-0">
-                      <div>
-                        <h3 className="text-sm font-semibold text-text">{section.title}</h3>
-                        {section.subtitle ? (
-                          <p className="mt-1 text-sm text-muted">{section.subtitle}</p>
-                        ) : null}
-                      </div>
-                      <EditableMaintenanceTable
-                        section={section.key}
-                        title={section.title}
-                        rows={editor[section.key]}
-                        columns={section.columns}
-                        onChange={(rows) => updateEditorSection(section.key, rows)}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Skeleton className="h-72 w-full" />
-              )}
-            </SectionCard>
+              <div className="grid gap-5 2xl:grid-cols-[minmax(0,1.4fr)_minmax(360px,0.8fr)]">
+                <SectionCard title="Perfil familiar">
+                  {renderEditorSections(profileEditorSections)}
+                </SectionCard>
+                <SectionCard title="Regras e traduções">
+                  {renderEditorSections(rulesEditorSections)}
+                </SectionCard>
+              </div>
+            </div>
           </>
         )}
       </div>
