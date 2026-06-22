@@ -35,6 +35,17 @@ specs assumem.
 | F3.1 | `F3.1-deploy-vps-same-origin.md` | — (deploy: Next estático same-origin com `/api` na VPS) | 00, F0.1, F0.2 |
 | F3.2 | `F3.2-manutencao.md` | **Manutenção** (saúde, ajustes e rotinas operacionais) | F3.1 |
 | F3.3 | `F3.3-simulador.md` | **Simulador** (cenários e amortização) | F3.1 |
+| F3.6 | `F3.6-simulacoes.md` | **Simulações** (hub: juros compostos, renda, Pix parcelado, CDB, marcação a mercado, amortização, alugar vs financiar) | F3.1, F3.3 |
+| F4 | `F4-carteira-investimentos.md` | **Investimentos** (Diagrama do Cerrado) — overview/contrato comum + decisões | F0.*, F2.5 |
+| F4.1 | `F4.1-investimentos-ativos.md` | Ativos: cotações **brapi** + CRUD manual + badge (sobre a ingestão Pluggy já entregue) | F4 |
+| F4.2 | `F4.2-investimentos-metas.md` | Metas de alocação por classe (perfis + trava 100% + overflow) | F4 |
+| F4.3 | `F4.3-investimentos-perguntas.md` | Perguntas + **nota normalizada** (score) | F4 |
+| F4.4 | `F4.4-investimentos-aportar.md` | **Aportar** (Método Burro, com fixtures do PDF) | F4.1, F4.2, F4.3 |
+| F4.5 | `F4.5-investimentos-mapa.md` | **Mapa** de rating soberano por país (referência) | F4 |
+| ADR-001 | `ADR-001-banco-de-dados.md` | Decisão de banco: SQLite (agora, c/ WAL) → PostgreSQL (alvo); por que não MySQL | — |
+
+> **Módulo Investimentos — acento AZUL** (não amarelo). Ingestão Pluggy + Ativos básico **já entregues** (commit
+> `feat: add Pluggy investment portfolio`). Ordem das sprints: **F4.1 → F4.2 → F4.3 → F4.4 → F4.5** (F4.4 depende de F4.1–F4.3).
 
 ## Status em 2026-06-21
 
@@ -56,6 +67,7 @@ specs assumem.
 | F3.2 | ✅ entregue | Tela Next de saúde/visão operacional sobre `/api/maintenance`. |
 | F3.3 | ✅ entregue | Simulador no Next com cenários e amortização sobre `/api/simular` e `/api/amortizacao`. |
 | F3.4 | ✅ entregue | Editor de Manutenção no Next com tabelas editáveis e save em `/api/maintenance`. |
+| F3.6 | 📋 spec | Hub "Simulações" com 7 calculadoras (juros compostos, renda, Pix parcelado, CDB, marcação a mercado, amortização, alugar×financiar). A implementar — reusa `simulator.py`, novos endpoints `/api/sim/*`. |
 
 ## Ordem de execução recomendada
 
@@ -89,6 +101,10 @@ Registradas em 2026-06-21 para encaixar nas próximas sprints:
 5. **F3.5 entregue:** `/api/accounts` passou a usar fallback de banco/cartão por código bancário, nome genérico,
    nome de pessoa e bandeira/final do cartão; `/api/maintenance` passou a expor `category_audit` com categorias
    vistas em transações que ainda não têm tradução no de/para, exibidas na tela Manutenção.
+
+6. **Aplicar meta em similares:** ao classificar uma transação em uma Meta e usar a ação de aplicar/sugerir para
+   registros similares, o fluxo deve reclassificar também registros parecidos que estejam com meta automática antiga,
+   preservando apenas classificações manuais do usuário.
 
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.
