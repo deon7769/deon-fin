@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ...agent.portfolio import quotes
+from ...agent.portfolio import country_ratings, quotes
 from ...storage import Database
 from ..dependencies import get_db
 from ..errors import error_response
@@ -103,6 +103,19 @@ def investment_profiles() -> dict[str, Any]:
 @router.get("/investments/targets")
 def investment_targets(db: Database = Depends(get_db)) -> dict[str, Any]:
     return portfolio_repo.get_allocation_targets(db)
+
+
+@router.get("/investments/map")
+def investment_country_map() -> list[dict[str, str]]:
+    return country_ratings.list_country_ratings()
+
+
+@router.get("/investments/map/{code}")
+def investment_country_detail(code: str) -> dict[str, Any]:
+    try:
+        return country_ratings.get_country_rating(code)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/investments/aporte/calcular")

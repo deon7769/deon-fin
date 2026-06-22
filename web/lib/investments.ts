@@ -7,9 +7,11 @@ import type {
   InvestmentAporteConfirmInput,
   InvestmentAporteCalculateInput,
   InvestmentAporteResponse,
+  InvestmentCountryDetail,
   InvestmentQuestion,
   InvestmentQuestionInput,
   InvestmentQuestionsResponse,
+  InvestmentMapCountry,
   InvestmentProfilePreset,
   InvestmentProfilesResponse,
   InvestmentRefreshQuotesResponse,
@@ -193,6 +195,29 @@ export function getInvestmentTargets(signal?: AbortSignal) {
 
 export function getInvestmentProfiles(signal?: AbortSignal) {
   return api.get<InvestmentProfilesResponse>("/investments/profiles", undefined, signal);
+}
+
+export function getInvestmentMap(signal?: AbortSignal) {
+  return api.get<InvestmentMapCountry[]>("/investments/map", undefined, signal);
+}
+
+export function getInvestmentCountry(code: string, signal?: AbortSignal) {
+  return api.get<InvestmentCountryDetail>(
+    `/investments/map/${encodeURIComponent(code.toUpperCase())}`,
+    undefined,
+    signal,
+  );
+}
+
+export function buildInvestmentCountryDetailsMap(
+  countries: Array<InvestmentCountryDetail | undefined | null>,
+): Record<string, InvestmentCountryDetail> {
+  return countries.reduce<Record<string, InvestmentCountryDetail>>((acc, country) => {
+    if (country?.code) {
+      acc[country.code.toUpperCase()] = country;
+    }
+    return acc;
+  }, {});
 }
 
 export function saveInvestmentTargets(input: { targets: InvestmentTargetsMap; perfil?: string }) {

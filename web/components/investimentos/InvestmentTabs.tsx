@@ -9,6 +9,7 @@ const TABS = [
   { href: "/investimentos", label: "Ativos" },
   { href: "/investimentos/metas", label: "Metas da carteira" },
   { href: "/investimentos/aportar", label: "Aportar" },
+  { href: "/investimentos/mapa", label: "Mapa" },
   { href: "/investimentos/perguntas", label: "Perguntas" },
 ];
 

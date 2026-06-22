@@ -1,0 +1,75 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import {
+  CountryRiskPanel,
+  filterInvestmentMapCountries,
+  InvestmentMapPanel,
+} from "@/components/investimentos/InvestmentMapPanel";
+import { buildInvestmentCountryDetailsMap } from "@/lib/investments";
+import type { InvestmentCountryDetail, InvestmentMapCountry } from "@/lib/types";
+
+const countries: InvestmentMapCountry[] = [
+  { code: "BR", name: "Brasil", tier: "medium", color: "#F59E0B" },
+  { code: "US", name: "Estados Unidos", tier: "top", color: "#2563EB" },
+];
+
+const detail: InvestmentCountryDetail = {
+  code: "BR",
+  name: "Brasil",
+  name_intl: "Brazil",
+  main_index: "Ibovespa",
+  ratings: { sp: "BB", moody: "Ba2", fitch: "BB-" },
+  tier: "medium",
+  tier_label: "Médio Risco",
+  color: "#F59E0B",
+  empresas: [{ name: "Vale", ticker: "VALE3", setor: "Mineração" }],
+  etfs: [{ ticker: "BOVA11", label: "ETF Brasileiro" }],
+};
+
+describe("InvestmentMapPanel", () => {
+  it("builds a normalized details map for country index search", () => {
+    expect(buildInvestmentCountryDetailsMap([detail, undefined])).toEqual({ BR: detail });
+  });
+
+  it("renders the map search, country list and selected country risk summary", () => {
+    const html = renderToStaticMarkup(
+      <InvestmentMapPanel
+        countries={countries}
+        selectedCode="BR"
+        selectedCountry={detail}
+        loadingCountry={false}
+        onSelectCountry={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Buscar por país ou índice");
+    expect(html).toContain("Mapa de risco soberano");
+    expect(html).toContain("Brasil");
+    expect(html).toContain("Médio Risco");
+    expect(html).toContain("Ibovespa");
+  });
+
+  it("filters countries by country name or main index and keeps selection case-insensitive", () => {
+    expect(filterInvestmentMapCountries(countries, { BR: detail }, "ibov")).toEqual([countries[0]]);
+    expect(filterInvestmentMapCountries(countries, { BR: detail }, "estados")).toEqual([countries[1]]);
+    expect(filterInvestmentMapCountries(countries, { BR: detail }, "br")).toEqual([countries[0]]);
+  });
+
+  it("renders Indices, Empresas and ETFs tabs for the selected country", () => {
+    const indicesHtml = renderToStaticMarkup(<CountryRiskPanel country={detail} activeTab="indices" />);
+    expect(indicesHtml).toContain("Principal Índice");
+    expect(indicesHtml).toContain("S&amp;P");
+    expect(indicesHtml).toContain("Moody");
+    expect(indicesHtml).toContain("Fitch");
+
+    const empresasHtml = renderToStaticMarkup(<CountryRiskPanel country={detail} activeTab="empresas" />);
+    expect(empresasHtml).toContain("Vale");
+    expect(empresasHtml).toContain("VALE3");
+    expect(empresasHtml).toContain("Mineração");
+
+    const etfsHtml = renderToStaticMarkup(<CountryRiskPanel country={detail} activeTab="etfs" />);
+    expect(etfsHtml).toContain("BOVA11");
+    expect(etfsHtml).toContain("ETF Brasileiro");
+  });
+});

@@ -426,6 +426,45 @@ export type InvestmentQuestionsResponse = {
   questions: InvestmentQuestion[];
 };
 
+export type InvestmentCountryTier = "top" | "high" | "medium" | "speculative" | "nodata";
+
+export type InvestmentMapCountry = {
+  code: string;
+  name: string;
+  tier: InvestmentCountryTier;
+  color: string;
+};
+
+export type InvestmentCountryRating = {
+  sp: string | null;
+  moody: string | null;
+  fitch: string | null;
+};
+
+export type InvestmentCountryCompany = {
+  name: string;
+  ticker: string;
+  setor: string;
+};
+
+export type InvestmentCountryEtf = {
+  ticker: string;
+  label?: string | null;
+};
+
+export type InvestmentCountryDetail = {
+  code: string;
+  name: string;
+  name_intl: string;
+  main_index: string;
+  ratings: InvestmentCountryRating;
+  tier: InvestmentCountryTier;
+  tier_label: string;
+  color: string;
+  empresas: InvestmentCountryCompany[];
+  etfs: InvestmentCountryEtf[];
+};
+
 export type InvestmentQuestionInput = {
   diagram_type: string;
   criterio?: string | null;
