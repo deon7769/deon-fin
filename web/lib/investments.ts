@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import type { InvestmentsResponse } from "@/lib/types";
+import type { InvestmentRefreshQuotesResponse, InvestmentsResponse } from "@/lib/types";
 
 export function getInvestments(includeInactive = false, signal?: AbortSignal) {
   return api.get<InvestmentsResponse>(
@@ -7,4 +7,8 @@ export function getInvestments(includeInactive = false, signal?: AbortSignal) {
     includeInactive ? { include_inactive: true } : undefined,
     signal,
   );
+}
+
+export function refreshInvestmentQuotes() {
+  return api.post<InvestmentRefreshQuotesResponse>("/investments/refresh-quotes");
 }

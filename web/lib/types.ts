@@ -325,8 +325,19 @@ export type InvestmentAsset = {
   provider_subtype: string | null;
   status: string | null;
   as_of_date: string | null;
+  manually_adjusted: boolean;
+  manual_adjusted_at: string | null;
+  price_source: string | null;
+  price_updated_at: string | null;
+  pct_carteira: number;
   created_at: string;
   updated_at: string;
+};
+
+export type InvestmentRefreshQuotesResponse = {
+  quoted: number;
+  updated: number;
+  skipped: number;
 };
 
 export type InvestmentClassSummary = {

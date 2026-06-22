@@ -27,6 +27,8 @@ ASSET_CLASS_ORDER = {
     "rf_int": 70,
 }
 
+VALID_ASSET_CLASSES = set(ASSET_CLASS_LABELS)
+
 
 def _money(value: Any) -> float:
     return round(float(value or 0.0), 2)
@@ -49,6 +51,25 @@ def _date(value: Any) -> str | None:
     if not text:
         return None
     return text.split("T")[0]
+
+
+def _validate_asset_class(asset_class: str) -> str:
+    value = str(asset_class or "").strip()
+    if value not in VALID_ASSET_CLASSES:
+        raise ValueError("classe de ativo inválida")
+    return value
+
+
+def _ticker(value: Any) -> str | None:
+    text = _text(value)
+    return text.upper() if text else None
+
+
+def _non_negative(value: Any, field: str) -> float:
+    number = _number(value)
+    if number is None or number < 0:
+        raise ValueError(f"{field} inválido")
+    return number
 
 
 def classify_pluggy_investment(investment: dict[str, Any]) -> str:
@@ -141,6 +162,8 @@ def upsert_pluggy_asset(db: Database, investment: dict[str, Any]) -> int:
                        status=?,
                        as_of_date=?,
                        metadata_json=?,
+                       manually_adjusted=0,
+                       manual_adjusted_at=NULL,
                        updated_at=datetime('now')
                  WHERE id=?
                 """,
@@ -159,6 +182,227 @@ def upsert_pluggy_asset(db: Database, investment: dict[str, Any]) -> int:
             values,
         )
         return int(cur.lastrowid)
+
+
+def create_manual_asset(
+    db: Database,
+    *,
+    asset_class: str,
+    ticker: str | None = None,
+    name: str | None = None,
+    quantity: float | None = None,
+    manual_value: float | None = None,
+    unit_price: float | None = None,
+    price_source: str | None = None,
+    price_updated_at: str | None = None,
+) -> dict[str, Any]:
+    normalized_class = _validate_asset_class(asset_class)
+    normalized_ticker = _ticker(ticker)
+    qty = _non_negative(quantity if quantity is not None else 0.0, "quantity")
+    value = _number(manual_value)
+    if value is not None and value < 0:
+        raise ValueError("manual_value inválido")
+    price = _number(unit_price)
+    if price is not None and price < 0:
+        raise ValueError("unit_price inválido")
+    if normalized_class not in {"rf", "rf_int"} and not normalized_ticker:
+        raise ValueError("ticker obrigatório")
+    current_value = value if value is not None else (qty * price if price is not None else 0.0)
+    source = price_source or ("manual" if value is not None else None)
+
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        row = None
+        if normalized_ticker:
+            row = cur.execute(
+                """
+                SELECT id
+                  FROM portfolio_assets
+                 WHERE source='manual'
+                   AND asset_class=?
+                   AND ticker=?
+                """,
+                (normalized_class, normalized_ticker),
+            ).fetchone()
+        if row:
+            cur.execute(
+                """
+                UPDATE portfolio_assets
+                   SET name=?,
+                       quantity=?,
+                       manual_value=?,
+                       current_value=?,
+                       unit_price=?,
+                       price_source=?,
+                       price_updated_at=?,
+                       status='ACTIVE',
+                       updated_at=datetime('now')
+                 WHERE id=?
+                """,
+                (
+                    _text(name) or normalized_ticker,
+                    qty,
+                    value,
+                    _money(current_value),
+                    price,
+                    source,
+                    price_updated_at,
+                    row["id"],
+                ),
+            )
+            asset_id = int(row["id"])
+        else:
+            cur.execute(
+                """
+                INSERT INTO portfolio_assets (
+                    asset_class, ticker, name, quantity, source, manual_value,
+                    current_value, unit_price, currency, status, price_source,
+                    price_updated_at
+                )
+                VALUES (?, ?, ?, ?, 'manual', ?, ?, ?, 'BRL', 'ACTIVE', ?, ?)
+                """,
+                (
+                    normalized_class,
+                    normalized_ticker,
+                    _text(name) or normalized_ticker,
+                    qty,
+                    value,
+                    _money(current_value),
+                    price,
+                    source,
+                    price_updated_at,
+                ),
+            )
+            asset_id = int(cur.lastrowid)
+    asset = get_asset(db, asset_id)
+    if asset is None:
+        raise RuntimeError("ativo não foi criado")
+    return asset
+
+
+def get_asset(db: Database, asset_id: int) -> dict[str, Any] | None:
+    row = db._conn.execute(
+        "SELECT * FROM portfolio_assets WHERE id=?",
+        (asset_id,),
+    ).fetchone()
+    return _row_to_asset(row) if row else None
+
+
+def update_asset(db: Database, asset_id: int, **updates: Any) -> dict[str, Any] | None:
+    current = db._conn.execute(
+        "SELECT * FROM portfolio_assets WHERE id=?",
+        (asset_id,),
+    ).fetchone()
+    if current is None:
+        return None
+
+    asset_class = current["asset_class"]
+    if "asset_class" in updates and updates["asset_class"] is not None:
+        asset_class = _validate_asset_class(updates["asset_class"])
+    ticker = current["ticker"]
+    if "ticker" in updates:
+        ticker = _ticker(updates["ticker"])
+    name = current["name"]
+    if "name" in updates:
+        name = _text(updates["name"])
+    quantity = float(current["quantity"] or 0.0)
+    quantity_changed = False
+    if "quantity" in updates and updates["quantity"] is not None:
+        new_quantity = _non_negative(updates["quantity"], "quantity")
+        quantity_changed = abs(new_quantity - quantity) > 0.0000001
+        quantity = new_quantity
+    manual_value = _number(current["manual_value"])
+    if "manual_value" in updates:
+        manual_value = _number(updates["manual_value"])
+        if manual_value is not None and manual_value < 0:
+            raise ValueError("manual_value inválido")
+    unit_price = _number(current["unit_price"])
+    price_source = current["price_source"]
+    if "manual_value" in updates and manual_value is not None:
+        current_value = manual_value
+        price_source = "manual"
+    elif unit_price is not None:
+        current_value = quantity * unit_price
+    else:
+        current_value = _number(current["current_value"]) or 0.0
+    manual_adjust_sql = ""
+    if quantity_changed:
+        manual_adjust_sql = ", manually_adjusted=1, manual_adjusted_at=datetime('now')"
+
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute(
+            f"""
+            UPDATE portfolio_assets
+               SET asset_class=?,
+                   ticker=?,
+                   name=?,
+                   quantity=?,
+                   manual_value=?,
+                   current_value=?,
+                   price_source=?,
+                   updated_at=datetime('now')
+                   {manual_adjust_sql}
+             WHERE id=?
+            """,
+            (
+                asset_class,
+                ticker,
+                name,
+                quantity,
+                manual_value,
+                _money(current_value),
+                price_source,
+                asset_id,
+            ),
+        )
+    return get_asset(db, asset_id)
+
+
+def delete_asset(db: Database, asset_id: int) -> dict[str, int] | None:
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute("DELETE FROM portfolio_assets WHERE id=?", (asset_id,))
+        if cur.rowcount == 0:
+            return None
+    return {"deleted_id": asset_id}
+
+
+def set_price(
+    db: Database,
+    asset_id: int,
+    *,
+    price: float,
+    currency: str = "BRL",
+    price_source: str = "brapi",
+    price_updated_at: str | None = None,
+) -> dict[str, Any] | None:
+    current = db._conn.execute(
+        "SELECT quantity FROM portfolio_assets WHERE id=?",
+        (asset_id,),
+    ).fetchone()
+    if current is None:
+        return None
+    value = float(current["quantity"] or 0.0) * float(price)
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute(
+            """
+            UPDATE portfolio_assets
+               SET unit_price=?,
+                   current_value=?,
+                   currency=?,
+                   price_source=?,
+                   price_updated_at=?,
+                   updated_at=datetime('now')
+             WHERE id=?
+            """,
+            (
+                float(price),
+                _money(value),
+                currency or "BRL",
+                price_source,
+                price_updated_at,
+                asset_id,
+            ),
+        )
+    return get_asset(db, asset_id)
 
 
 def upsert_pluggy_transaction(
@@ -249,6 +493,11 @@ def _row_to_asset(row: Any) -> dict[str, Any]:
         "provider_subtype": row["provider_subtype"],
         "status": row["status"],
         "as_of_date": row["as_of_date"],
+        "manually_adjusted": bool(row["manually_adjusted"] or 0),
+        "manual_adjusted_at": row["manual_adjusted_at"],
+        "price_source": row["price_source"],
+        "price_updated_at": row["price_updated_at"],
+        "pct_carteira": 0.0,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -284,6 +533,10 @@ def list_assets(db: Database, *, include_inactive: bool = False) -> list[dict[st
 def portfolio_summary(db: Database, *, include_inactive: bool = False) -> dict[str, Any]:
     assets = list_assets(db, include_inactive=include_inactive)
     total_value = _money(sum(asset["current_value"] for asset in assets))
+    for asset in assets:
+        asset["pct_carteira"] = (
+            _money((asset["current_value"] / total_value) * 100) if total_value else 0.0
+        )
     by_class_map: dict[str, dict[str, Any]] = {}
     for asset in assets:
         key = asset["asset_class"]

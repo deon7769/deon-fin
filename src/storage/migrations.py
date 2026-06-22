@@ -371,6 +371,25 @@ def m0014_portfolio(conn: sqlite3.Connection) -> None:
     )
 
 
+def m0015_portfolio_quotes_and_manual_adjustments(conn: sqlite3.Connection) -> None:
+    _add_column(conn, "portfolio_assets", "manually_adjusted", "INTEGER NOT NULL DEFAULT 0")
+    _add_column(conn, "portfolio_assets", "manual_adjusted_at", "TEXT")
+    _add_column(conn, "portfolio_assets", "price_source", "TEXT")
+    _add_column(conn, "portfolio_assets", "price_updated_at", "TEXT")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS quote_cache (
+            symbol      TEXT NOT NULL,
+            asset_class TEXT NOT NULL,
+            price       REAL,
+            currency    TEXT DEFAULT 'BRL',
+            fetched_at  TEXT NOT NULL,
+            PRIMARY KEY (symbol, asset_class)
+        )
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -386,6 +405,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (12, "account_connection_metadata", m0012_account_connection_metadata),
     (13, "savings_goals", m0013_savings_goals),
     (14, "portfolio", m0014_portfolio),
+    (15, "portfolio_quotes_and_manual_adjustments", m0015_portfolio_quotes_and_manual_adjustments),
 ]
 
 

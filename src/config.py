@@ -37,6 +37,9 @@ class Settings:
     app_user: str = "familia"
     app_password: str | None = None
     cors_origins: list[str] | None = None
+    quotes_provider: str = "brapi"
+    brapi_token: str | None = None
+    quotes_ttl_min: int = 15
 
     @property
     def database_path(self) -> Path:
@@ -149,6 +152,9 @@ def load_settings() -> Settings:
             ).split(",")
             if origin.strip()
         ],
+        quotes_provider=os.environ.get("QUOTES_PROVIDER", "brapi").strip().lower() or "brapi",
+        brapi_token=(os.environ.get("BRAPI_TOKEN") or "").strip() or None,
+        quotes_ttl_min=int(os.environ.get("QUOTES_TTL_MIN", "15") or 15),
     )
 
 

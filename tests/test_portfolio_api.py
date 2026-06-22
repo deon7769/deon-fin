@@ -116,6 +116,10 @@ def test_portfolio_api_returns_active_assets_summary(client, tmp_db):
         },
     ]
     assert [asset["ticker"] for asset in body["assets"]] == ["WEGE3", "MXRF11"]
+    assert body["assets"][0]["pct_carteira"] == 66.67
+    assert body["assets"][0]["manually_adjusted"] is False
+    assert body["assets"][0]["price_source"] is None
+    assert body["assets"][0]["price_updated_at"] is None
 
 
 def test_portfolio_api_can_include_inactive_assets(client, tmp_db):
@@ -141,3 +145,94 @@ def test_portfolio_api_can_include_inactive_assets(client, tmp_db):
     assert response.status_code == 200
     assert response.json()["totals"] == {"asset_count": 1, "current_value": 0.0}
     assert response.json()["assets"][0]["status"] == "TOTAL_WITHDRAWAL"
+
+
+def test_manual_fixed_income_asset_crud(client):
+    created = client.post(
+        "/api/investments/assets",
+        json={
+            "asset_class": "rf",
+            "name": "Tesouro Selic",
+            "manual_value": 1500.55,
+        },
+    )
+
+    assert created.status_code == 201
+    body = created.json()
+    assert body["source"] == "manual"
+    assert body["asset_class"] == "rf"
+    assert body["current_value"] == 1500.55
+    assert body["manual_value"] == 1500.55
+    assert body["price_source"] == "manual"
+
+    updated = client.patch(
+        f"/api/investments/assets/{body['id']}",
+        json={"manual_value": 1750.25},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["current_value"] == 1750.25
+    assert updated.json()["manual_value"] == 1750.25
+
+    deleted = client.delete(f"/api/investments/assets/{body['id']}")
+
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted_id": body["id"]}
+    assert client.get("/api/investments").json()["assets"] == []
+
+
+def test_patch_pluggy_asset_quantity_marks_manual_adjustment_and_next_sync_clears(
+    client,
+    tmp_db,
+):
+    asset_id = portfolio_repo.upsert_pluggy_asset(
+        tmp_db,
+        {
+            "id": "inv-wege",
+            "name": "WEGE3",
+            "code": "WEGE3",
+            "type": "EQUITY",
+            "subtype": "STOCK",
+            "currencyCode": "BRL",
+            "quantity": 10,
+            "value": 40,
+            "balance": 400,
+            "status": "ACTIVE",
+            "date": "2026-06-21T03:00:00.000Z",
+        },
+    )
+
+    patched = client.patch(
+        f"/api/investments/assets/{asset_id}",
+        json={"quantity": 12},
+    )
+
+    assert patched.status_code == 200
+    patched_body = patched.json()
+    assert patched_body["quantity"] == 12.0
+    assert patched_body["current_value"] == 480.0
+    assert patched_body["manually_adjusted"] is True
+    assert patched_body["manual_adjusted_at"] is not None
+
+    portfolio_repo.upsert_pluggy_asset(
+        tmp_db,
+        {
+            "id": "inv-wege",
+            "name": "WEGE3",
+            "code": "WEGE3",
+            "type": "EQUITY",
+            "subtype": "STOCK",
+            "currencyCode": "BRL",
+            "quantity": 11,
+            "value": 41,
+            "balance": 451,
+            "status": "ACTIVE",
+            "date": "2026-06-22T03:00:00.000Z",
+        },
+    )
+
+    refreshed = client.get("/api/investments").json()["assets"][0]
+    assert refreshed["quantity"] == 11.0
+    assert refreshed["current_value"] == 451.0
+    assert refreshed["manually_adjusted"] is False
+    assert refreshed["manual_adjusted_at"] is None

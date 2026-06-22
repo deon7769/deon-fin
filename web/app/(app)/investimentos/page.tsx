@@ -9,7 +9,7 @@ import { MoneyText } from "@/components/ui/MoneyText";
 import { Pill } from "@/components/ui/Pill";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useInvestments } from "@/hooks/useInvestments";
+import { useInvestments, useRefreshInvestmentQuotes } from "@/hooks/useInvestments";
 import { formatDate } from "@/lib/format";
 import type { InvestmentAsset, InvestmentClassSummary } from "@/lib/types";
 
@@ -111,15 +111,29 @@ function displayDate(value: string | null) {
   return value ? formatDate(value) : "--";
 }
 
+function priceSourceLabel(value: string | null) {
+  if (value === "brapi") {
+    return "brapi";
+  }
+  if (value === "manual") {
+    return "manual";
+  }
+  if (value === "pluggy") {
+    return "Pluggy";
+  }
+  return "sem fonte";
+}
+
 function AssetsTable({ assets }: { assets: InvestmentAsset[] }) {
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-[920px] w-full border-collapse text-sm">
+      <table className="min-w-[1080px] w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-normal text-muted">
             <th className="py-3 pr-4">Tipo</th>
             <th className="px-4 py-3">Ativo</th>
             <th className="px-4 py-3 text-right">Valor atual</th>
+            <th className="px-4 py-3 text-right">% carteira</th>
             <th className="px-4 py-3 text-right">Quantidade</th>
             <th className="px-4 py-3 text-right">Preço</th>
             <th className="px-4 py-3">Status</th>
@@ -133,18 +147,32 @@ function AssetsTable({ assets }: { assets: InvestmentAsset[] }) {
                 <Pill color={CLASS_COLORS[asset.asset_class]}>{asset.asset_class_label}</Pill>
               </td>
               <td className="px-4 py-3">
-                <div className="font-medium text-text">{asset.ticker ?? asset.name ?? "--"}</div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="truncate font-medium text-text">{asset.ticker ?? asset.name ?? "--"}</div>
+                  {asset.manually_adjusted ? (
+                    <span
+                      title="Ajustado na mão; o Pluggy sobrescreve no próximo sync"
+                      className="shrink-0 rounded-full border border-blue-400/40 bg-blue-500/10 px-2 py-0.5 text-[11px] font-semibold text-blue-300"
+                    >
+                      manual
+                    </span>
+                  ) : null}
+                </div>
                 <div className="mt-1 text-xs text-muted">{asset.provider_subtype ?? asset.provider_type ?? asset.source}</div>
               </td>
               <td className="px-4 py-3 text-right font-medium">
                 <MoneyText value={asset.current_value} />
               </td>
+              <td className="px-4 py-3 text-right tabular-nums text-text">{asset.pct_carteira.toFixed(2)}%</td>
               <td className="px-4 py-3 text-right tabular-nums text-text">{asset.quantity.toLocaleString("pt-BR")}</td>
               <td className="px-4 py-3 text-right">
                 {asset.unit_price === null ? <span className="text-muted">--</span> : <MoneyText value={asset.unit_price} />}
               </td>
               <td className="px-4 py-3 text-muted">{statusLabel(asset.status)}</td>
-              <td className="py-3 pl-4 text-muted">{displayDate(asset.as_of_date)}</td>
+              <td className="py-3 pl-4 text-muted">
+                <div>{displayDate(asset.price_updated_at ?? asset.as_of_date)}</div>
+                <div className="mt-1 text-xs">{priceSourceLabel(asset.price_source)}</div>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -156,6 +184,7 @@ function AssetsTable({ assets }: { assets: InvestmentAsset[] }) {
 export default function InvestimentosPage() {
   const [includeInactive, setIncludeInactive] = useState(false);
   const investments = useInvestments(includeInactive);
+  const refreshQuotes = useRefreshInvestmentQuotes();
   const data = investments.data;
 
   return (
@@ -175,11 +204,12 @@ export default function InvestimentosPage() {
           </label>
           <button
             type="button"
-            onClick={() => void investments.refetch()}
-            className="inline-flex h-10 w-fit items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm font-medium text-text transition hover:bg-surface2"
+            onClick={() => refreshQuotes.mutate()}
+            disabled={refreshQuotes.isPending}
+            className="inline-flex h-10 w-fit items-center gap-2 rounded-md bg-blue-500 px-3 text-sm font-medium text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw size={16} aria-hidden />
-            Atualizar
+            <RefreshCw size={16} aria-hidden className={refreshQuotes.isPending ? "animate-spin" : undefined} />
+            {refreshQuotes.isPending ? "Atualizando..." : "Atualizar cotações"}
           </button>
         </div>
 
