@@ -273,6 +273,8 @@ def test_invoice_items_are_purchases_only_and_include_bucket_tag_category(tmp_db
     assert result["invoice"]["count"] == 2
     assert [item["id"] for item in result["items"]] == [second.id, first.id]
     assert result["items"][0]["installment"] == {"n": 3, "of": 10}
+    assert result["items"][0]["category_label"] == "Eletronicos"
+    assert result["items"][1]["category_label"] == "Mercado"
     assert result["items"][1]["bucket"] == {
         "id": fixed["id"],
         "name": fixed["name"],
@@ -284,8 +286,29 @@ def test_invoice_items_are_purchases_only_and_include_bucket_tag_category(tmp_db
         "color": tag["color"],
     }
     assert result["by_category"] == [
-        {"name": "Eletronicos", "color": fixed["color"], "total": 300.0},
-        {"name": "Mercado", "color": fixed["color"], "total": 120.0},
+        {"name": "Eletronicos", "label": "Eletronicos", "color": fixed["color"], "total": 300.0},
+        {"name": "Mercado", "label": "Mercado", "color": fixed["color"], "total": 120.0},
+    ]
+
+
+def test_invoice_translates_pluggy_category_labels(tmp_db):
+    _seed_accounts(tmp_db)
+    tx = _insert_tx(
+        tmp_db,
+        external_id="invoice-shopping",
+        amount="100.00",
+        description="Compra Pluggy",
+        category="Shopping",
+    )
+
+    result = invoices_repo.get_invoice(tmp_db, account_id="invoice-card", month="2026-06")
+
+    assert result is not None
+    assert result["items"][0]["id"] == tx.id
+    assert result["items"][0]["category"] == "Shopping"
+    assert result["items"][0]["category_label"] == "Compras"
+    assert result["by_category"] == [
+        {"name": "Shopping", "label": "Compras", "color": None, "total": 100.0},
     ]
 
 

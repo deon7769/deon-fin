@@ -137,3 +137,44 @@ export function transactionDisplayValue(
 ): number {
   return transaction.display_value ?? transaction.signed_value;
 }
+
+export function transactionCategoryLabel(
+  transaction: Pick<Transaction, "category" | "category_label">,
+): string {
+  return transaction.category_label?.trim() || transaction.category?.trim() || "Sem categoria";
+}
+
+export function parseTransactionAmountInput(value: string): number | null {
+  const raw = value.trim();
+  if (!raw || /[^0-9.,]/.test(raw)) {
+    return null;
+  }
+
+  let normalized: string | null = null;
+  if (raw.includes(",") && raw.includes(".")) {
+    if (/^\d{1,3}(\.\d{3})+,\d{1,2}$/.test(raw)) {
+      normalized = raw.replace(/\./g, "").replace(",", ".");
+    }
+  } else if (raw.includes(",")) {
+    if (/^\d+(,\d{1,2})?$/.test(raw)) {
+      normalized = raw.replace(",", ".");
+    }
+  } else if (raw.includes(".")) {
+    if (/^\d+\.\d{1,2}$/.test(raw)) {
+      normalized = raw;
+    } else if (/^\d{1,3}(\.\d{3})+$/.test(raw)) {
+      normalized = raw.replace(/\./g, "");
+    }
+  } else if (/^\d+$/.test(raw)) {
+    normalized = raw;
+  }
+
+  if (normalized === null) {
+    return null;
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return Math.round(parsed * 100) / 100;
+}

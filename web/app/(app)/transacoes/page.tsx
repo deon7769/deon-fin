@@ -36,7 +36,11 @@ import {
 import { useTransactions } from "@/hooks/useTransactions";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/format";
-import { transactionDisplayValue } from "@/lib/transactions";
+import {
+  parseTransactionAmountInput,
+  transactionCategoryLabel,
+  transactionDisplayValue,
+} from "@/lib/transactions";
 import type { Tag, Transaction, TransactionHiddenFilter, TransactionType } from "@/lib/types";
 
 const EMPTY_TRANSACTIONS: Transaction[] = [];
@@ -178,6 +182,7 @@ function NewTransactionPanel({
   const [bucketId, setBucketId] = useState<number | null>(null);
   const [tagId, setTagId] = useState<number | null>(null);
   const [note, setNote] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
 
   if (!open) {
     return null;
@@ -185,10 +190,16 @@ function NewTransactionPanel({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const parsedAmount = parseTransactionAmountInput(amount);
+    if (parsedAmount === null) {
+      setFormError("Informe um valor válido.");
+      return;
+    }
+    setFormError(null);
     await onSubmit({
       account_id: accountId.trim(),
       posted_at: postedAt,
-      amount: Number(amount.replace(",", ".")),
+      amount: parsedAmount,
       type,
       description,
       bucket_id: bucketId,
@@ -257,7 +268,10 @@ function NewTransactionPanel({
           <span className="text-xs font-medium text-muted">Valor</span>
           <input
             value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+            onChange={(event) => {
+              setAmount(event.target.value);
+              setFormError(null);
+            }}
             required
             inputMode="decimal"
             className="h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
@@ -288,9 +302,9 @@ function NewTransactionPanel({
             className="h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
           />
         </label>
-        {error ? (
+        {formError || error ? (
           <div className="rounded-md border border-negative/40 bg-negative/10 px-3 py-2 text-sm text-negative lg:col-span-6">
-            {error}
+            {formError ?? error}
           </div>
         ) : null}
         <div className="flex items-center justify-end gap-2 lg:col-span-6">
@@ -361,7 +375,7 @@ export default function TransacoesPage() {
         cell: (tx) => (
           <div>
             <p className="font-medium text-text">{tx.description}</p>
-            <p className="mt-1 text-xs text-muted">{tx.category ?? "Sem categoria"}</p>
+            <p className="mt-1 text-xs text-muted">{transactionCategoryLabel(tx)}</p>
             <NoteCell
               tx={tx}
               saving={updateTx.isPending}

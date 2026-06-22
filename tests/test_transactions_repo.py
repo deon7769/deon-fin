@@ -133,6 +133,37 @@ def test_filter_income_includes_credit_refunds(tmp_db):
     assert [item["id"] for item in expense_page["items"]] == [purchase.id]
 
 
+def test_filter_expense_excludes_neutral_transfers_and_card_payments(tmp_db):
+    _seed_accounts(tmp_db)
+    grocery = _insert(
+        tmp_db,
+        amount="-120.00",
+        description="Mercado",
+        category="Groceries",
+        external_id="repo-type-expense-1",
+    )
+    _insert(
+        tmp_db,
+        amount="-700.00",
+        description="Pix entre contas",
+        category="Transfer - PIX",
+        external_id="repo-type-expense-2",
+    )
+    _insert(
+        tmp_db,
+        amount="-900.00",
+        description="Pagamento fatura",
+        category="Credit card payment",
+        external_id="repo-type-expense-3",
+    )
+
+    page = transactions_repo.list_transactions(tmp_db, month="2026-06", type="expense")
+
+    assert [item["id"] for item in page["items"]] == [grocery.id]
+    assert page["total"] == 1
+    assert page["summary"] == {"income": 0.0, "expense": 120.0, "balance": -120.0}
+
+
 def test_list_transactions_filters_bucket_and_tag_with_none(tmp_db):
     _seed_accounts(tmp_db)
     buckets_repo.seed_buckets(tmp_db)
@@ -163,7 +194,7 @@ def test_list_transactions_filters_bucket_and_tag_with_none(tmp_db):
     assert [item["id"] for item in no_tag["items"]] == [plain.id]
 
 
-def test_list_transactions_summary_ignores_hidden_and_uses_sign_helpers(tmp_db):
+def test_list_transactions_summary_respects_hidden_filter_and_uses_sign_helpers(tmp_db):
     _seed_accounts(tmp_db)
     _insert(
         tmp_db,
@@ -202,12 +233,14 @@ def test_list_transactions_summary_ignores_hidden_and_uses_sign_helpers(tmp_db):
     tmp_db._conn.execute("UPDATE transactions SET hidden=1 WHERE id=?", (hidden.id,))
     tmp_db._conn.commit()
 
+    visible = transactions_repo.list_transactions(tmp_db, month="2026-06")
     page = transactions_repo.list_transactions(tmp_db, month="2026-06", hidden="include")
 
-    assert page["summary"] == {"income": 5000.0, "expense": 350.0, "balance": 4650.0}
+    assert visible["summary"] == {"income": 5000.0, "expense": 350.0, "balance": 4650.0}
+    assert page["summary"] == {"income": 5000.0, "expense": 1349.0, "balance": 3651.0}
     hidden_only = transactions_repo.list_transactions(tmp_db, month="2026-06", hidden="only")
     assert hidden_only["total"] == 1
-    assert hidden_only["summary"] == page["summary"]
+    assert hidden_only["summary"] == {"income": 0.0, "expense": 999.0, "balance": -999.0}
     visible_transfer = next(item for item in page["items"] if item["description"] == "Transferencia")
     assert visible_transfer["type"] == "expense"
     assert visible_transfer["signed_value"] == 0.0
@@ -232,6 +265,23 @@ def test_list_transactions_display_value_preserves_credit_card_expense_sign(tmp_
     assert item["amount"] == 250.0
     assert item["signed_value"] == -250.0
     assert item["display_value"] == -250.0
+
+
+def test_list_transactions_includes_translated_category_label(tmp_db):
+    _seed_accounts(tmp_db)
+    _insert(
+        tmp_db,
+        amount="-89.90",
+        description="Restaurante",
+        category="Eating out",
+        external_id="repo-category-label",
+    )
+
+    page = transactions_repo.list_transactions(tmp_db, month="2026-06")
+
+    item = page["items"][0]
+    assert item["category"] == "Eating out"
+    assert item["category_label"] == "Restaurantes"
 
 
 def test_update_transaction_bucket_marks_manual_without_rule_side_effects(tmp_db):

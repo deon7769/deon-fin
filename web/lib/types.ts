@@ -58,6 +58,7 @@ export type Transaction = {
   description: string;
   raw_description?: string | null;
   category?: string | null;
+  category_label?: string | null;
   category_source?: string | null;
   source: string;
   external_id?: string | null;
@@ -236,6 +237,7 @@ export type InvoiceItem = {
   amount: number;
   signed_value: number;
   category: string;
+  category_label?: string | null;
   bucket: Pick<Bucket, "id" | "name" | "color"> | null;
   bucket_source?: string | null;
   tag: Pick<Tag, "id" | "name" | "color"> | null;
@@ -244,6 +246,7 @@ export type InvoiceItem = {
 
 export type InvoiceCategory = {
   name: string;
+  label?: string | null;
   color: string | null;
   total: number;
 };

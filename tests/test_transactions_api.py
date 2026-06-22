@@ -86,6 +86,7 @@ def test_get_transactions_shape_and_bad_params(client, tmp_db):
     assert body["items"][0]["type"] == "expense"
     assert body["items"][0]["signed_value"] == -42.5
     assert body["items"][0]["display_value"] == -42.5
+    assert body["items"][0]["category_label"] == body["items"][0]["category"]
 
     invalid_month = client.get("/api/transactions?month=202606")
     assert invalid_month.status_code == 422
@@ -98,6 +99,76 @@ def test_get_transactions_shape_and_bad_params(client, tmp_db):
     invalid_bucket = client.get("/api/transactions?bucket_ids=abc")
     assert invalid_bucket.status_code == 422
     assert invalid_bucket.json()["error"]["code"] == "validation_error"
+
+
+def test_get_transactions_translates_pluggy_category_labels(client, tmp_db):
+    _seed_account(tmp_db)
+    tx = Transaction(
+        account_id="api-checking",
+        posted_at=date(2026, 6, 20),
+        amount=Decimal("-89.90"),
+        description="Restaurante",
+        raw_description="RESTAURANTE",
+        category="Eating out",
+        source="test",
+        external_id="api-category-label",
+    )
+    tmp_db.insert_transactions([tx])
+    tmp_db._conn.execute("UPDATE transactions SET reference_month='2026-06' WHERE id=?", (tx.id,))
+    tmp_db._conn.commit()
+
+    response = client.get("/api/transactions?month=2026-06")
+
+    assert response.status_code == 200
+    item = response.json()["items"][0]
+    assert item["category"] == "Eating out"
+    assert item["category_label"] == "Restaurantes"
+
+
+def test_get_transactions_type_filter_excludes_neutral_movements(client, tmp_db):
+    _seed_account(tmp_db)
+    rows = [
+        Transaction(
+            account_id="api-checking",
+            posted_at=date(2026, 6, 20),
+            amount=Decimal("-120.00"),
+            description="Mercado",
+            raw_description="MERCADO",
+            category="Groceries",
+            source="test",
+            external_id="api-type-expense-1",
+        ),
+        Transaction(
+            account_id="api-checking",
+            posted_at=date(2026, 6, 20),
+            amount=Decimal("-700.00"),
+            description="Pix entre contas",
+            raw_description="PIX ENTRE CONTAS",
+            category="Transfer - PIX",
+            source="test",
+            external_id="api-type-expense-2",
+        ),
+        Transaction(
+            account_id="api-checking",
+            posted_at=date(2026, 6, 20),
+            amount=Decimal("-900.00"),
+            description="Pagamento fatura",
+            raw_description="PAGAMENTO FATURA",
+            category="Credit card payment",
+            source="test",
+            external_id="api-type-expense-3",
+        ),
+    ]
+    tmp_db.insert_transactions(rows)
+    tmp_db._conn.execute("UPDATE transactions SET reference_month='2026-06'")
+    tmp_db._conn.commit()
+
+    response = client.get("/api/transactions?month=2026-06&type=expense")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body["items"]] == [rows[0].id]
+    assert body["summary"] == {"income": 0.0, "expense": 120.0, "balance": -120.0}
 
 
 def test_patch_transaction_accepts_all_partial_fields(client, tmp_db):

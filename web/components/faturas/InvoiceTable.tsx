@@ -7,7 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { TagSelect } from "@/components/ui/TagSelect";
 import { formatDate } from "@/lib/format";
-import { installmentLabel } from "@/lib/invoices";
+import { installmentLabel, invoiceItemCategoryLabel } from "@/lib/invoices";
 import type { Bucket, InvoiceItem, Tag } from "@/lib/types";
 
 type InvoiceTableProps = {
@@ -54,7 +54,7 @@ export function InvoiceTable({
             <p className="truncate font-medium text-text" title={item.description}>
               {item.description}
             </p>
-            <p className="mt-1 text-xs text-muted">{item.category}</p>
+            <p className="mt-1 text-xs text-muted">{invoiceItemCategoryLabel(item)}</p>
           </div>
         ),
       },

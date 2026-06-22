@@ -6,6 +6,7 @@ from calendar import monthrange
 from datetime import date, timedelta
 from typing import Any
 
+from ...agent import maintenance as mnt
 from ...agent.cards import CREDIT_TYPES, _EXCLUDE
 from ...storage import Database
 from ...storage.reference_month import reference_month
@@ -53,6 +54,11 @@ def _is_credit_card(account_type: str | None) -> bool:
 
 def _is_purchase(amount: float, category: str | None) -> bool:
     return float(amount) > 0 and (category or "(sem categoria)") not in _EXCLUDE
+
+
+def _category_label(category: str | None, cat_map: dict[str, str]) -> str:
+    name = category or "(sem categoria)"
+    return mnt.translate_category(name, cat_map)
 
 
 def _load_meta(raw: str | None) -> dict[str, Any]:
@@ -240,7 +246,11 @@ def _transaction_rows(db: Database, account_id: str) -> list[Any]:
     ).fetchall()
 
 
-def _serialize_item(row: Any, installment: dict[str, int] | None) -> dict[str, Any]:
+def _serialize_item(
+    row: Any,
+    installment: dict[str, int] | None,
+    cat_map: dict[str, str],
+) -> dict[str, Any]:
     bucket = None
     if row["bucket_id"] is not None:
         bucket = {
@@ -258,6 +268,7 @@ def _serialize_item(row: Any, installment: dict[str, int] | None) -> dict[str, A
         }
 
     amount = _money(row["amount"])
+    category = row["category"] or "(sem categoria)"
     return {
         "id": row["id"],
         "account_id": row["account_id"],
@@ -265,7 +276,8 @@ def _serialize_item(row: Any, installment: dict[str, int] | None) -> dict[str, A
         "description": row["description"],
         "amount": amount,
         "signed_value": amount,
-        "category": row["category"] or "(sem categoria)",
+        "category": category,
+        "category_label": _category_label(category, cat_map),
         "bucket": bucket,
         "bucket_source": row["bucket_source"],
         "tag": tag,
@@ -279,6 +291,7 @@ def get_invoice(db: Database, *, account_id: str, month: str) -> dict[str, Any] 
         return None
 
     start_day = _start_day(db)
+    cat_map = mnt.load_overrides()["categorias_pt"]
     items: list[dict[str, Any]] = []
     by_category: dict[str, float] = {}
     category_color: dict[str, str | None] = {}
@@ -295,6 +308,7 @@ def get_invoice(db: Database, *, account_id: str, month: str) -> dict[str, Any] 
         item = _serialize_item(
             row,
             _parse_installment(row["raw_description"] or row["description"] or "", meta),
+            cat_map,
         )
         items.append(item)
         category = item["category"]
@@ -314,7 +328,12 @@ def get_invoice(db: Database, *, account_id: str, month: str) -> dict[str, Any] 
         },
         "items": items,
         "by_category": [
-            {"name": name, "color": category_color.get(name), "total": _money(total)}
+            {
+                "name": name,
+                "label": _category_label(name, cat_map),
+                "color": category_color.get(name),
+                "total": _money(total),
+            }
             for name, total in sorted(by_category.items(), key=lambda item: (-item[1], item[0]))
         ],
     }

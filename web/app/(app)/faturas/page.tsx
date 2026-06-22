@@ -19,6 +19,7 @@ import { useSetTag } from "@/hooks/useSetTag";
 import { useCreateTag } from "@/hooks/useTagMutations";
 import { useTags } from "@/hooks/useTags";
 import { formatMonthYear } from "@/lib/format";
+import { invoiceCategoryLabel } from "@/lib/invoices";
 import { usePeriod } from "@/providers/PeriodProvider";
 import type { CardItem, InvoiceItem, Tag } from "@/lib/types";
 
@@ -160,7 +161,7 @@ export default function FaturasPage() {
                       key={item.name}
                       className="flex items-center justify-between gap-3 border-b border-border pb-3 last:border-b-0 last:pb-0"
                     >
-                      <Pill color={item.color}>{item.name}</Pill>
+                      <Pill color={item.color}>{invoiceCategoryLabel(item)}</Pill>
                       <MoneyText value={item.total} className="font-semibold text-negative" />
                     </div>
                   ))}

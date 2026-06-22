@@ -6,6 +6,10 @@ from src.agent import maintenance as mnt
 def test_translate_category_default_e_fallback():
     cat = mnt.load_overrides()["categorias_pt"]
     assert mnt.translate_category("Groceries", cat) == "Mercado"
+    assert mnt.translate_category("Proceeds interests and dividends", cat) == "Juros e dividendos"
+    assert mnt.translate_category("Automatic investment", cat) == "Investimento automático"
+    assert mnt.translate_category("Public transportation", cat) == "Transporte público"
+    assert mnt.translate_category("Tolls and in vehicle payment", cat) == "Pedágios e pagamento veicular"
     assert mnt.translate_category("gas stations", cat) == "Combustível"
     # categoria sem tradução volta como veio
     assert mnt.translate_category("Xyzland", cat) == "Xyzland"

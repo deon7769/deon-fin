@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { cardDetailLine, installmentLabel, invoiceStatusLabel } from "@/lib/invoices";
+import {
+  cardDetailLine,
+  installmentLabel,
+  invoiceCategoryLabel,
+  invoiceItemCategoryLabel,
+  invoiceStatusLabel,
+} from "@/lib/invoices";
 
 describe("invoice helpers", () => {
   it("formats installment labels", () => {
@@ -17,5 +23,12 @@ describe("invoice helpers", () => {
     expect(cardDetailLine({ brand: "Visa", last4: "1234" })).toBe("Visa - final 1234");
     expect(cardDetailLine({ brand: null, last4: "9876" })).toBe("final 9876");
     expect(cardDetailLine({ brand: null, last4: null })).toBe("");
+  });
+
+  it("prefers translated category labels for items and summaries", () => {
+    expect(invoiceItemCategoryLabel({ category: "Shopping", category_label: "Compras" })).toBe("Compras");
+    expect(invoiceItemCategoryLabel({ category: "Shopping", category_label: "" })).toBe("Shopping");
+    expect(invoiceCategoryLabel({ name: "Eating out", label: "Restaurantes" })).toBe("Restaurantes");
+    expect(invoiceCategoryLabel({ name: "Groceries", label: " " })).toBe("Groceries");
   });
 });

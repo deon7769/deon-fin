@@ -4,6 +4,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Any, Literal
 
+from ...agent import maintenance as mnt
 from ...agent.context import CREDIT_TYPES, income_value, internal_transfer_credit_ids, spending_value
 from ...agent.buckets import match_key_for
 from ...storage import Database, Transaction
@@ -83,7 +84,38 @@ def _display_value(amount: float, account_type: str | None) -> float:
     return round(float(amount), 2)
 
 
-def _serialize_item(row: Any, *, external_transfer_income: bool = False) -> dict[str, Any]:
+def _row_signed_value(row: Any, internal_transfer_income_ids: set[Any]) -> float:
+    return _signed_value(
+        float(row["amount"]),
+        row["account_type"],
+        row["category"],
+        external_transfer_income=row["id"] not in internal_transfer_income_ids,
+    )
+
+
+def _matches_type_filter(
+    row: Any,
+    type: Literal["income", "expense"] | None,
+    internal_transfer_income_ids: set[Any],
+) -> bool:
+    if type is None:
+        return True
+    signed = _row_signed_value(row, internal_transfer_income_ids)
+    return signed > 0 if type == "income" else signed < 0
+
+
+def _category_label(category: str | None, cat_map: dict[str, str] | None = None) -> str:
+    name = category or "(sem categoria)"
+    mapping = cat_map if cat_map is not None else mnt.load_overrides()["categorias_pt"]
+    return mnt.translate_category(name, mapping)
+
+
+def _serialize_item(
+    row: Any,
+    *,
+    external_transfer_income: bool = False,
+    cat_map: dict[str, str] | None = None,
+) -> dict[str, Any]:
     amount = float(row["amount"])
     bucket = None
     if row["bucket_id"] is not None:
@@ -109,6 +141,7 @@ def _serialize_item(row: Any, *, external_transfer_income: bool = False) -> dict
         "description": row["description"],
         "raw_description": row["raw_description"],
         "category": row["category"],
+        "category_label": _category_label(row["category"], cat_map),
         "category_source": row["category_source"],
         "source": row["source"],
         "external_id": row["external_id"],
@@ -243,13 +276,13 @@ def _compute_summary(
         date_from=date_from,
         date_to=date_to,
         q=q,
-        type=type,
+        type=None,
         amount_min=amount_min,
         amount_max=amount_max,
         account_id=account_id,
         bucket_ids=bucket_ids,
         tag_ids=tag_ids,
-        hidden="exclude",
+        hidden=hidden,
     )
     rows = db._conn.execute(
         f"""
@@ -265,6 +298,8 @@ def _compute_summary(
     expense = 0.0
     internal_transfer_income_ids = internal_transfer_credit_ids(rows)
     for row in rows:
+        if not _matches_type_filter(row, type, internal_transfer_income_ids):
+            continue
         amount = float(row["amount"])
         income += income_value(
             amount,
@@ -323,33 +358,31 @@ def list_transactions(
         "tag_ids": tag_ids,
         "hidden": hidden,
     }
-    where, params = _build_where(**filters)
-    total = db._conn.execute(
-        f"""
-        SELECT COUNT(*)
-          FROM transactions t
-          LEFT JOIN accounts a ON a.id = t.account_id
-         WHERE {where}
-        """,
+    sql_filters = {**filters, "type": None}
+    where, params = _build_where(**sql_filters)
+    all_rows = db._conn.execute(
+        f"{SELECT_COLS} WHERE {where} ORDER BY t.posted_at DESC, t.id DESC",
         params,
-    ).fetchone()[0]
-    rows = db._conn.execute(
-        f"{SELECT_COLS} WHERE {where} ORDER BY t.posted_at DESC, t.id DESC LIMIT ? OFFSET ?",
-        (*params, page_size, offset),
     ).fetchall()
-    internal_transfer_income_ids = internal_transfer_credit_ids(rows)
+    internal_transfer_income_ids = internal_transfer_credit_ids(all_rows)
+    filtered_rows = [
+        row for row in all_rows if _matches_type_filter(row, type, internal_transfer_income_ids)
+    ]
+    rows = filtered_rows[offset : offset + page_size]
+    cat_map = mnt.load_overrides()["categorias_pt"]
 
     return {
         "items": [
             _serialize_item(
                 row,
                 external_transfer_income=row["id"] not in internal_transfer_income_ids,
+                cat_map=cat_map,
             )
             for row in rows
         ],
         "page": page,
         "page_size": page_size,
-        "total": int(total),
+        "total": len(filtered_rows),
         "summary": _compute_summary(db, **filters),
     }
 

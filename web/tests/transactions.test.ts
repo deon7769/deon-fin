@@ -4,7 +4,9 @@ import {
   clampPageSize,
   hasTransactionFilters,
   idsFilterFromSearch,
+  parseTransactionAmountInput,
   semTagFilterFromSearch,
+  transactionCategoryLabel,
   transactionDisplayValue,
   transactionQuery,
 } from "@/lib/transactions";
@@ -79,5 +81,25 @@ describe("transaction helpers", () => {
   it("prefers transaction display_value over aggregate signed_value", () => {
     expect(transactionDisplayValue({ amount: -300, signed_value: 0, display_value: -300 })).toBe(-300);
     expect(transactionDisplayValue({ amount: -300, signed_value: 0 })).toBe(0);
+  });
+
+  it("prefers translated category labels when available", () => {
+    expect(transactionCategoryLabel({ category: "Eating out", category_label: "Restaurantes" })).toBe(
+      "Restaurantes",
+    );
+    expect(transactionCategoryLabel({ category: "Shopping", category_label: " " })).toBe("Shopping");
+    expect(transactionCategoryLabel({ category: null, category_label: null })).toBe("Sem categoria");
+  });
+
+  it("parses transaction amount input without accepting JavaScript numeric quirks", () => {
+    expect(parseTransactionAmountInput("1.234,56")).toBe(1234.56);
+    expect(parseTransactionAmountInput("1234,56")).toBe(1234.56);
+    expect(parseTransactionAmountInput("1234.56")).toBe(1234.56);
+    expect(parseTransactionAmountInput("0x10")).toBeNull();
+    expect(parseTransactionAmountInput("1e3")).toBeNull();
+    expect(parseTransactionAmountInput("abc123")).toBeNull();
+    expect(parseTransactionAmountInput("1.2.3")).toBeNull();
+    expect(parseTransactionAmountInput("-10")).toBeNull();
+    expect(parseTransactionAmountInput("0")).toBeNull();
   });
 });
