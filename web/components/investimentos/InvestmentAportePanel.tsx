@@ -108,8 +108,8 @@ function ConfirmModal({
             />
           </label>
           <p className="rounded-md border border-blue-400/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-200">
-            Quantidade sugerida: {displayNumber(suggestion.sugest_un)}, equivale a R${" "}
-            {suggestion.sugest_rs.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            Quantidade sugerida: {displayNumber(suggestion.sugest_un)}, valor sugerido:{" "}
+            <MoneyText value={suggestion.sugest_rs} />
           </p>
           <div className="flex justify-end gap-2">
             <button
@@ -151,6 +151,9 @@ export function InvestmentAportePanel({
 }: InvestmentAportePanelProps) {
   const [aporte, setAporte] = useState(displayNumber(targets.ultimo_aporte ?? 0));
   const [selected, setSelected] = useState<InvestmentAporteSuggestion | null>(null);
+  const hasExecutableSuggestions = Boolean(
+    result?.sugestoes.some((item) => item.sugest_un > 0 && item.sugest_rs > 0),
+  );
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -226,7 +229,7 @@ export function InvestmentAportePanel({
               <button
                 type="button"
                 onClick={() => void onConfirmAll(aporteComprasFromSuggestions(result))}
-                disabled={confirming || result.sugestoes.every((item) => item.sugest_un <= 0)}
+                disabled={confirming || !hasExecutableSuggestions}
                 className="inline-flex h-9 items-center gap-2 rounded-md bg-blue-500 px-3 text-sm font-medium text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <CircleDollarSign size={16} aria-hidden />
@@ -234,57 +237,64 @@ export function InvestmentAportePanel({
               </button>
             }
           >
-            <div className="overflow-x-auto">
-              <table className="min-w-[1060px] w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-normal text-muted">
-                    <th className="py-3 pr-4">Tipo</th>
-                    <th className="px-4 py-3">Ticker</th>
-                    <th className="px-4 py-3 text-right">Atual</th>
-                    <th className="px-4 py-3 text-right">Preco atual</th>
-                    <th className="px-4 py-3 text-right">Nota</th>
-                    <th className="px-4 py-3 text-right">Total apos aporte</th>
-                    <th className="px-4 py-3 text-right">Sugest. R$</th>
-                    <th className="px-4 py-3 text-right">Sugest. un</th>
-                    <th className="py-3 pl-4 text-right">Acao</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.sugestoes.map((item) => (
-                    <tr key={item.id} className="border-b border-border last:border-0">
-                      <td className="py-3 pr-4">
-                        <Pill color={CLASS_COLORS[item.asset_class]}>{classLabel(item.asset_class)}</Pill>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-text">{item.ticker ?? "--"}</td>
-                      <td className="px-4 py-3 text-right">
-                        <MoneyText value={item.valor_atual} />
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <MoneyText value={item.preco} />
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-text">{scoreText(item.nota)}</td>
-                      <td className="px-4 py-3 text-right tabular-nums text-text">
-                        {item.total_apos_aporte_pct.toFixed(2)}%
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        <MoneyText value={item.sugest_rs} />
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-text">{displayNumber(item.sugest_un)}</td>
-                      <td className="py-3 pl-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setSelected(item)}
-                          disabled={item.sugest_un <= 0}
-                          className="h-9 rounded-md border border-blue-400/40 bg-blue-500/10 px-3 text-sm font-medium text-blue-200 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          Aportar!
-                        </button>
-                      </td>
+            {hasExecutableSuggestions ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-[1060px] w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-normal text-muted">
+                      <th className="py-3 pr-4">Tipo</th>
+                      <th className="px-4 py-3">Ticker</th>
+                      <th className="px-4 py-3 text-right">Atual</th>
+                      <th className="px-4 py-3 text-right">Preco atual</th>
+                      <th className="px-4 py-3 text-right">Nota</th>
+                      <th className="px-4 py-3 text-right">Total apos aporte</th>
+                      <th className="px-4 py-3 text-right">Sugest. R$</th>
+                      <th className="px-4 py-3 text-right">Sugest. un</th>
+                      <th className="py-3 pl-4 text-right">Acao</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {result.sugestoes.map((item) => (
+                      <tr key={item.id} className="border-b border-border last:border-0">
+                        <td className="py-3 pr-4">
+                          <Pill color={CLASS_COLORS[item.asset_class]}>{classLabel(item.asset_class)}</Pill>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-text">{item.ticker ?? "--"}</td>
+                        <td className="px-4 py-3 text-right">
+                          <MoneyText value={item.valor_atual} />
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <MoneyText value={item.preco} />
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-text">{scoreText(item.nota)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-text">
+                          {item.total_apos_aporte_pct.toFixed(2)}%
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium">
+                          <MoneyText value={item.sugest_rs} />
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-text">{displayNumber(item.sugest_un)}</td>
+                        <td className="py-3 pl-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setSelected(item)}
+                            disabled={item.sugest_un <= 0}
+                            className="h-9 rounded-md border border-blue-400/40 bg-blue-500/10 px-3 text-sm font-medium text-blue-200 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Aportar!
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed border-border bg-bg px-4 py-5 text-sm text-muted">
+                <p className="font-medium text-text">Nenhuma sugestao executavel para este aporte.</p>
+                <p className="mt-1">Ajuste ativos, precos ou metas antes de confirmar.</p>
+              </div>
+            )}
           </SectionCard>
         </>
       ) : null}

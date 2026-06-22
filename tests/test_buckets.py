@@ -174,6 +174,56 @@ def test_set_bucket_propagates_to_similar_transactions(tmp_db):
     )
 
 
+def test_set_bucket_only_this_does_not_learn_rule_or_touch_similars(tmp_db):
+    _seed_account(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    conforto = _bucket_by_key(tmp_db, "conforto")
+    target = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
+    similar = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
+
+    result = transactions_repo.set_bucket(
+        tmp_db,
+        target.id,
+        bucket_id=conforto["id"],
+        apply_to_similar=False,
+    )
+    apply_buckets_to_database(tmp_db)
+
+    assert result["rule_upserted"] is False
+    assert result["similar_affected"] == 0
+    assert buckets_repo.list_rules(tmp_db) == []
+    assert _tx_bucket_state(tmp_db, target.id) == (conforto["id"], "manual")
+    assert _tx_bucket_state(tmp_db, similar.id) == (None, None)
+
+
+def test_clearing_only_this_preserves_existing_rule(tmp_db):
+    _seed_account(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    conforto = _bucket_by_key(tmp_db, "conforto")
+    target = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
+    similar = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
+
+    created = transactions_repo.set_bucket(
+        tmp_db,
+        similar.id,
+        bucket_id=conforto["id"],
+        apply_to_similar=True,
+    )
+    cleared = transactions_repo.set_bucket(
+        tmp_db,
+        target.id,
+        bucket_id=None,
+        apply_to_similar=False,
+    )
+    apply_buckets_to_database(tmp_db)
+
+    assert created["rule_upserted"] is True
+    assert cleared["rule_deleted"] is False
+    assert buckets_repo.list_rules(tmp_db)[0]["bucket_id"] == conforto["id"]
+    assert _tx_bucket_state(tmp_db, target.id) == (None, "manual")
+    assert _tx_bucket_state(tmp_db, similar.id) == (conforto["id"], "manual")
+
+
 def test_set_bucket_respects_amount_sign(tmp_db):
     _seed_account(tmp_db)
     buckets_repo.seed_buckets(tmp_db)

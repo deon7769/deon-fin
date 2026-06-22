@@ -1,5 +1,6 @@
 import { DataTable } from "@/components/ui/DataTable";
 import { KpiCard } from "@/components/ui/KpiCard";
+import { MoneyText } from "@/components/ui/MoneyText";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { resultRows, summaryCards, type SimulationResponse } from "@/lib/simulacoes";
 import { SimulationLineChart } from "./SimulationLineChart";
@@ -25,7 +26,17 @@ export function SimulationResultPanel({ result }: { result: SimulationResponse }
 
       <div className="grid gap-3 md:grid-cols-3">
         {cards.map((card) => (
-          <KpiCard key={card.key} title={card.label} value={card.value} />
+          <KpiCard
+            key={card.key}
+            title={card.label}
+            value={
+              card.moneyValue === undefined ? (
+                card.value
+              ) : (
+                <MoneyText value={card.moneyValue} />
+              )
+            }
+          />
         ))}
       </div>
 
@@ -40,8 +51,26 @@ export function SimulationResultPanel({ result }: { result: SimulationResponse }
               getRowKey={(row) => row.key}
               columns={[
                 { key: "month", header: "Mês", cell: (row) => row.month },
-                { key: "firstMetric", header: "Métrica 1", cell: (row) => row.firstMetric },
-                { key: "secondMetric", header: "Métrica 2", cell: (row) => row.secondMetric },
+                {
+                  key: "firstMetric",
+                  header: "Métrica 1",
+                  cell: (row) =>
+                    row.firstMetricMoneyValue === undefined ? (
+                      row.firstMetric
+                    ) : (
+                      <MoneyText value={row.firstMetricMoneyValue} />
+                    ),
+                },
+                {
+                  key: "secondMetric",
+                  header: "Métrica 2",
+                  cell: (row) =>
+                    row.secondMetricMoneyValue === undefined ? (
+                      row.secondMetric
+                    ) : (
+                      <MoneyText value={row.secondMetricMoneyValue} />
+                    ),
+                },
               ]}
             />
           </SectionCard>

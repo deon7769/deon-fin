@@ -58,8 +58,14 @@ function subscribeHidden(listener: () => void) {
   };
 }
 
-export function PrivacyProvider({ children }: { children: ReactNode }) {
-  const hidden = useSyncExternalStore(subscribeHidden, readHiddenSnapshot, () => false);
+export function PrivacyProvider({
+  children,
+  initialHidden = false,
+}: {
+  children: ReactNode;
+  initialHidden?: boolean;
+}) {
+  const hidden = useSyncExternalStore(subscribeHidden, readHiddenSnapshot, () => initialHidden);
 
   const setHidden = useCallback((next: boolean) => {
     memoryHidden = next;

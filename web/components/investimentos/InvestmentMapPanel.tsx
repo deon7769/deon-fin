@@ -246,25 +246,33 @@ export function InvestmentMapPanel({
             />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {filteredCountries.map((country) => {
-              const active = selectedCode?.toUpperCase() === country.code.toUpperCase();
-              return (
-                <button
-                  key={country.code}
-                  type="button"
-                  onClick={() => selectCountry(country.code)}
-                  className={cn(
-                    "inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition",
-                    active
-                      ? "border-blue-400 bg-blue-500/15 text-blue-100"
-                      : "border-border bg-surface2 text-muted hover:border-blue-400/60 hover:text-text",
-                  )}
-                >
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: country.color }} aria-hidden />
-                  {country.name}
-                </button>
-              );
-            })}
+            {filteredCountries.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border bg-surface2 px-3 py-2 text-sm text-muted">
+                {countries.length === 0
+                  ? "Nenhum pais com dados disponiveis."
+                  : "Nenhum pais encontrado para a busca."}
+              </div>
+            ) : (
+              filteredCountries.map((country) => {
+                const active = selectedCode?.toUpperCase() === country.code.toUpperCase();
+                return (
+                  <button
+                    key={country.code}
+                    type="button"
+                    onClick={() => selectCountry(country.code)}
+                    className={cn(
+                      "inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition",
+                      active
+                        ? "border-blue-400 bg-blue-500/15 text-blue-100"
+                        : "border-border bg-surface2 text-muted hover:border-blue-400/60 hover:text-text",
+                    )}
+                  >
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: country.color }} aria-hidden />
+                    {country.name}
+                  </button>
+                );
+              })
+            )}
           </div>
         </section>
 

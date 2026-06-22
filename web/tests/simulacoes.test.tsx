@@ -13,6 +13,7 @@ import {
   resultRows,
   summaryCards,
 } from "@/lib/simulacoes";
+import { PrivacyProvider } from "@/providers/PrivacyProvider";
 import type { SimulationResponse } from "@/lib/simulacoes";
 
 const jurosResult: SimulationResponse = {
@@ -81,22 +82,28 @@ describe("simulacoes hub helpers", () => {
 
   it("maps simulation results into summary cards and table rows", () => {
     expect(summaryCards(jurosResult)).toEqual([
-      { key: "valor_final", label: "Valor final", value: "R$ 6.756,94" },
-      { key: "total_investido", label: "Total investido", value: "R$ 6.500,00" },
-      { key: "total_juros", label: "Total juros", value: "R$ 256,94" },
+      { key: "valor_final", label: "Valor final", value: "R$ 6.756,94", moneyValue: 6756.94 },
+      { key: "total_investido", label: "Total investido", value: "R$ 6.500,00", moneyValue: 6500 },
+      { key: "total_juros", label: "Total juros", value: "R$ 256,94", moneyValue: 256.94 },
     ]);
     expect(resultRows(jurosResult)).toEqual([
       {
         key: "1",
         month: "1",
         firstMetric: "R$ 3,22",
+        firstMetricMoneyValue: 3.22,
         secondMetric: "R$ 503,22",
+        secondMetricMoneyValue: 503.22,
       },
     ]);
   });
 
   it("renders cards and the time series table", () => {
-    const html = renderToStaticMarkup(<SimulationResultPanel result={jurosResult} />);
+    const html = renderToStaticMarkup(
+      <PrivacyProvider>
+        <SimulationResultPanel result={jurosResult} />
+      </PrivacyProvider>,
+    );
 
     expect(html).toContain("Valor final");
     expect(html).toContain("R$ 6.756,94");
@@ -105,14 +112,28 @@ describe("simulacoes hub helpers", () => {
     expect(html).toContain("R$ 503,22");
   });
 
+  it("masks monetary simulation results when privacy mode is hidden", () => {
+    const html = renderToStaticMarkup(
+      <PrivacyProvider initialHidden>
+        <SimulationResultPanel result={jurosResult} />
+      </PrivacyProvider>,
+    );
+
+    expect(html).toContain('aria-label="valor oculto"');
+    expect(html).not.toContain("R$ 6.756,94");
+    expect(html).not.toContain("R$ 503,22");
+  });
+
   it("renders market data default warnings returned by the API", () => {
     const html = renderToStaticMarkup(
-      <SimulationResultPanel
-        result={{
-          ...jurosResult,
-          avisos: [{ code: "default_cdi_aa", message: "CDI anual padrão usado: 11.5%." }],
-        }}
-      />,
+      <PrivacyProvider>
+        <SimulationResultPanel
+          result={{
+            ...jurosResult,
+            avisos: [{ code: "default_cdi_aa", message: "CDI anual padrão usado: 11.5%." }],
+          }}
+        />
+      </PrivacyProvider>,
     );
 
     expect(html).toContain("CDI anual padrão usado: 11.5%.");

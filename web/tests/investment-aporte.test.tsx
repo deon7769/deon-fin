@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -94,6 +96,36 @@ describe("InvestmentAportePanel", () => {
     expect(html).toContain("INT10");
     expect(html).toContain("Aportar!");
     expect(html).toContain("Aportar tudo");
+  });
+
+  it("renders an explicit empty state when no executable suggestions are available", () => {
+    const html = renderToStaticMarkup(
+      <PrivacyProvider>
+        <InvestmentAportePanel
+          targets={targets}
+          result={{ ...result, troco: 1000, sugestoes: [] }}
+          calculating={false}
+          confirming={false}
+          error={null}
+          onCalculate={() => undefined}
+          onConfirmAll={() => undefined}
+        />
+      </PrivacyProvider>,
+    );
+
+    expect(html).toContain("Nenhuma sugestao executavel para este aporte.");
+    expect(html).not.toContain("<table");
+    expect(html).toContain("Ajuste ativos, precos ou metas antes de confirmar.");
+  });
+
+  it("uses MoneyText for the confirmation modal suggested amount", () => {
+    const source = readFileSync(
+      join(process.cwd(), "components", "investimentos", "InvestmentAportePanel.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("<MoneyText value={suggestion.sugest_rs}");
+    expect(source).not.toContain("equivale a R$");
   });
 
   it("renders targets warning when allocation targets are invalid", () => {

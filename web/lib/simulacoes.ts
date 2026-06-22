@@ -299,6 +299,7 @@ export function summaryCards(result: SimulationResponse) {
       key,
       label: labelFor(key),
       value: formatSimulationValue(key, value),
+      moneyValue: typeof value === "number" && isCurrencyKey(key) ? value : undefined,
     }));
 }
 
@@ -317,7 +318,11 @@ export function resultRows(result: SimulationResponse) {
       key: String(row.mes ?? index + 1),
       month: String(row.mes ?? index + 1),
       firstMetric: formatSimulationValue(firstKey, row[firstKey]),
+      firstMetricMoneyValue:
+        typeof row[firstKey] === "number" && isCurrencyKey(firstKey) ? row[firstKey] : undefined,
       secondMetric: formatSimulationValue(secondKey, row[secondKey]),
+      secondMetricMoneyValue:
+        typeof row[secondKey] === "number" && isCurrencyKey(secondKey) ? row[secondKey] : undefined,
     };
   });
 }

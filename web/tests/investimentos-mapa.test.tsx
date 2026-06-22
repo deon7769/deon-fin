@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -48,6 +50,30 @@ describe("InvestmentMapPanel", () => {
     expect(html).toContain("Brasil");
     expect(html).toContain("Médio Risco");
     expect(html).toContain("Ibovespa");
+  });
+
+  it("renders an explicit empty state when no map countries are available", () => {
+    const html = renderToStaticMarkup(
+      <InvestmentMapPanel
+        countries={[]}
+        selectedCode={null}
+        selectedCountry={null}
+        loadingCountry={false}
+        onSelectCountry={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Nenhum pais com dados disponiveis.");
+  });
+
+  it("shows a map asset error instead of hanging on the loading state", () => {
+    const source = readFileSync(
+      join(process.cwd(), "components", "investimentos", "LeafletCountryMap.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain("Nao foi possivel carregar o mapa.");
+    expect(source).toContain("setGeoError(true)");
   });
 
   it("filters countries by country name or main index and keeps selection case-insensitive", () => {

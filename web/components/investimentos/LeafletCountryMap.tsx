@@ -35,6 +35,7 @@ function featureCode(feature: Feature<Geometry, CountryProperties>) {
 
 export function LeafletCountryMap({ countries, selectedCode, onSelectCountry }: LeafletCountryMapProps) {
   const [geoJson, setGeoJson] = useState<FeatureCollection<Geometry, CountryProperties> | null>(null);
+  const [geoError, setGeoError] = useState(false);
   const countryByCode = useMemo(
     () => new Map(countries.map((country) => [country.code.toUpperCase(), country])),
     [countries],
@@ -43,21 +44,39 @@ export function LeafletCountryMap({ countries, selectedCode, onSelectCountry }: 
   useEffect(() => {
     let cancelled = false;
     fetch("/world.geo.json")
-      .then((response) => (response.ok ? response.json() : null))
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("world.geo.json");
+        }
+        return response.json();
+      })
       .then((data: FeatureCollection<Geometry, CountryProperties> | null) => {
         if (!cancelled) {
+          if (!data) {
+            setGeoError(true);
+            return;
+          }
           setGeoJson(data);
+          setGeoError(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setGeoJson(null);
+          setGeoError(true);
         }
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  if (geoError) {
+    return (
+      <div className="flex h-full min-h-[320px] items-center justify-center rounded-md border border-negative/40 bg-negative/10 px-4 text-center text-sm text-negative">
+        Nao foi possivel carregar o mapa.
+      </div>
+    );
+  }
 
   if (!geoJson) {
     return (

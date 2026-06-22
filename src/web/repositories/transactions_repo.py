@@ -574,7 +574,7 @@ def set_bucket(
             (bucket_id, transaction_id),
         )
 
-        if match_key:
+        if apply_to_similar and match_key:
             if bucket_id is None:
                 cur.execute("DELETE FROM bucket_rules WHERE match_key=?", (match_key,))
                 rule_deleted = cur.rowcount > 0
@@ -589,7 +589,7 @@ def set_bucket(
                 )
                 rule_upserted = True
 
-            if apply_to_similar and bucket_id is not None:
+            if bucket_id is not None:
                 cur.execute(
                     """
                     SELECT id, amount, raw_description, description

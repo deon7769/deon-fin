@@ -132,6 +132,25 @@ def test_calcular_aporte_uses_assets_targets_and_scores(client, tmp_db):
     assert sugestoes["INT10"]["sugest_rs"] == pytest.approx(555.56, abs=0.01)
 
 
+def test_calcular_aporte_does_not_allocate_fixed_income_without_unit_price(client, tmp_db):
+    _save_targets(tmp_db, rf=100)
+    portfolio_repo.create_manual_asset(
+        tmp_db,
+        asset_class="rf",
+        name="Tesouro Selic",
+        manual_value=1000,
+    )
+
+    response = client.post("/api/investments/aporte/calcular", json={"aporte": 500})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["patrimonio"] == 1000.0
+    assert body["pl_alvo"] == 1500.0
+    assert body["sugestoes"] == []
+    assert body["troco"] == 500.0
+
+
 def test_confirmar_aporte_adds_quantity_updates_value_and_saves_ultimo_aporte(
     client,
     tmp_db,
