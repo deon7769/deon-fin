@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 
+import { CardPicker } from "@/components/faturas/CardPicker";
+import { PrivacyProvider } from "@/providers/PrivacyProvider";
 import {
   cardDetailLine,
   installmentLabel,
@@ -30,5 +34,51 @@ describe("invoice helpers", () => {
     expect(invoiceItemCategoryLabel({ category: "Shopping", category_label: "" })).toBe("Shopping");
     expect(invoiceCategoryLabel({ name: "Eating out", label: "Restaurantes" })).toBe("Restaurantes");
     expect(invoiceCategoryLabel({ name: "Groceries", label: " " })).toBe("Groceries");
+  });
+});
+
+describe("CardPicker", () => {
+  const cards = [
+    {
+      id: "card-a",
+      name: "Cartao A",
+      brand: "Visa",
+      last4: "1111",
+      credit_limit: 1000,
+      available: 750,
+      currency: "BRL",
+    },
+    {
+      id: "card-b",
+      name: "Cartao B",
+      brand: "Mastercard",
+      last4: "2222",
+      credit_limit: 2000,
+      available: 1500,
+      currency: "BRL",
+    },
+  ];
+
+  it("renders controls to reorder invoice cards", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        PrivacyProvider,
+        null,
+        createElement(CardPicker, {
+          cards,
+          value: "card-a",
+          onChange: vi.fn(),
+          orderMode: true,
+          savingOrder: false,
+          onMove: vi.fn(),
+          onSaveOrder: vi.fn(),
+          onCancelOrder: vi.fn(),
+        }),
+      ),
+    );
+
+    expect(html).toContain("Salvar ordem");
+    expect(html).toContain("Mover Cartao A para baixo");
+    expect(html).toContain("Mover Cartao B para cima");
   });
 });

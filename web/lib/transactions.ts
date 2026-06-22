@@ -22,6 +22,16 @@ export type TransactionFilters = {
 
 export type TransactionQuery = Record<string, string | number | boolean>;
 
+type FilterLookupItem = {
+  id: number;
+  name: string;
+};
+
+type TransactionFilterBadgeContext = {
+  buckets?: FilterLookupItem[];
+  tags?: FilterLookupItem[];
+};
+
 function idsParam(values?: Array<number | null>): string | undefined {
   if (!values?.length) {
     return undefined;
@@ -130,6 +140,49 @@ export function hasTransactionFilters(filters: TransactionFilters): boolean {
       filters.bucketIds?.length ||
       filters.tagIds?.length,
   );
+}
+
+function lookupFilterName(
+  value: number | null,
+  items: FilterLookupItem[] | undefined,
+  emptyLabel: string,
+  fallbackPrefix: string,
+): string {
+  if (value === null) {
+    return emptyLabel;
+  }
+  return items?.find((item) => item.id === value)?.name ?? `${fallbackPrefix} #${value}`;
+}
+
+export function transactionFilterBadges(
+  filters: TransactionFilters,
+  context: TransactionFilterBadgeContext = {},
+): string[] {
+  const badges: string[] = [];
+
+  for (const bucketId of filters.bucketIds ?? []) {
+    badges.push(
+      `Meta: ${lookupFilterName(bucketId, context.buckets, "Sem meta", "Meta")}`,
+    );
+  }
+  for (const tagId of filters.tagIds ?? []) {
+    badges.push(`Tag: ${lookupFilterName(tagId, context.tags, "Sem tag", "Tag")}`);
+  }
+
+  const q = filters.q?.trim();
+  if (q) {
+    badges.push(`Busca: ${q}`);
+  }
+  if (filters.type) {
+    badges.push(`Tipo: ${filters.type === "income" ? "Receitas" : "Despesas"}`);
+  }
+  if (filters.hidden && filters.hidden !== "exclude") {
+    badges.push(
+      filters.hidden === "only" ? "Ocultas: Somente ocultas" : "Ocultas: Incluídas",
+    );
+  }
+
+  return badges;
 }
 
 export function transactionDisplayValue(

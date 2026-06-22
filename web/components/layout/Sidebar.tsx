@@ -211,7 +211,7 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          "hidden h-screen shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200 md:flex",
+          "sticky top-0 hidden h-screen shrink-0 flex-col self-start border-r border-border bg-surface transition-[width] duration-200 md:flex",
           sidebarWidthClass(collapsed),
         )}
       >

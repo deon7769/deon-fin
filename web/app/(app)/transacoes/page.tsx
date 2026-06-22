@@ -40,6 +40,7 @@ import {
   parseTransactionAmountInput,
   transactionCategoryLabel,
   transactionDisplayValue,
+  transactionFilterBadges,
 } from "@/lib/transactions";
 import type { Tag, Transaction, TransactionHiddenFilter, TransactionType } from "@/lib/types";
 
@@ -351,6 +352,10 @@ export default function TransacoesPage() {
   const from = data && data.total > 0 ? (page - 1) * pageSize + 1 : 0;
   const to = data ? Math.min(page * pageSize, data.total) : 0;
   const defaultAccountId = rows[0]?.account_id;
+  const activeFilterBadges = transactionFilterBadges(filters, {
+    buckets: bucketsQuery.data ?? [],
+    tags: tagsQuery.data ?? [],
+  });
   const accountOptions = useMemo(() => {
     const byId = new Map<string, string>();
     for (const tx of rows) {
@@ -625,6 +630,19 @@ export default function TransacoesPage() {
                 <span>Limpar</span>
               </button>
             </div>
+
+            {activeFilterBadges.length ? (
+              <div className="flex flex-wrap items-center gap-2" aria-label="Filtros ativos">
+                {activeFilterBadges.map((badge) => (
+                  <span
+                    key={badge}
+                    className="rounded-md border border-accent/40 bg-accent/10 px-2 py-1 text-xs font-medium text-text"
+                  >
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            ) : null}
 
             {transactionsQuery.isError ? (
               <div className="rounded-md border border-negative/40 bg-negative/10 px-4 py-3 text-sm text-negative">

@@ -193,6 +193,17 @@ def test_cards_list_only_credit_cards_and_degrade(tmp_db):
     assert by_id["invoice-card-2"]["last4"] is None
 
 
+def test_cards_list_uses_persisted_account_sort_order(tmp_db):
+    _seed_accounts(tmp_db)
+    tmp_db._conn.execute("UPDATE accounts SET sort_order=2 WHERE id='invoice-card'")
+    tmp_db._conn.execute("UPDATE accounts SET sort_order=1 WHERE id='invoice-card-2'")
+    tmp_db._conn.commit()
+
+    cards = invoices_repo.list_cards(tmp_db)
+
+    assert [card["id"] for card in cards] == ["invoice-card-2", "invoice-card"]
+
+
 def test_cards_enrich_from_balances(tmp_db):
     _seed_accounts(tmp_db)
     tmp_db._conn.execute(

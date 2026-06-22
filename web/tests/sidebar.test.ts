@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
+
+import { Sidebar } from "@/components/layout/Sidebar";
+import { PrivacyProvider } from "@/providers/PrivacyProvider";
 import {
   SIDEBAR_STORAGE_KEY,
   initialSidebarCollapsed,
@@ -6,6 +11,10 @@ import {
   sidebarWidthClass,
   toggleSidebarCollapsed,
 } from "@/lib/sidebar";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/transacoes",
+}));
 
 describe("sidebar helpers", () => {
   it("uses a stable storage key for the collapsed state", () => {
@@ -36,5 +45,13 @@ describe("sidebar helpers", () => {
   it("toggles the collapsed state", () => {
     expect(toggleSidebarCollapsed(false)).toBe(true);
     expect(toggleSidebarCollapsed(true)).toBe(false);
+  });
+
+  it("keeps the desktop sidebar pinned while page content scrolls", () => {
+    const html = renderToStaticMarkup(createElement(PrivacyProvider, null, createElement(Sidebar)));
+
+    expect(html).toContain("sticky top-0");
+    expect(html).toContain("h-screen");
+    expect(html).toContain("transition-[width]");
   });
 });

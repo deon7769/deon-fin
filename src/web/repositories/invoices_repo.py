@@ -109,10 +109,20 @@ def _safe_balances(db: Database) -> dict[str, dict[str, Any]]:
     return {row["account_id"]: dict(row) for row in rows}
 
 
+def _account_sort_key(row: Any) -> tuple[int, str, str]:
+    keys = row.keys() if hasattr(row, "keys") else []
+    sort_order = row["sort_order"] if "sort_order" in keys else None
+    return (
+        int(sort_order) if sort_order is not None else 999_999,
+        (row["institution"] or "").lower(),
+        (row["name"] or "").lower(),
+    )
+
+
 def list_cards(db: Database) -> list[dict[str, Any]]:
     balances = _safe_balances(db)
     cards: list[dict[str, Any]] = []
-    for account in db.list_accounts():
+    for account in sorted(db.list_accounts(), key=_account_sort_key):
         if not _is_credit_card(account["type"]):
             continue
 

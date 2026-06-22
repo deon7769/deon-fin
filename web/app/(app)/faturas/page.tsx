@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, ReceiptText } from "lucide-react";
 import { CardPicker } from "@/components/faturas/CardPicker";
@@ -12,6 +12,7 @@ import { MoneyText } from "@/components/ui/MoneyText";
 import { Pill } from "@/components/ui/Pill";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useReorderAccounts } from "@/hooks/useAccounts";
 import { useBuckets } from "@/hooks/useBuckets";
 import { useCards, useInvoice } from "@/hooks/useInvoices";
 import { useSetBucket } from "@/hooks/useSetBucket";
@@ -22,6 +23,8 @@ import { formatMonthYear } from "@/lib/format";
 import { invoiceCategoryLabel } from "@/lib/invoices";
 import { usePeriod } from "@/providers/PeriodProvider";
 import type { CardItem, InvoiceItem, Tag } from "@/lib/types";
+
+const EMPTY_CARDS: CardItem[] = [];
 
 function RetryState({
   title,
@@ -59,18 +62,54 @@ function selectedCardId(cards: CardItem[], accountId: string | null): string | n
   return cards[0]?.id ?? null;
 }
 
+function moveCard(order: string[], cardId: string, direction: -1 | 1): string[] {
+  const currentIndex = order.indexOf(cardId);
+  const nextIndex = currentIndex + direction;
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= order.length) {
+    return order;
+  }
+
+  const next = [...order];
+  [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+  return next;
+}
+
+function sameCardOrderDraft(order: string[], cards: CardItem[]): boolean {
+  if (order.length !== cards.length) {
+    return false;
+  }
+
+  const cardIds = new Set(cards.map((card) => card.id));
+  return order.every((cardId) => cardIds.has(cardId));
+}
+
 export default function FaturasPage() {
   const { month } = usePeriod();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [orderMode, setOrderMode] = useState(false);
+  const [draftOrder, setDraftOrder] = useState<string[]>([]);
   const cardsQuery = useCards();
   const bucketsQuery = useBuckets();
   const tagsQuery = useTags();
   const setBucket = useSetBucket();
   const setTag = useSetTag();
   const createTag = useCreateTag();
-  const cards = cardsQuery.data?.items ?? [];
+  const reorderCards = useReorderAccounts();
+  const cards = cardsQuery.data?.items ?? EMPTY_CARDS;
+  const canSaveCardOrder = sameCardOrderDraft(draftOrder, cards);
+  const displayCards = useMemo(() => {
+    if (!orderMode || draftOrder.length !== cards.length) {
+      return cards;
+    }
+
+    const byId = new Map(cards.map((card) => [card.id, card]));
+    const ordered = draftOrder
+      .map((cardId) => byId.get(cardId))
+      .filter((card): card is CardItem => Boolean(card));
+    return ordered.length === cards.length ? ordered : cards;
+  }, [cards, draftOrder, orderMode]);
   const accountId = selectedCardId(cards, searchParams.get("account_id"));
   const invoiceQuery = useInvoice(accountId, month);
   const invoice = invoiceQuery.data;
@@ -83,6 +122,27 @@ export default function FaturasPage() {
 
   const createInlineTag = async (name: string): Promise<Tag> =>
     createTag.mutateAsync({ name, color: null });
+
+  const startOrder = () => {
+    setDraftOrder(cards.map((card) => card.id));
+    setOrderMode(true);
+  };
+
+  const cancelOrder = () => {
+    setOrderMode(false);
+    setDraftOrder([]);
+  };
+
+  const saveOrder = () => {
+    if (!canSaveCardOrder) {
+      cancelOrder();
+      return;
+    }
+
+    reorderCards.mutate(draftOrder, {
+      onSuccess: cancelOrder,
+    });
+  };
 
   const categoryTotal = useMemo(
     () => invoice?.by_category.reduce((total, item) => total + item.total, 0) ?? 0,
@@ -103,9 +163,18 @@ export default function FaturasPage() {
         ) : (
           <SectionCard title="Cartões">
             <CardPicker
-              cards={cards}
+              cards={displayCards}
               value={accountId}
               loading={cardsQuery.isLoading}
+              orderMode={orderMode}
+              savingOrder={reorderCards.isPending}
+              canSaveOrder={canSaveCardOrder}
+              onStartOrder={cards.length > 1 ? startOrder : undefined}
+              onCancelOrder={cancelOrder}
+              onSaveOrder={saveOrder}
+              onMove={(cardId, direction) =>
+                setDraftOrder((current) => moveCard(current, cardId, direction))
+              }
               onChange={changeCard}
             />
           </SectionCard>

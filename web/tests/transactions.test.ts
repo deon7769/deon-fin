@@ -8,6 +8,7 @@ import {
   semTagFilterFromSearch,
   transactionCategoryLabel,
   transactionDisplayValue,
+  transactionFilterBadges,
   transactionQuery,
 } from "@/lib/transactions";
 
@@ -76,6 +77,19 @@ describe("transaction helpers", () => {
     expect(idsFilterFromSearch("1,none, 2")).toEqual([1, null, 2]);
     expect(idsFilterFromSearch("x,0")).toBeUndefined();
     expect(idsFilterFromSearch(null)).toBeUndefined();
+  });
+
+  it("describes hidden bucket filters so redirected meta filters are visible", () => {
+    expect(
+      transactionFilterBadges(
+        { bucketIds: [2], type: "expense", hidden: "exclude" },
+        { buckets: [{ id: 2, name: "Moradia" }] },
+      ),
+    ).toEqual(["Meta: Moradia", "Tipo: Despesas"]);
+
+    expect(transactionFilterBadges({ bucketIds: [null] }, { buckets: [] })).toEqual([
+      "Meta: Sem meta",
+    ]);
   });
 
   it("prefers transaction display_value over aggregate signed_value", () => {
