@@ -595,7 +595,6 @@ def set_bucket(
                     SELECT id, amount, raw_description, description
                       FROM transactions
                      WHERE id != ?
-                       AND bucket_id IS NULL
                        AND (bucket_source IS NULL OR bucket_source != 'manual')
                     """,
                     (transaction_id,),

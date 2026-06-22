@@ -141,10 +141,15 @@ def test_set_bucket_propagates_to_similar_transactions(tmp_db):
     target = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
     similar_a = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
     similar_b = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
-    already_set = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
+    auto_set = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
+    manual_set = _insert_tx(tmp_db, description="IFOOD RESTAURANTE")
     tmp_db._conn.execute(
         "UPDATE transactions SET bucket_id=?, bucket_source='auto' WHERE id=?",
-        (_bucket_by_key(tmp_db, "prazeres")["id"], already_set.id),
+        (_bucket_by_key(tmp_db, "prazeres")["id"], auto_set.id),
+    )
+    tmp_db._conn.execute(
+        "UPDATE transactions SET bucket_id=?, bucket_source='manual' WHERE id=?",
+        (_bucket_by_key(tmp_db, "prazeres")["id"], manual_set.id),
     )
     tmp_db._conn.commit()
 
@@ -157,14 +162,15 @@ def test_set_bucket_propagates_to_similar_transactions(tmp_db):
 
     assert result["bucket_source"] == "manual"
     assert result["rule_upserted"] is True
-    assert result["similar_affected"] == 2
-    assert set(result["similar_ids"]) == {similar_a.id, similar_b.id}
+    assert result["similar_affected"] == 3
+    assert set(result["similar_ids"]) == {similar_a.id, similar_b.id, auto_set.id}
     assert _tx_bucket_state(tmp_db, target.id) == (conforto["id"], "manual")
     assert _tx_bucket_state(tmp_db, similar_a.id) == (conforto["id"], "rule")
     assert _tx_bucket_state(tmp_db, similar_b.id) == (conforto["id"], "rule")
-    assert _tx_bucket_state(tmp_db, already_set.id) == (
+    assert _tx_bucket_state(tmp_db, auto_set.id) == (conforto["id"], "rule")
+    assert _tx_bucket_state(tmp_db, manual_set.id) == (
         _bucket_by_key(tmp_db, "prazeres")["id"],
-        "auto",
+        "manual",
     )
 
 
