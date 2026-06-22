@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  calcularInvestmentAporte,
+  confirmarInvestmentAporte,
   createInvestmentQuestion,
   createInvestmentAsset,
   deleteInvestmentQuestion,
@@ -22,6 +24,8 @@ import {
 import type {
   InvestmentAssetAnswersInput,
   InvestmentAssetInput,
+  InvestmentAporteConfirmInput,
+  InvestmentAporteCalculateInput,
   InvestmentQuestionInput,
   InvestmentTargetsMap,
 } from "@/lib/types";
@@ -113,6 +117,24 @@ export function useSaveInvestmentTargets() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["investments", "targets"] });
       queryClient.invalidateQueries({ queryKey: ["investments"] });
+    },
+  });
+}
+
+export function useCalcularInvestmentAporte() {
+  return useMutation({
+    mutationFn: (input: InvestmentAporteCalculateInput) => calcularInvestmentAporte(input),
+  });
+}
+
+export function useConfirmarInvestmentAporte() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: InvestmentAporteConfirmInput) => confirmarInvestmentAporte(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["investments"] });
+      queryClient.invalidateQueries({ queryKey: ["investments", "targets"] });
     },
   });
 }

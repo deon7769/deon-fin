@@ -4,6 +4,9 @@ import type {
   InvestmentAssetAnswersInput,
   InvestmentAssetAnswersResponse,
   InvestmentAssetInput,
+  InvestmentAporteConfirmInput,
+  InvestmentAporteCalculateInput,
+  InvestmentAporteResponse,
   InvestmentQuestion,
   InvestmentQuestionInput,
   InvestmentQuestionsResponse,
@@ -52,6 +55,10 @@ function toNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function toMoneyNumber(value: number): number {
+  return Number(value.toFixed(2));
+}
+
 function toRequiredNumber(value: string, fallback: number): number {
   return toNumber(value) ?? fallback;
 }
@@ -98,6 +105,23 @@ export function buildQuestionPayload(values: InvestmentQuestionFormValues): Inve
     peso: toRequiredNumber(values.peso, 1),
     sort_order: Math.trunc(toRequiredNumber(values.sortOrder, 0)),
     ativo: values.ativo,
+  };
+}
+
+export function buildAportePayload(value: string): InvestmentAporteCalculateInput {
+  return { aporte: toRequiredNumber(value, 0) };
+}
+
+export function aporteComprasFromSuggestions(result: InvestmentAporteResponse): InvestmentAporteConfirmInput {
+  const sugestoes = result.sugestoes.filter(
+    (item) => Number(item.sugest_un) > 0 && Number(item.sugest_rs) > 0,
+  );
+  return {
+    aporte: toMoneyNumber(sugestoes.reduce((total, item) => total + Number(item.sugest_rs || 0), 0)),
+    compras: sugestoes.map((item) => ({
+      asset_id: item.id,
+      quantidade: item.sugest_un,
+    })),
   };
 }
 
@@ -173,6 +197,14 @@ export function getInvestmentProfiles(signal?: AbortSignal) {
 
 export function saveInvestmentTargets(input: { targets: InvestmentTargetsMap; perfil?: string }) {
   return api.put<InvestmentTargetsResponse>("/investments/targets", input);
+}
+
+export function calcularInvestmentAporte(input: InvestmentAporteCalculateInput) {
+  return api.post<InvestmentAporteResponse>("/investments/aporte/calcular", input);
+}
+
+export function confirmarInvestmentAporte(input: InvestmentAporteConfirmInput) {
+  return api.post<InvestmentsResponse>("/investments/aporte/confirmar", input);
 }
 
 export function getInvestmentQuestions(diagramType: string, signal?: AbortSignal) {

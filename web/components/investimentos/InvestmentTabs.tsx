@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 const TABS = [
   { href: "/investimentos", label: "Ativos" },
   { href: "/investimentos/metas", label: "Metas da carteira" },
+  { href: "/investimentos/aportar", label: "Aportar" },
   { href: "/investimentos/perguntas", label: "Perguntas" },
 ];
 

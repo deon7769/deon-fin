@@ -4,6 +4,7 @@ import hashlib
 import json
 from typing import Any
 
+from ...agent.portfolio.aporte import calcular_aporte
 from ...storage import Database
 
 
@@ -733,3 +734,99 @@ def save_allocation_targets(
             (detected_profile,),
         )
     return _targets_response(db)
+
+
+def _asset_to_aporte_input(asset: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": asset["id"],
+        "asset_class": asset["asset_class"],
+        "ticker": asset["ticker"] or asset["name"],
+        "nota": asset.get("nota"),
+        "valor_atual": asset["current_value"],
+        "preco": asset["unit_price"] or 0.0,
+        "fracionavel": asset["asset_class"] in {"acoes_int", "reit", "cripto"},
+    }
+
+
+def calculate_aporte(db: Database, aporte: float) -> dict[str, Any]:
+    targets_response = get_allocation_targets(db)
+    if not targets_response["valid"]:
+        raise ValueError("targets_sum")
+    assets = list_assets(db)
+    return calcular_aporte(
+        aporte,
+        [_asset_to_aporte_input(asset) for asset in assets],
+        targets_response["targets"],
+    )
+
+
+def add_asset_quantity(db: Database, asset_id: int, quantity: float) -> dict[str, Any] | None:
+    if quantity <= 0:
+        raise ValueError("quantidade inválida")
+    current = db._conn.execute(
+        "SELECT * FROM portfolio_assets WHERE id=?",
+        (asset_id,),
+    ).fetchone()
+    if current is None:
+        return None
+    current_quantity = float(current["quantity"] or 0.0)
+    unit_price = _number(current["unit_price"])
+    current_value = _number(current["current_value"]) or 0.0
+    new_quantity = current_quantity + float(quantity)
+    if unit_price is not None and unit_price > 0:
+        new_value = new_quantity * unit_price
+        manual_value = current["manual_value"]
+    else:
+        new_value = current_value + float(quantity)
+        manual_value = new_value if current["asset_class"] in {"rf", "rf_int"} else current["manual_value"]
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute(
+            """
+            UPDATE portfolio_assets
+               SET quantity=?,
+                   manual_value=?,
+                   current_value=?,
+                   manually_adjusted=1,
+                   manual_adjusted_at=datetime('now'),
+                   updated_at=datetime('now')
+             WHERE id=?
+            """,
+            (new_quantity, manual_value, _money(new_value), asset_id),
+        )
+    return get_asset(db, asset_id)
+
+
+def confirm_aporte(
+    db: Database,
+    *,
+    compras: list[dict[str, Any]],
+    aporte: float | None = None,
+) -> dict[str, Any]:
+    total_aporte = 0.0
+    for compra in compras:
+        asset_id = int(compra["asset_id"])
+        quantidade = float(compra["quantidade"])
+        asset = db._conn.execute(
+            "SELECT unit_price FROM portfolio_assets WHERE id=?",
+            (asset_id,),
+        ).fetchone()
+        if asset is None:
+            raise ValueError("ativo não encontrado")
+        unit_price = _number(asset["unit_price"])
+        total_aporte += quantidade * unit_price if unit_price is not None and unit_price > 0 else quantidade
+        if add_asset_quantity(db, asset_id, quantidade) is None:
+            raise ValueError("ativo não encontrado")
+
+    ultimo_aporte = _money(aporte if aporte is not None else total_aporte)
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute(
+            """
+            INSERT INTO investment_profile (id, perfil, ultimo_aporte, updated_at)
+            VALUES (1, 'custom', ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE SET
+                ultimo_aporte=excluded.ultimo_aporte,
+                updated_at=datetime('now')
+            """,
+            (ultimo_aporte,),
+        )
+    return portfolio_summary(db)

@@ -35,6 +35,20 @@ class TargetsSaveRequest(BaseModel):
     perfil: str | None = None
 
 
+class AporteCalculateRequest(BaseModel):
+    aporte: float
+
+
+class AporteCompraRequest(BaseModel):
+    asset_id: int
+    quantidade: float
+
+
+class AporteConfirmRequest(BaseModel):
+    compras: list[AporteCompraRequest]
+    aporte: float | None = None
+
+
 class QuestionCreateRequest(BaseModel):
     diagram_type: str
     criterio: str | None = None
@@ -89,6 +103,40 @@ def investment_profiles() -> dict[str, Any]:
 @router.get("/investments/targets")
 def investment_targets(db: Database = Depends(get_db)) -> dict[str, Any]:
     return portfolio_repo.get_allocation_targets(db)
+
+
+@router.post("/investments/aporte/calcular")
+def calculate_investment_aporte(
+    body: AporteCalculateRequest,
+    db: Database = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        return portfolio_repo.calculate_aporte(db, body.aporte)
+    except ValueError as exc:
+        if str(exc) == "targets_sum":
+            return error_response(
+                422,
+                "targets_sum",
+                "Ajuste as Metas da carteira para 100% antes de aportar.",
+            )
+        raise _repo_error(exc) from exc
+
+
+@router.post("/investments/aporte/confirmar")
+def confirm_investment_aporte(
+    body: AporteConfirmRequest,
+    db: Database = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        return portfolio_repo.confirm_aporte(
+            db,
+            compras=[compra.model_dump() for compra in body.compras],
+            aporte=body.aporte,
+        )
+    except ValueError as exc:
+        if str(exc) == "ativo não encontrado":
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise _repo_error(exc) from exc
 
 
 @router.get("/investments/questions")

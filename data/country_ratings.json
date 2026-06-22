@@ -1,0 +1,343 @@
+{
+  "US": {
+    "name": "Estados Unidos",
+    "name_intl": "United States",
+    "main_index": "S&P 500",
+    "ratings": {
+      "sp": "AA+",
+      "moody": "Aaa",
+      "fitch": "AAA"
+    },
+    "tier_label": "AA (Alta Qualidade)",
+    "tier": "high",
+    "empresas": [
+      {
+        "name": "Apple Inc.",
+        "ticker": "AAPL",
+        "setor": "Tecnologia"
+      },
+      {
+        "name": "Microsoft Corp.",
+        "ticker": "MSFT",
+        "setor": "Tecnologia"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "SPY",
+        "label": "ETF Americano"
+      },
+      {
+        "ticker": "IVV",
+        "label": "ETF Americano"
+      },
+      {
+        "ticker": "VOO",
+        "label": "ETF Americano"
+      }
+    ]
+  },
+  "BR": {
+    "name": "Brasil",
+    "name_intl": "Brazil",
+    "main_index": "Ibovespa",
+    "ratings": {
+      "sp": "BB",
+      "moody": "Ba2",
+      "fitch": "BB-"
+    },
+    "tier_label": "Médio Risco",
+    "tier": "medium",
+    "empresas": [
+      {
+        "name": "Vale",
+        "ticker": "VALE3",
+        "setor": "Mineração"
+      },
+      {
+        "name": "Petrobras",
+        "ticker": "PETR4",
+        "setor": "Energia"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "BOVA11",
+        "label": "ETF Brasileiro"
+      },
+      {
+        "ticker": "EWZ",
+        "label": "ETF Brasil"
+      }
+    ]
+  },
+  "DE": {
+    "name": "Alemanha",
+    "name_intl": "Germany",
+    "main_index": "DAX",
+    "ratings": {
+      "sp": "AAA",
+      "moody": "Aaa",
+      "fitch": "AAA"
+    },
+    "tier_label": "AAA (Prime)",
+    "tier": "top",
+    "empresas": [
+      {
+        "name": "SAP",
+        "ticker": "SAP",
+        "setor": "Tecnologia"
+      },
+      {
+        "name": "Siemens",
+        "ticker": "SIE",
+        "setor": "Industrial"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "EWG",
+        "label": "ETF Alemanha"
+      }
+    ]
+  },
+  "IN": {
+    "name": "Índia",
+    "name_intl": "India",
+    "main_index": "NIFTY 50",
+    "ratings": {
+      "sp": "BBB",
+      "moody": "Baa3",
+      "fitch": "BBB-"
+    },
+    "tier_label": "BBB/BB (Médio Risco)",
+    "tier": "medium",
+    "empresas": [
+      {
+        "name": "Reliance Industries",
+        "ticker": "RELIANCE",
+        "setor": "Energia"
+      },
+      {
+        "name": "Infosys",
+        "ticker": "INFY",
+        "setor": "Tecnologia"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "INDA",
+        "label": "ETF Índia"
+      }
+    ]
+  },
+  "RU": {
+    "name": "Rússia",
+    "name_intl": "Russia",
+    "main_index": "MOEX Russia Index",
+    "ratings": {
+      "sp": "B",
+      "moody": "Ca",
+      "fitch": "CC"
+    },
+    "tier_label": "B/CCC (Especulativo)",
+    "tier": "speculative",
+    "empresas": [
+      {
+        "name": "Gazprom",
+        "ticker": "GAZP",
+        "setor": "Energia"
+      },
+      {
+        "name": "Sberbank",
+        "ticker": "SBER",
+        "setor": "Financeiro"
+      }
+    ],
+    "etfs": []
+  },
+  "JP": {
+    "name": "Japão",
+    "name_intl": "Japan",
+    "main_index": "Nikkei 225",
+    "ratings": {
+      "sp": "A+",
+      "moody": "A1",
+      "fitch": "A"
+    },
+    "tier_label": "A (Alta Qualidade)",
+    "tier": "high",
+    "empresas": [
+      {
+        "name": "Toyota Motor",
+        "ticker": "7203",
+        "setor": "Automotivo"
+      },
+      {
+        "name": "Sony Group",
+        "ticker": "6758",
+        "setor": "Tecnologia"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "EWJ",
+        "label": "ETF Japão"
+      }
+    ]
+  },
+  "CN": {
+    "name": "China",
+    "name_intl": "China",
+    "main_index": "CSI 300",
+    "ratings": {
+      "sp": "A+",
+      "moody": "A1",
+      "fitch": "A"
+    },
+    "tier_label": "A (Alta Qualidade)",
+    "tier": "high",
+    "empresas": [
+      {
+        "name": "Alibaba",
+        "ticker": "BABA",
+        "setor": "Consumo"
+      },
+      {
+        "name": "Tencent",
+        "ticker": "0700",
+        "setor": "Tecnologia"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "MCHI",
+        "label": "ETF China"
+      },
+      {
+        "ticker": "FXI",
+        "label": "ETF China Large Cap"
+      }
+    ]
+  },
+  "GB": {
+    "name": "Reino Unido",
+    "name_intl": "United Kingdom",
+    "main_index": "FTSE 100",
+    "ratings": {
+      "sp": "AA",
+      "moody": "Aa3",
+      "fitch": "AA-"
+    },
+    "tier_label": "AA (Alta Qualidade)",
+    "tier": "high",
+    "empresas": [
+      {
+        "name": "AstraZeneca",
+        "ticker": "AZN",
+        "setor": "Saúde"
+      },
+      {
+        "name": "HSBC Holdings",
+        "ticker": "HSBA",
+        "setor": "Financeiro"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "EWU",
+        "label": "ETF Reino Unido"
+      }
+    ]
+  },
+  "CA": {
+    "name": "Canadá",
+    "name_intl": "Canada",
+    "main_index": "S&P/TSX Composite",
+    "ratings": {
+      "sp": "AAA",
+      "moody": "Aaa",
+      "fitch": "AA+"
+    },
+    "tier_label": "AAA (Prime)",
+    "tier": "top",
+    "empresas": [
+      {
+        "name": "Royal Bank of Canada",
+        "ticker": "RY",
+        "setor": "Financeiro"
+      },
+      {
+        "name": "Shopify",
+        "ticker": "SHOP",
+        "setor": "Tecnologia"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "EWC",
+        "label": "ETF Canadá"
+      }
+    ]
+  },
+  "AU": {
+    "name": "Austrália",
+    "name_intl": "Australia",
+    "main_index": "S&P/ASX 200",
+    "ratings": {
+      "sp": "AAA",
+      "moody": "Aaa",
+      "fitch": "AAA"
+    },
+    "tier_label": "AAA (Prime)",
+    "tier": "top",
+    "empresas": [
+      {
+        "name": "BHP Group",
+        "ticker": "BHP",
+        "setor": "Mineração"
+      },
+      {
+        "name": "CSL",
+        "ticker": "CSL",
+        "setor": "Saúde"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "EWA",
+        "label": "ETF Austrália"
+      }
+    ]
+  },
+  "MX": {
+    "name": "México",
+    "name_intl": "Mexico",
+    "main_index": "S&P/BMV IPC",
+    "ratings": {
+      "sp": "BBB",
+      "moody": "Baa3",
+      "fitch": "BBB-"
+    },
+    "tier_label": "BBB/BB (Médio Risco)",
+    "tier": "medium",
+    "empresas": [
+      {
+        "name": "América Móvil",
+        "ticker": "AMX",
+        "setor": "Telecomunicações"
+      },
+      {
+        "name": "Cemex",
+        "ticker": "CEMEXCPO",
+        "setor": "Materiais"
+      }
+    ],
+    "etfs": [
+      {
+        "ticker": "EWW",
+        "label": "ETF México"
+      }
+    ]
+  }
+}

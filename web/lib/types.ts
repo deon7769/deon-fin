@@ -382,6 +382,35 @@ export type InvestmentProfilesResponse = {
   profiles: InvestmentProfilePreset[];
 };
 
+export type InvestmentAporteSuggestion = {
+  id: number;
+  tipo: string | null;
+  asset_class: string;
+  ticker: string | null;
+  valor_atual: number;
+  preco: number;
+  nota: number | null;
+  sugest_rs: number;
+  sugest_un: number;
+  total_apos_aporte_pct: number;
+};
+
+export type InvestmentAporteResponse = {
+  patrimonio: number;
+  pl_alvo: number;
+  sugestoes: InvestmentAporteSuggestion[];
+  troco: number;
+};
+
+export type InvestmentAporteCalculateInput = {
+  aporte: number;
+};
+
+export type InvestmentAporteConfirmInput = {
+  aporte?: number;
+  compras: Array<{ asset_id: number; quantidade: number }>;
+};
+
 export type InvestmentQuestion = {
   id: number;
   diagram_type: string;
