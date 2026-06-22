@@ -306,3 +306,96 @@ def test_save_investment_targets_detects_matching_profile(client):
     persisted = client.get("/api/investments/targets").json()
     assert persisted["perfil"] == "moderado"
     assert persisted["targets"] == body["targets"]
+
+
+def test_questions_api_crud_and_restore_defaults(client):
+    initial = client.get("/api/investments/questions?diagram_type=acoes")
+
+    assert initial.status_code == 200
+    assert initial.json()["diagram_type"] == "acoes"
+    assert len(initial.json()["questions"]) == 5
+    assert "ROE" in initial.json()["questions"][0]["pergunta"]
+
+    created = client.post(
+        "/api/investments/questions",
+        json={
+            "diagram_type": "acoes",
+            "criterio": "Moat",
+            "pergunta": "Possui vantagem competitiva clara?",
+            "peso": 2,
+            "sort_order": 15,
+        },
+    )
+
+    assert created.status_code == 201
+    created_body = created.json()
+    assert created_body["ativo"] is True
+    assert created_body["peso"] == 2.0
+
+    patched = client.patch(
+        f"/api/investments/questions/{created_body['id']}",
+        json={"pergunta": "Possui vantagem competitiva duravel?", "ativo": False},
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["pergunta"].endswith("duravel?")
+    assert patched.json()["ativo"] is False
+
+    deleted = client.delete(f"/api/investments/questions/{created_body['id']}")
+
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted_id": created_body["id"]}
+
+    first_default_id = initial.json()["questions"][0]["id"]
+    assert client.delete(f"/api/investments/questions/{first_default_id}").status_code == 200
+
+    restored = client.post("/api/investments/questions/restore-defaults?diagram_type=acoes")
+
+    assert restored.status_code == 200
+    restored_questions = restored.json()["questions"]
+    assert len(restored_questions) == 5
+    assert [question["sort_order"] for question in restored_questions] == [10, 20, 30, 40, 50]
+    assert "ROE" in restored_questions[0]["pergunta"]
+
+
+def test_asset_answers_api_updates_score_and_investments_summary(client, tmp_db):
+    asset = portfolio_repo.create_manual_asset(
+        tmp_db,
+        asset_class="acoes_nac",
+        ticker="WEGE3",
+        name="WEG",
+        quantity=10,
+        manual_value=400,
+    )
+
+    initial = client.get(f"/api/investments/assets/{asset['id']}/answers")
+
+    assert initial.status_code == 200
+    initial_body = initial.json()
+    assert initial_body["score"]["nota"] == -10.0
+    assert len(initial_body["questions"]) == 5
+    assert all(answer["resposta"] is False for answer in initial_body["answers"])
+
+    question_ids = [question["id"] for question in initial_body["questions"][:3]]
+    updated = client.put(
+        f"/api/investments/assets/{asset['id']}/answers",
+        json={
+            "answers": [
+                {"question_id": question_ids[0], "resposta": True},
+                {"question_id": question_ids[1], "resposta": True},
+                {"question_id": question_ids[2], "resposta": True},
+            ]
+        },
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["score"]["nota"] == 2.0
+    assert [answer["resposta"] for answer in updated.json()["answers"][:3]] == [
+        True,
+        True,
+        True,
+    ]
+
+    investments = client.get("/api/investments").json()
+
+    assert investments["assets"][0]["nota"] == 2.0

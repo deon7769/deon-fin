@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { InvestmentAssetModal } from "@/components/investimentos/InvestmentAssetModal";
 import { buildAssetPayload } from "@/lib/investments";
-import type { InvestmentAsset } from "@/lib/types";
+import type { InvestmentAsset, InvestmentAssetAnswersResponse } from "@/lib/types";
 
 const asset: InvestmentAsset = {
   id: 7,
@@ -26,9 +26,35 @@ const asset: InvestmentAsset = {
   manual_adjusted_at: null,
   price_source: "brapi",
   price_updated_at: "2026-06-22T10:00:00",
+  nota: 2,
   pct_carteira: 8.63,
   created_at: "2026-06-22 10:00:00",
   updated_at: "2026-06-22 10:00:00",
+};
+
+const scoreAnswers: InvestmentAssetAnswersResponse = {
+  asset_id: 7,
+  diagram_type: "acoes",
+  questions: [
+    {
+      id: 1,
+      diagram_type: "acoes",
+      criterio: "Rentabilidade",
+      pergunta: "ROE historico maior que 8%?",
+      peso: 1,
+      sort_order: 10,
+      ativo: true,
+    },
+  ],
+  answers: [{ asset_id: 7, question_id: 1, resposta: true }],
+  score: {
+    asset_id: 7,
+    diagram_type: "acoes",
+    pontos_positivos: 1,
+    pontos_negativos: 0,
+    peso_total: 1,
+    nota: 10,
+  },
 };
 
 describe("investment asset form", () => {
@@ -93,5 +119,24 @@ describe("investment asset form", () => {
     expect(editHtml).toContain("WEGE3");
     expect(editHtml).toContain("Remover");
     expect(editHtml).toContain("Atualizar e fechar");
+  });
+
+  it("renders score answers inside the edit modal", () => {
+    const html = renderToStaticMarkup(
+      <InvestmentAssetModal
+        open
+        mode="edit"
+        asset={asset}
+        scoreAnswers={scoreAnswers}
+        onClose={() => undefined}
+        onSubmit={() => undefined}
+        onScoreAnswersSave={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Score");
+    expect(html).toContain("Nota 10");
+    expect(html).toContain("ROE historico maior que 8%?");
+    expect(html).toContain("Salvar respostas");
   });
 });

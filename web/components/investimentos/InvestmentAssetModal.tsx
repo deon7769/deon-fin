@@ -1,26 +1,36 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { Trash2, X } from "lucide-react";
+import { FormEvent, useMemo, useState } from "react";
+import { Save, Trash2, X } from "lucide-react";
 import {
   buildAssetPayload,
   INVESTMENT_CLASSES,
   isFixedIncomeClass,
   type InvestmentAssetFormValues,
 } from "@/lib/investments";
-import type { InvestmentAsset, InvestmentAssetInput, InvestmentTickerSearchItem } from "@/lib/types";
+import type {
+  InvestmentAsset,
+  InvestmentAssetAnswer,
+  InvestmentAssetAnswersResponse,
+  InvestmentAssetInput,
+  InvestmentTickerSearchItem,
+} from "@/lib/types";
 
 type InvestmentAssetModalProps = {
   open: boolean;
   mode: "create" | "edit";
   asset?: InvestmentAsset | null;
   tickerOptions?: InvestmentTickerSearchItem[];
+  scoreAnswers?: InvestmentAssetAnswersResponse | null;
+  scoreLoading?: boolean;
+  scoreSaving?: boolean;
   saving?: boolean;
   deleting?: boolean;
   error?: string | null;
   onClose: () => void;
   onSubmit: (input: InvestmentAssetInput) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
+  onScoreAnswersSave?: (answers: Array<Pick<InvestmentAssetAnswer, "question_id" | "resposta">>) => void | Promise<void>;
   onTickerSearchChange?: (query: string) => void;
   onAssetClassChange?: (assetClass: string) => void;
 };
@@ -39,12 +49,16 @@ export function InvestmentAssetModal({
   mode,
   asset,
   tickerOptions = [],
+  scoreAnswers = null,
+  scoreLoading = false,
+  scoreSaving = false,
   saving = false,
   deleting = false,
   error = null,
   onClose,
   onSubmit,
   onDelete,
+  onScoreAnswersSave,
   onTickerSearchChange,
   onAssetClassChange,
 }: InvestmentAssetModalProps) {
@@ -58,12 +72,16 @@ export function InvestmentAssetModal({
       mode={mode}
       asset={asset}
       tickerOptions={tickerOptions}
+      scoreAnswers={scoreAnswers}
+      scoreLoading={scoreLoading}
+      scoreSaving={scoreSaving}
       saving={saving}
       deleting={deleting}
       error={error}
       onClose={onClose}
       onSubmit={onSubmit}
       onDelete={onDelete}
+      onScoreAnswersSave={onScoreAnswersSave}
       onTickerSearchChange={onTickerSearchChange}
       onAssetClassChange={onAssetClassChange}
     />
@@ -74,12 +92,16 @@ function InvestmentAssetModalContent({
   mode,
   asset,
   tickerOptions = [],
+  scoreAnswers,
+  scoreLoading,
+  scoreSaving,
   saving,
   deleting,
   error,
   onClose,
   onSubmit,
   onDelete,
+  onScoreAnswersSave,
   onTickerSearchChange,
   onAssetClassChange,
 }: Omit<InvestmentAssetModalProps, "open">) {
@@ -258,6 +280,15 @@ function InvestmentAssetModalContent({
             </p>
           ) : null}
 
+          {mode === "edit" ? (
+            <ScoreAnswersSection
+              scoreAnswers={scoreAnswers ?? null}
+              loading={Boolean(scoreLoading)}
+              saving={Boolean(scoreSaving)}
+              onSave={onScoreAnswersSave}
+            />
+          ) : null}
+
           {localError || error ? <p className="text-sm text-negative">{localError ?? error}</p> : null}
 
           <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
@@ -293,6 +324,97 @@ function InvestmentAssetModalContent({
             </div>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function scoreLabel(value: number | null | undefined) {
+  return value === null || value === undefined ? "N/A" : Number(value.toFixed(2)).toString();
+}
+
+function ScoreAnswersSection({
+  scoreAnswers,
+  loading,
+  saving,
+  onSave,
+}: {
+  scoreAnswers: InvestmentAssetAnswersResponse | null;
+  loading: boolean;
+  saving: boolean;
+  onSave?: (answers: Array<Pick<InvestmentAssetAnswer, "question_id" | "resposta">>) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState<Record<number, boolean>>({});
+  const persisted = useMemo(() => {
+    const next: Record<number, boolean> = {};
+    for (const answer of scoreAnswers?.answers ?? []) {
+      next[answer.question_id] = answer.resposta;
+    }
+    return next;
+  }, [scoreAnswers]);
+  const answerValue = (questionId: number) => draft[questionId] ?? persisted[questionId] ?? false;
+
+  if (loading) {
+    return (
+      <div className="rounded-md border border-border bg-bg px-3 py-3 text-sm text-muted">
+        Carregando score...
+      </div>
+    );
+  }
+
+  if (!scoreAnswers || scoreAnswers.questions.length === 0) {
+    return null;
+  }
+
+  const save = async () => {
+    await onSave?.(
+      scoreAnswers.questions.map((question) => ({
+        question_id: question.id,
+        resposta: answerValue(question.id),
+      })),
+    );
+  };
+
+  return (
+    <div className="rounded-md border border-blue-400/30 bg-blue-500/5 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-text">Score</p>
+          <p className="mt-1 text-xs text-muted">
+            Nota {scoreLabel(scoreAnswers.score.nota)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={save}
+          disabled={!onSave || saving}
+          className="inline-flex h-9 items-center gap-2 rounded-md border border-blue-400/40 bg-blue-500/10 px-3 text-sm font-medium text-blue-200 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Save size={16} aria-hidden />
+          {saving ? "Salvando..." : "Salvar respostas"}
+        </button>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {scoreAnswers.questions.map((question) => (
+          <label
+            key={question.id}
+            className="flex items-start justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2"
+          >
+            <span className="min-w-0 text-sm text-text">{question.pergunta}</span>
+            <span className="inline-flex shrink-0 items-center gap-2 text-xs font-medium text-muted">
+              Sim
+              <input
+                type="checkbox"
+                checked={answerValue(question.id)}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, [question.id]: event.target.checked }))
+                }
+                className="h-4 w-4 accent-blue-500"
+              />
+            </span>
+          </label>
+        ))}
       </div>
     </div>
   );

@@ -329,6 +329,7 @@ export type InvestmentAsset = {
   manual_adjusted_at: string | null;
   price_source: string | null;
   price_updated_at: string | null;
+  nota?: number | null;
   pct_carteira: number;
   created_at: string;
   updated_at: string;
@@ -379,6 +380,57 @@ export type InvestmentProfilePreset = {
 
 export type InvestmentProfilesResponse = {
   profiles: InvestmentProfilePreset[];
+};
+
+export type InvestmentQuestion = {
+  id: number;
+  diagram_type: string;
+  criterio: string | null;
+  pergunta: string;
+  peso: number;
+  sort_order: number;
+  ativo: boolean;
+};
+
+export type InvestmentQuestionsResponse = {
+  diagram_type: string;
+  questions: InvestmentQuestion[];
+};
+
+export type InvestmentQuestionInput = {
+  diagram_type: string;
+  criterio?: string | null;
+  pergunta: string;
+  peso: number;
+  sort_order: number;
+  ativo: boolean;
+};
+
+export type InvestmentAssetScore = {
+  asset_id: number;
+  diagram_type: string | null;
+  pontos_positivos: number;
+  pontos_negativos: number;
+  peso_total: number;
+  nota: number | null;
+};
+
+export type InvestmentAssetAnswer = {
+  asset_id: number;
+  question_id: number;
+  resposta: boolean;
+};
+
+export type InvestmentAssetAnswersResponse = {
+  asset_id: number;
+  diagram_type: string | null;
+  questions: InvestmentQuestion[];
+  answers: InvestmentAssetAnswer[];
+  score: InvestmentAssetScore;
+};
+
+export type InvestmentAssetAnswersInput = {
+  answers: Array<{ question_id: number; resposta: boolean }>;
 };
 
 export type InvestmentClassSummary = {

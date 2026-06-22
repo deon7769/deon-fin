@@ -588,7 +588,12 @@ def list_assets(db: Database, *, include_inactive: bool = False) -> list[dict[st
               id
         """
     ).fetchall()
-    return [_row_to_asset(row) for row in rows]
+    assets = [_row_to_asset(row) for row in rows]
+    from . import score_repo
+
+    for asset in assets:
+        asset["nota"] = score_repo.compute_nota(db, asset["id"])["nota"]
+    return assets
 
 
 def portfolio_summary(db: Database, *, include_inactive: bool = False) -> dict[str, Any]:

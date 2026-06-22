@@ -14,8 +14,10 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import {
   useCreateInvestmentAsset,
   useDeleteInvestmentAsset,
+  useInvestmentAssetAnswers,
   useInvestments,
   useRefreshInvestmentQuotes,
+  useSaveInvestmentAssetAnswers,
   useTickerSearch,
   useUpdateInvestmentAsset,
 } from "@/hooks/useInvestments";
@@ -214,7 +216,12 @@ export default function InvestimentosPage() {
   const createAsset = useCreateInvestmentAsset();
   const updateAsset = useUpdateInvestmentAsset();
   const deleteAsset = useDeleteInvestmentAsset();
+  const saveAssetAnswers = useSaveInvestmentAssetAnswers();
   const tickerOptions = useTickerSearch(tickerSearch, modalAssetClass);
+  const assetAnswers = useInvestmentAssetAnswers(
+    modalAsset?.id ?? null,
+    modalMode === "edit" && modalAsset !== null,
+  );
   const data = investments.data;
   const modalOpen = modalMode !== null;
   const modalSaving = createAsset.isPending || updateAsset.isPending;
@@ -270,6 +277,21 @@ export default function InvestimentosPage() {
       closeModal();
     } catch (error) {
       setModalError(error instanceof Error ? error.message : "Não foi possível remover o ativo.");
+    }
+  };
+
+  const saveScoreAnswers = async (answers: Array<{ question_id: number; resposta: boolean }>) => {
+    if (!modalAsset) {
+      return;
+    }
+    try {
+      setModalError(null);
+      await saveAssetAnswers.mutateAsync({
+        id: modalAsset.id,
+        input: { answers },
+      });
+    } catch (error) {
+      setModalError(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel salvar as respostas.");
     }
   };
 
@@ -380,6 +402,9 @@ export default function InvestimentosPage() {
         open={modalOpen}
         mode={modalMode ?? "create"}
         asset={modalAsset}
+        scoreAnswers={modalMode === "edit" ? assetAnswers.data ?? null : null}
+        scoreLoading={modalMode === "edit" && assetAnswers.isLoading}
+        scoreSaving={saveAssetAnswers.isPending}
         tickerOptions={tickerOptions.data ?? []}
         saving={modalSaving}
         deleting={deleteAsset.isPending}
@@ -387,6 +412,7 @@ export default function InvestimentosPage() {
         onClose={closeModal}
         onSubmit={submitAsset}
         onDelete={modalMode === "edit" ? removeAsset : undefined}
+        onScoreAnswersSave={modalMode === "edit" ? saveScoreAnswers : undefined}
         onTickerSearchChange={setTickerSearch}
         onAssetClassChange={setModalAssetClass}
       />

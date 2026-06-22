@@ -51,13 +51,15 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
         "quote_cache",
         "allocation_targets",
         "investment_profile",
+        "asset_questions",
+        "asset_answers",
     }.issubset(_tables(conn))
 
     ids = [
         row[0]
         for row in conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
     ]
-    assert ids == list(range(1, 17))
+    assert ids == list(range(1, 18))
     assert "idx_tx_reference_month" in _indexes(conn, "transactions")
     assert "idx_tx_tag_id" in _indexes(conn, "transactions")
     assert "idx_tx_bucket_id" in _indexes(conn, "transactions")
@@ -185,6 +187,54 @@ def test_new_database_has_investment_allocation_targets(tmp_path: Path):
     assert all(row["target_pct"] == 0 for row in rows)
     profile = conn.execute("SELECT perfil FROM investment_profile WHERE id=1").fetchone()
     assert profile["perfil"] == "custom"
+    db.close()
+
+
+def test_new_database_has_asset_questions_and_answers_seeded(tmp_path: Path):
+    db = Database(tmp_path / "new.db")
+    conn = db._conn
+
+    assert {
+        "id",
+        "diagram_type",
+        "criterio",
+        "pergunta",
+        "peso",
+        "sort_order",
+        "ativo",
+    }.issubset(_columns(conn, "asset_questions"))
+    assert {
+        "asset_id",
+        "question_id",
+        "resposta",
+    }.issubset(_columns(conn, "asset_answers"))
+
+    rows = conn.execute(
+        """
+        SELECT diagram_type, COUNT(*) AS total
+          FROM asset_questions
+         WHERE ativo=1
+         GROUP BY diagram_type
+        """
+    ).fetchall()
+    assert {row["diagram_type"]: row["total"] for row in rows} == {
+        "acoes": 5,
+        "imobiliario": 5,
+    }
+
+    first_acoes = conn.execute(
+        """
+        SELECT criterio, pergunta, peso, sort_order
+          FROM asset_questions
+         WHERE diagram_type='acoes'
+         ORDER BY sort_order, id
+         LIMIT 1
+        """
+    ).fetchone()
+    assert first_acoes["criterio"]
+    assert "ROE" in first_acoes["pergunta"]
+    assert first_acoes["peso"] == 1
+    assert first_acoes["sort_order"] == 10
     db.close()
 
 
@@ -325,7 +375,7 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
     tmp_db._conn.execute("DELETE FROM schema_migrations")
     tmp_db._conn.commit()
 
-    assert apply_migrations(tmp_db._conn) == 16
+    assert apply_migrations(tmp_db._conn) == 17
     assert apply_migrations(tmp_db._conn) == 0
 
     ids = [
@@ -334,4 +384,4 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
             "SELECT id FROM schema_migrations ORDER BY id"
         ).fetchall()
     ]
-    assert ids == list(range(1, 17))
+    assert ids == list(range(1, 18))

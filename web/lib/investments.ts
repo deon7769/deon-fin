@@ -1,7 +1,12 @@
 import { api } from "@/lib/api";
 import type {
   InvestmentAsset,
+  InvestmentAssetAnswersInput,
+  InvestmentAssetAnswersResponse,
   InvestmentAssetInput,
+  InvestmentQuestion,
+  InvestmentQuestionInput,
+  InvestmentQuestionsResponse,
   InvestmentProfilePreset,
   InvestmentProfilesResponse,
   InvestmentRefreshQuotesResponse,
@@ -29,6 +34,15 @@ export type InvestmentAssetFormValues = {
   manualValue: string;
 };
 
+export type InvestmentQuestionFormValues = {
+  diagramType: string;
+  criterio: string;
+  pergunta: string;
+  peso: string;
+  sortOrder: string;
+  ativo: boolean;
+};
+
 function toNumber(value: string): number | undefined {
   const normalized = value.trim().replace(/\./g, "").replace(",", ".");
   if (!normalized) {
@@ -36,6 +50,14 @@ function toNumber(value: string): number | undefined {
   }
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function toRequiredNumber(value: string, fallback: number): number {
+  return toNumber(value) ?? fallback;
+}
+
+function normalizeText(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 export function isFixedIncomeClass(assetClass: string) {
@@ -58,6 +80,24 @@ export function buildAssetPayload(values: InvestmentAssetFormValues): Investment
     ...(ticker ? { ticker } : {}),
     ...(name ? { name } : {}),
     ...(toNumber(values.quantity) !== undefined ? { quantity: toNumber(values.quantity) } : {}),
+  };
+}
+
+export function diagramLabel(diagramType: string) {
+  if (diagramType === "imobiliario") {
+    return "Imobiliario";
+  }
+  return "Acoes";
+}
+
+export function buildQuestionPayload(values: InvestmentQuestionFormValues): InvestmentQuestionInput {
+  return {
+    diagram_type: values.diagramType,
+    criterio: normalizeText(values.criterio) || null,
+    pergunta: normalizeText(values.pergunta),
+    peso: toRequiredNumber(values.peso, 1),
+    sort_order: Math.trunc(toRequiredNumber(values.sortOrder, 0)),
+    ativo: values.ativo,
   };
 }
 
@@ -133,4 +173,42 @@ export function getInvestmentProfiles(signal?: AbortSignal) {
 
 export function saveInvestmentTargets(input: { targets: InvestmentTargetsMap; perfil?: string }) {
   return api.put<InvestmentTargetsResponse>("/investments/targets", input);
+}
+
+export function getInvestmentQuestions(diagramType: string, signal?: AbortSignal) {
+  return api.get<InvestmentQuestionsResponse>(
+    "/investments/questions",
+    { diagram_type: diagramType },
+    signal,
+  );
+}
+
+export function createInvestmentQuestion(input: InvestmentQuestionInput) {
+  return api.post<InvestmentQuestion>("/investments/questions", input);
+}
+
+export function updateInvestmentQuestion(id: number, input: Partial<InvestmentQuestionInput>) {
+  return api.patch<InvestmentQuestion>(`/investments/questions/${id}`, input);
+}
+
+export function deleteInvestmentQuestion(id: number) {
+  return api.del<{ deleted_id: number }>(`/investments/questions/${id}`);
+}
+
+export function restoreInvestmentQuestions(diagramType: string) {
+  return api.post<InvestmentQuestionsResponse>(
+    `/investments/questions/restore-defaults?diagram_type=${encodeURIComponent(diagramType)}`,
+  );
+}
+
+export function getInvestmentAssetAnswers(assetId: number, signal?: AbortSignal) {
+  return api.get<InvestmentAssetAnswersResponse>(
+    `/investments/assets/${assetId}/answers`,
+    undefined,
+    signal,
+  );
+}
+
+export function saveInvestmentAssetAnswers(assetId: number, input: InvestmentAssetAnswersInput) {
+  return api.put<InvestmentAssetAnswersResponse>(`/investments/assets/${assetId}/answers`, input);
 }

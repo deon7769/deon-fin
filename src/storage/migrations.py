@@ -5,6 +5,8 @@ import sqlite3
 from collections.abc import Callable
 from typing import Any
 
+from src.domain.investment_questions import DEFAULT_ASSET_QUESTIONS
+
 
 Migration = Callable[[sqlite3.Connection], None]
 
@@ -433,6 +435,68 @@ def m0016_investment_allocation_targets(conn: sqlite3.Connection) -> None:
     )
 
 
+def m0017_asset_questions_answers(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS asset_questions (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            diagram_type TEXT NOT NULL CHECK (diagram_type IN ('acoes', 'imobiliario')),
+            criterio     TEXT,
+            pergunta     TEXT NOT NULL,
+            peso         REAL NOT NULL DEFAULT 1,
+            sort_order   INTEGER NOT NULL DEFAULT 0,
+            ativo        INTEGER NOT NULL DEFAULT 1
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_asset_questions_diagram_order
+          ON asset_questions(diagram_type, ativo, sort_order, id)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS asset_answers (
+            asset_id    INTEGER NOT NULL REFERENCES portfolio_assets(id) ON DELETE CASCADE,
+            question_id INTEGER NOT NULL REFERENCES asset_questions(id) ON DELETE CASCADE,
+            resposta    INTEGER NOT NULL DEFAULT 0 CHECK (resposta IN (0, 1)),
+            PRIMARY KEY (asset_id, question_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_asset_answers_question
+          ON asset_answers(question_id)
+        """
+    )
+
+    for diagram_type, questions in DEFAULT_ASSET_QUESTIONS.items():
+        existing = conn.execute(
+            "SELECT COUNT(*) FROM asset_questions WHERE diagram_type=?",
+            (diagram_type,),
+        ).fetchone()[0]
+        if existing:
+            continue
+        for question in questions:
+            conn.execute(
+                """
+                INSERT INTO asset_questions (
+                    diagram_type, criterio, pergunta, peso, sort_order, ativo
+                )
+                VALUES (?, ?, ?, ?, ?, 1)
+                """,
+                (
+                    diagram_type,
+                    question["criterio"],
+                    question["pergunta"],
+                    question["peso"],
+                    question["sort_order"],
+                ),
+            )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -450,6 +514,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (14, "portfolio", m0014_portfolio),
     (15, "portfolio_quotes_and_manual_adjustments", m0015_portfolio_quotes_and_manual_adjustments),
     (16, "investment_allocation_targets", m0016_investment_allocation_targets),
+    (17, "asset_questions_answers", m0017_asset_questions_answers),
 ]
 
 
