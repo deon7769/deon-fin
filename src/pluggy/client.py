@@ -162,6 +162,48 @@ class PluggyClient:
         data = self._request("GET", "/categories")
         return data.get("results", [])
 
+    def list_investments(
+        self,
+        item_id: str,
+        *,
+        page_size: int = 500,
+    ) -> Iterator[dict[str, Any]]:
+        page = 1
+        while True:
+            data = self._request(
+                "GET",
+                "/investments",
+                params={"itemId": item_id, "page": page, "pageSize": page_size},
+            )
+            results = data.get("results", [])
+            for investment in results:
+                yield investment
+            total_pages = int(data.get("totalPages") or page)
+            if page >= total_pages or not results:
+                return
+            page += 1
+
+    def list_investment_transactions(
+        self,
+        investment_id: str,
+        *,
+        page_size: int = 500,
+    ) -> Iterator[dict[str, Any]]:
+        page = 1
+        while True:
+            data = self._request(
+                "GET",
+                f"/investments/{investment_id}/transactions",
+                params={"page": page, "pageSize": page_size},
+            )
+            results = data.get("results", [])
+            for transaction in results:
+                yield transaction
+            total_pages = int(data.get("totalPages") or page)
+            if page >= total_pages or not results:
+                return
+            page += 1
+
     def close(self) -> None:
         self._http.close()
 

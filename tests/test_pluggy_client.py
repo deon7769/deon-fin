@@ -40,3 +40,69 @@ def test_list_transactions_v2_follows_cursor():
         "dateTo": "2026-01-31",
     }
     assert second_params == {"accountId": "acc", "after": "cursor-1"}
+
+
+def test_list_investments_follows_page_pagination():
+    client = PluggyClient("id", "secret", api_key="fake.jwt.token")
+    client._api_key_issued_at = 0
+    client._request = MagicMock(
+        side_effect=[
+            {
+                "page": 1,
+                "totalPages": 2,
+                "results": [{"id": "inv-1", "code": "WEGE3"}],
+            },
+            {
+                "page": 2,
+                "totalPages": 2,
+                "results": [{"id": "inv-2", "code": "CDB123"}],
+            },
+        ]
+    )  # type: ignore[method-assign]
+
+    investments = list(client.list_investments("item-1", page_size=100))
+
+    assert [investment["id"] for investment in investments] == ["inv-1", "inv-2"]
+    assert client._request.call_count == 2
+    assert client._request.call_args_list[0].kwargs["params"] == {
+        "itemId": "item-1",
+        "page": 1,
+        "pageSize": 100,
+    }
+    assert client._request.call_args_list[1].kwargs["params"] == {
+        "itemId": "item-1",
+        "page": 2,
+        "pageSize": 100,
+    }
+
+
+def test_list_investment_transactions_follows_page_pagination():
+    client = PluggyClient("id", "secret", api_key="fake.jwt.token")
+    client._api_key_issued_at = 0
+    client._request = MagicMock(
+        side_effect=[
+            {
+                "page": 1,
+                "totalPages": 2,
+                "results": [{"id": "mov-1", "type": "BUY"}],
+            },
+            {
+                "page": 2,
+                "totalPages": 2,
+                "results": [{"id": "mov-2", "type": "INTEREST"}],
+            },
+        ]
+    )  # type: ignore[method-assign]
+
+    transactions = list(client.list_investment_transactions("inv-1", page_size=50))
+
+    assert [transaction["id"] for transaction in transactions] == ["mov-1", "mov-2"]
+    assert client._request.call_count == 2
+    assert client._request.call_args_list[0].args == (
+        "GET",
+        "/investments/inv-1/transactions",
+    )
+    assert client._request.call_args_list[0].kwargs["params"] == {
+        "page": 1,
+        "pageSize": 50,
+    }

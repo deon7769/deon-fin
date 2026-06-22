@@ -10,6 +10,7 @@ from ..pluggy import PluggyClient
 from ..storage import Account, Database, Transaction
 from ..web.repositories import accounts_repo
 from .base import ImportResult
+from .pluggy_investments import sync_pluggy_investments
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +33,11 @@ def sync_pluggy_item(
             results.append(_sync_account(client, db, acc, since=since))
         except Exception:
             log.exception("falha ao sincronizar conta %s do item %s", acc.get("id"), item_id)
+    if hasattr(client, "list_investments"):
+        try:
+            sync_pluggy_investments(client, db, item_id)
+        except Exception:
+            log.exception("falha ao sincronizar investimentos do item %s", item_id)
     return results
 
 

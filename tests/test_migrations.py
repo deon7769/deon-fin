@@ -46,13 +46,15 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
         "profile",
         "account_balances",
         "savings_goals",
+        "portfolio_assets",
+        "portfolio_transactions",
     }.issubset(_tables(conn))
 
     ids = [
         row[0]
         for row in conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
     ]
-    assert ids == list(range(1, 14))
+    assert ids == list(range(1, 15))
     assert "idx_tx_reference_month" in _indexes(conn, "transactions")
     assert "idx_tx_tag_id" in _indexes(conn, "transactions")
     assert "idx_tx_bucket_id" in _indexes(conn, "transactions")
@@ -88,6 +90,52 @@ def test_new_database_has_savings_goals_table(tmp_path: Path):
         "created_at",
         "updated_at",
     }.issubset(_columns(conn, "savings_goals"))
+    db.close()
+
+
+def test_new_database_has_portfolio_tables(tmp_path: Path):
+    db = Database(tmp_path / "new.db")
+    conn = db._conn
+
+    assert {
+        "id",
+        "asset_class",
+        "ticker",
+        "name",
+        "quantity",
+        "source",
+        "external_id",
+        "manual_value",
+        "current_value",
+        "unit_price",
+        "currency",
+        "provider_type",
+        "provider_subtype",
+        "status",
+        "as_of_date",
+        "metadata_json",
+        "created_at",
+        "updated_at",
+    }.issubset(_columns(conn, "portfolio_assets"))
+    assert {
+        "id",
+        "asset_id",
+        "source",
+        "external_id",
+        "type",
+        "movement_type",
+        "trade_date",
+        "posted_at",
+        "quantity",
+        "unit_value",
+        "amount",
+        "net_amount",
+        "description",
+        "metadata_json",
+        "created_at",
+    }.issubset(_columns(conn, "portfolio_transactions"))
+    assert "idx_portfolio_assets_class" in _indexes(conn, "portfolio_assets")
+    assert "idx_portfolio_transactions_asset" in _indexes(conn, "portfolio_transactions")
     db.close()
 
 
@@ -228,7 +276,7 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
     tmp_db._conn.execute("DELETE FROM schema_migrations")
     tmp_db._conn.commit()
 
-    assert apply_migrations(tmp_db._conn) == 13
+    assert apply_migrations(tmp_db._conn) == 14
     assert apply_migrations(tmp_db._conn) == 0
 
     ids = [
@@ -237,4 +285,4 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
             "SELECT id FROM schema_migrations ORDER BY id"
         ).fetchall()
     ]
-    assert ids == list(range(1, 14))
+    assert ids == list(range(1, 15))

@@ -308,6 +308,44 @@ export type AccountsResponse = {
   sync: AccountsSync;
 };
 
+export type InvestmentAsset = {
+  id: number;
+  asset_class: string;
+  asset_class_label: string;
+  ticker: string | null;
+  name: string | null;
+  quantity: number;
+  source: string;
+  external_id: string | null;
+  manual_value: number | null;
+  current_value: number;
+  unit_price: number | null;
+  currency: string;
+  provider_type: string | null;
+  provider_subtype: string | null;
+  status: string | null;
+  as_of_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InvestmentClassSummary = {
+  asset_class: string;
+  label: string;
+  count: number;
+  current_value: number;
+  pct: number;
+};
+
+export type InvestmentsResponse = {
+  totals: {
+    asset_count: number;
+    current_value: number;
+  };
+  by_class: InvestmentClassSummary[];
+  assets: InvestmentAsset[];
+};
+
 export type MaintenanceFamilyProfile = {
   [key: string]: unknown;
   receitas?: Array<{ membro?: string; valor?: number }>;

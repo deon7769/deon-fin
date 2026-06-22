@@ -297,6 +297,80 @@ def m0013_savings_goals(conn: sqlite3.Connection) -> None:
     )
 
 
+def m0014_portfolio(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS portfolio_assets (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            asset_class      TEXT NOT NULL,
+            ticker           TEXT,
+            name             TEXT,
+            quantity         REAL NOT NULL DEFAULT 0,
+            source           TEXT NOT NULL DEFAULT 'manual',
+            external_id      TEXT,
+            manual_value     REAL,
+            current_value    REAL,
+            unit_price       REAL,
+            currency         TEXT DEFAULT 'BRL',
+            provider_type    TEXT,
+            provider_subtype TEXT,
+            status           TEXT,
+            as_of_date       TEXT,
+            metadata_json    TEXT,
+            created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_assets_external
+          ON portfolio_assets(source, external_id)
+         WHERE external_id IS NOT NULL
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_portfolio_assets_class
+          ON portfolio_assets(asset_class, ticker)
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS portfolio_transactions (
+            id             TEXT PRIMARY KEY,
+            asset_id       INTEGER NOT NULL REFERENCES portfolio_assets(id) ON DELETE CASCADE,
+            source         TEXT NOT NULL,
+            external_id    TEXT,
+            type           TEXT,
+            movement_type  TEXT,
+            trade_date     TEXT,
+            posted_at      TEXT,
+            quantity       REAL,
+            unit_value     REAL,
+            amount         REAL,
+            net_amount     REAL,
+            description    TEXT,
+            metadata_json  TEXT,
+            created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolio_transactions_external
+          ON portfolio_transactions(source, external_id)
+         WHERE external_id IS NOT NULL
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_asset
+          ON portfolio_transactions(asset_id, posted_at)
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -311,6 +385,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (11, "tx_filter_indexes", m0011_tx_filter_indexes),
     (12, "account_connection_metadata", m0012_account_connection_metadata),
     (13, "savings_goals", m0013_savings_goals),
+    (14, "portfolio", m0014_portfolio),
 ]
 
 
