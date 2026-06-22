@@ -25,7 +25,7 @@ export const menuItems: NavItem[] = [
   { href: "/orcamento", label: "Orçamento", icon: Wallet },
   { href: "/metas", label: "Metas", icon: Target },
   { href: "/investimentos", label: "Investimentos", icon: PieChart },
-  { href: "/simulador", label: "Simulador", icon: Calculator },
+  { href: "/simulacoes", label: "Simulações", icon: Calculator },
   { href: "/contas", label: "Contas", icon: Landmark },
   { href: "/faturas", label: "Faturas", icon: ReceiptText },
   { href: "/transacoes", label: "Transações", icon: ArrowLeftRight },

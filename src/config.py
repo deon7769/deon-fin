@@ -40,6 +40,8 @@ class Settings:
     quotes_provider: str = "brapi"
     brapi_token: str | None = None
     quotes_ttl_min: int = 15
+    cdi_aa: float = 10.5
+    ipca_aa: float = 4.5
 
     @property
     def database_path(self) -> Path:
@@ -155,6 +157,8 @@ def load_settings() -> Settings:
         quotes_provider=os.environ.get("QUOTES_PROVIDER", "brapi").strip().lower() or "brapi",
         brapi_token=(os.environ.get("BRAPI_TOKEN") or "").strip() or None,
         quotes_ttl_min=int(os.environ.get("QUOTES_TTL_MIN", "15") or 15),
+        cdi_aa=float(os.environ.get("CDI_AA", "10.5") or 10.5),
+        ipca_aa=float(os.environ.get("IPCA_AA", "4.5") or 4.5),
     )
 
 
