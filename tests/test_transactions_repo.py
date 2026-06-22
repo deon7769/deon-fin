@@ -213,7 +213,7 @@ def test_list_transactions_summary_ignores_hidden_and_uses_sign_helpers(tmp_db):
     assert visible_transfer["signed_value"] == 0.0
 
 
-def test_update_transaction_bucket_preserves_rule_side_effects(tmp_db):
+def test_update_transaction_bucket_marks_manual_without_rule_side_effects(tmp_db):
     _seed_accounts(tmp_db)
     buckets_repo.seed_buckets(tmp_db)
     tx = _insert(tmp_db, description="Padaria Alfa", external_id="repo-bucket-rule-1")
@@ -222,9 +222,7 @@ def test_update_transaction_bucket_preserves_rule_side_effects(tmp_db):
     updated = transactions_repo.update_transaction(tmp_db, tx.id, bucket_id=bucket["id"])
 
     assert updated["bucket_id"] == bucket["id"]
-    rules = buckets_repo.list_rules(tmp_db)
-    assert len(rules) == 1
-    assert rules[0]["bucket_id"] == bucket["id"]
+    assert buckets_repo.list_rules(tmp_db) == []
 
     cleared = transactions_repo.update_transaction(tmp_db, tx.id, bucket_id=None)
 

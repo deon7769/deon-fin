@@ -175,7 +175,7 @@ def calcular_aporte(
         preco = _preco(ativo)
         valor_atual = _valor_atual(ativo)
         sugest_un = suggestion["sugest_un"]
-        if sugest_rs <= 0 or sugest_un <= 0:
+        if _is_fixed_income(_asset_class(ativo)) and preco <= 0:
             continue
         total_apos_aporte_pct = (
             _money((valor_atual + sugest_rs) / pl_alvo * 100) if pl_alvo > 0 else 0.0
