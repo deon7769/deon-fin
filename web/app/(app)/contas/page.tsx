@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, ArrowDown, ArrowUp, CreditCard, Landmark, List, Plus, SquareStack } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, CreditCard, Landmark, List, SquareStack } from "lucide-react";
 import { AccountCardGrid } from "@/components/contas/AccountCardGrid";
 import { AccountsTable } from "@/components/contas/AccountsTable";
 import { CardsTable } from "@/components/contas/CardsTable";
+import { ConnectAccountButton } from "@/components/contas/ConnectAccountButton";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -18,6 +19,7 @@ import {
   useReorderAccounts,
   useSyncAccount,
 } from "@/hooks/useAccounts";
+import { openPluggyConnect } from "@/lib/pluggyConnect";
 
 type ViewMode = "list" | "cards";
 
@@ -26,11 +28,6 @@ type SortableAccount = {
   name: string;
   detail: string;
 };
-
-const LEGACY_CONNECT_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api").replace(
-  /\/api\/?$/,
-  "/",
-);
 
 function RetryState({
   error,
@@ -73,6 +70,9 @@ export default function ContasPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [orderMode, setOrderMode] = useState(false);
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
+  const [connecting, setConnecting] = useState(false);
+  const [connectMessage, setConnectMessage] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
   const accounts = useAccounts();
   const syncAccount = useSyncAccount();
   const credentials = useAccountCredentials();
@@ -118,6 +118,26 @@ export default function ContasPage() {
     );
     if (confirmed) {
       deleteAccount.mutate(accountId);
+    }
+  };
+
+  const handleConnectAccount = async () => {
+    setConnecting(true);
+    setConnectError(null);
+    setConnectMessage("Abrindo hub de conexões...");
+    try {
+      const result = await openPluggyConnect();
+      if (result.status === "connected") {
+        setConnectMessage("Conexão registrada. A sincronização foi agendada.");
+        await accounts.refetch();
+      } else {
+        setConnectMessage("Hub fechado sem nova conexão.");
+      }
+    } catch (error) {
+      setConnectMessage(null);
+      setConnectError(error instanceof Error ? error.message : "Não foi possível abrir o hub de conexões.");
+    } finally {
+      setConnecting(false);
     }
   };
 
@@ -175,17 +195,20 @@ export default function ContasPage() {
             >
               Ordenar contas
             </button>
-            <a
-              href={LEGACY_CONNECT_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-black transition hover:brightness-95"
-            >
-              <Plus size={16} aria-hidden />
-              Nova conta
-            </a>
+            <ConnectAccountButton loading={connecting} onClick={handleConnectAccount} />
           </div>
         </div>
+        {connectMessage || connectError ? (
+          <div
+            className={`rounded-md border px-3 py-2 text-sm ${
+              connectError
+                ? "border-negative/40 bg-negative/10 text-negative"
+                : "border-accent/40 bg-accent/10 text-text"
+            }`}
+          >
+            {connectError ?? connectMessage}
+          </div>
+        ) : null}
 
         {accounts.isError ? (
           <RetryState error={accounts.error} onRetry={() => void accounts.refetch()} />
@@ -233,15 +256,7 @@ export default function ContasPage() {
                   icon={<Landmark size={28} aria-hidden />}
                   title="Nenhuma conta conectada"
                   action={
-                    <a
-                      href={LEGACY_CONNECT_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-black transition hover:brightness-95"
-                    >
-                      <Plus size={16} aria-hidden />
-                      Nova conta
-                    </a>
+                    <ConnectAccountButton loading={connecting} onClick={handleConnectAccount} />
                   }
                 />
               </SectionCard>
