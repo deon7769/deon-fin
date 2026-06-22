@@ -211,6 +211,27 @@ def test_list_transactions_summary_ignores_hidden_and_uses_sign_helpers(tmp_db):
     visible_transfer = next(item for item in page["items"] if item["description"] == "Transferencia")
     assert visible_transfer["type"] == "expense"
     assert visible_transfer["signed_value"] == 0.0
+    assert visible_transfer["display_value"] == -700.0
+
+
+def test_list_transactions_display_value_preserves_credit_card_expense_sign(tmp_db):
+    _seed_accounts(tmp_db)
+    _insert(
+        tmp_db,
+        account_id="repo-credit",
+        amount="250.00",
+        description="Compra Cartao",
+        category="Lazer",
+        external_id="repo-display-credit",
+    )
+
+    page = transactions_repo.list_transactions(tmp_db, month="2026-06")
+
+    item = page["items"][0]
+    assert item["type"] == "expense"
+    assert item["amount"] == 250.0
+    assert item["signed_value"] == -250.0
+    assert item["display_value"] == -250.0
 
 
 def test_update_transaction_bucket_marks_manual_without_rule_side_effects(tmp_db):

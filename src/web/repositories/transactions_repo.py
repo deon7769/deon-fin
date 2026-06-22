@@ -77,6 +77,12 @@ def _signed_value(
     return round(income - expense, 2)
 
 
+def _display_value(amount: float, account_type: str | None) -> float:
+    if _is_credit(account_type):
+        return round(-float(amount), 2)
+    return round(float(amount), 2)
+
+
 def _serialize_item(row: Any, *, external_transfer_income: bool = False) -> dict[str, Any]:
     amount = float(row["amount"])
     bucket = None
@@ -122,6 +128,7 @@ def _serialize_item(row: Any, *, external_transfer_income: bool = False) -> dict
             row["category"],
             external_transfer_income=external_transfer_income,
         ),
+        "display_value": _display_value(amount, row["account_type"]),
         "type": _display_type(amount, row["account_type"]),
     }
 

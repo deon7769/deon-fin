@@ -1,4 +1,4 @@
-import type { TransactionHiddenFilter, TransactionType } from "./types";
+import type { Transaction, TransactionHiddenFilter, TransactionType } from "./types";
 
 export type TransactionDateRange = {
   from: string;
@@ -130,4 +130,10 @@ export function hasTransactionFilters(filters: TransactionFilters): boolean {
       filters.bucketIds?.length ||
       filters.tagIds?.length,
   );
+}
+
+export function transactionDisplayValue(
+  transaction: Pick<Transaction, "amount" | "signed_value" | "display_value">,
+): number {
+  return transaction.display_value ?? transaction.signed_value;
 }

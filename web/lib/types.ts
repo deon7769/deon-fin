@@ -72,6 +72,7 @@ export type Transaction = {
   account_name?: string | null;
   account_type?: string | null;
   signed_value: number;
+  display_value?: number;
   type: TransactionType;
 };
 

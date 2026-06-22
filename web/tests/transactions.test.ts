@@ -5,6 +5,7 @@ import {
   hasTransactionFilters,
   idsFilterFromSearch,
   semTagFilterFromSearch,
+  transactionDisplayValue,
   transactionQuery,
 } from "@/lib/transactions";
 
@@ -73,5 +74,10 @@ describe("transaction helpers", () => {
     expect(idsFilterFromSearch("1,none, 2")).toEqual([1, null, 2]);
     expect(idsFilterFromSearch("x,0")).toBeUndefined();
     expect(idsFilterFromSearch(null)).toBeUndefined();
+  });
+
+  it("prefers transaction display_value over aggregate signed_value", () => {
+    expect(transactionDisplayValue({ amount: -300, signed_value: 0, display_value: -300 })).toBe(-300);
+    expect(transactionDisplayValue({ amount: -300, signed_value: 0 })).toBe(0);
   });
 });

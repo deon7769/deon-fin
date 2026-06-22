@@ -85,6 +85,7 @@ def test_get_transactions_shape_and_bad_params(client, tmp_db):
     assert body["items"][0]["tag"] is None
     assert body["items"][0]["type"] == "expense"
     assert body["items"][0]["signed_value"] == -42.5
+    assert body["items"][0]["display_value"] == -42.5
 
     invalid_month = client.get("/api/transactions?month=202606")
     assert invalid_month.status_code == 422

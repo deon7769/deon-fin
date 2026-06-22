@@ -36,6 +36,7 @@ import {
 import { useTransactions } from "@/hooks/useTransactions";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/format";
+import { transactionDisplayValue } from "@/lib/transactions";
 import type { Tag, Transaction, TransactionHiddenFilter, TransactionType } from "@/lib/types";
 
 const EMPTY_TRANSACTIONS: Transaction[] = [];
@@ -375,7 +376,7 @@ export default function TransacoesPage() {
         className: "min-w-[130px] px-3 py-3 text-right align-top",
         cell: (tx) => (
           <MoneyText
-            value={tx.signed_value}
+            value={transactionDisplayValue(tx)}
             colorBySign="auto"
             className="font-semibold"
           />
