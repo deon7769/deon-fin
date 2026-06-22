@@ -1,15 +1,18 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { menuItems } from "@/components/layout/nav";
 import { SimulationResultPanel } from "@/components/simulacoes/SimulationResultPanel";
 import {
   CALCULATORS,
   DEFAULT_INPUTS,
   endpointForCalculator,
+  fieldsForCalculator,
   resultRows,
   summaryCards,
 } from "@/lib/simulacoes";
-import { menuItems } from "@/components/layout/nav";
 import type { SimulationResponse } from "@/lib/simulacoes";
 
 const jurosResult: SimulationResponse = {
@@ -46,6 +49,34 @@ describe("simulacoes hub helpers", () => {
       valor_inicial: 500,
       valor_mensal: 500,
     });
+    expect(DEFAULT_INPUTS["marcacao-mercado"]).toMatchObject({
+      data_aplicacao: "2026-01-01",
+      data_vencimento: "2030-01-01",
+    });
+    expect(CALCULATORS.find((item) => item.key === "cdb")?.description).toBe(
+      "Rendimento bruto, IR e líquido.",
+    );
+  });
+
+  it("describes friendly fields and options for calculator forms", () => {
+    expect(fieldsForCalculator("juros-compostos").map((field) => field.label)).toEqual([
+      "Valor inicial",
+      "Aporte mensal",
+      "Taxa",
+      "Período da taxa",
+      "Prazo",
+      "Unidade do prazo",
+    ]);
+    expect(fieldsForCalculator("juros-compostos")[3]).toMatchObject({
+      type: "select",
+      options: [
+        { value: "anual", label: "Anual" },
+        { value: "mensal", label: "Mensal" },
+      ],
+    });
+    expect(fieldsForCalculator("marcacao-mercado").map((field) => field.label)).toContain(
+      "Título isento de IR",
+    );
   });
 
   it("maps simulation results into summary cards and table rows", () => {
@@ -74,10 +105,32 @@ describe("simulacoes hub helpers", () => {
     expect(html).toContain("R$ 503,22");
   });
 
+  it("renders market data default warnings returned by the API", () => {
+    const html = renderToStaticMarkup(
+      <SimulationResultPanel
+        result={{
+          ...jurosResult,
+          avisos: [{ code: "default_cdi_aa", message: "CDI anual padrão usado: 11.5%." }],
+        }}
+      />,
+    );
+
+    expect(html).toContain("CDI anual padrão usado: 11.5%.");
+  });
+
   it("moves the navigation item from simulador to simulacoes", () => {
     expect(menuItems).toContainEqual(
       expect.objectContaining({ href: "/simulacoes", label: "Simulações" }),
     );
     expect(menuItems.some((item) => item.href === "/simulador")).toBe(false);
+  });
+
+  it("redirects the old simulator route to the simulations hub", () => {
+    const source = readFileSync(
+      join(process.cwd(), "app", "(app)", "simulador", "page.tsx"),
+      "utf8",
+    );
+
+    expect(source).toContain('redirect("/simulacoes")');
   });
 });

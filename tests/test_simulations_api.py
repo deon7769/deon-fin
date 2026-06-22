@@ -152,7 +152,7 @@ def test_additional_simulation_endpoints_return_resumo(client, path, payload, ex
 
 
 def test_legacy_simulator_endpoints_keep_working(client):
-    response = client.post(
+    simulation = client.post(
         "/api/simular",
         json={
             "preco": 50000,
@@ -164,5 +164,53 @@ def test_legacy_simulator_endpoints_keep_working(client):
         },
     )
 
-    assert response.status_code == 200
-    assert response.json()["juntar_a_vista"]["meses_para_juntar"] == 25
+    assert simulation.status_code == 200
+    assert simulation.json()["juntar_a_vista"]["meses_para_juntar"] == 25
+
+    amortization = client.post(
+        "/api/amortizacao",
+        json={"saldo": 30000, "juros_aa": 12, "parcela": 1000, "aporte_extra": 500},
+    )
+
+    assert amortization.status_code == 200
+    assert amortization.json()["meses_economizados"] > 0
+
+
+def test_market_data_defaults_are_signaled(client, monkeypatch):
+    monkeypatch.setattr(
+        "src.web.routers.simulations.settings",
+        SimpleNamespace(cdi_aa=11.5, ipca_aa=4.25),
+    )
+
+    cdb_response = client.post(
+        "/api/sim/cdb",
+        json={
+            "investimento_inicial": 1000,
+            "investimento_mensal": 0,
+            "cdi_pct": 100,
+            "tempo": 1,
+            "tempo_unidade": "anos",
+        },
+    )
+    mtm_response = client.post(
+        "/api/sim/marcacao-mercado",
+        json={
+            "tipo": "ipca",
+            "data_aplicacao": "2026-01-01",
+            "data_vencimento": "2030-01-01",
+            "data_hoje": "2026-06-22",
+            "valor_investido": 10000,
+            "valor_atual_bruto": 10400,
+            "rentabilidade_contratada_aa": 6,
+            "isento_ir": False,
+        },
+    )
+
+    assert cdb_response.status_code == 200
+    assert cdb_response.json()["avisos"] == [
+        {"code": "default_cdi_aa", "message": "CDI anual padrão usado: 11.5%."}
+    ]
+    assert mtm_response.status_code == 200
+    assert mtm_response.json()["avisos"] == [
+        {"code": "default_ipca_aa", "message": "IPCA projetado padrão usado: 4.25%."}
+    ]

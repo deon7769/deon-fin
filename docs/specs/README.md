@@ -67,7 +67,7 @@ specs assumem.
 | F3.2 | ✅ entregue | Tela Next de saúde/visão operacional sobre `/api/maintenance`. |
 | F3.3 | ✅ entregue | Simulador no Next com cenários e amortização sobre `/api/simular` e `/api/amortizacao`. |
 | F3.4 | ✅ entregue | Editor de Manutenção no Next com tabelas editáveis e save em `/api/maintenance`. |
-| F3.6 | 📋 spec | Hub "Simulações" com 7 calculadoras (juros compostos, renda, Pix parcelado, CDB, marcação a mercado, amortização, alugar×financiar). A implementar — reusa `simulator.py`, novos endpoints `/api/sim/*`. |
+| F3.6 | ✅ entregue | Hub "Simulações" com 7 calculadoras, formulários guiados, redirect `/simulador`→`/simulacoes` e endpoints `/api/sim/*` com avisos de defaults CDI/IPCA. |
 
 ## Ordem de execução recomendada
 
@@ -80,7 +80,7 @@ specs assumem.
 7. **Deploy:** F3.1 (Next estático servido pela FastAPI, same-origin, na VPS).
 8. **Extensões do layout:** F3.2 (Manutenção) → F3.3 (Simulador).
 
-> Estado atual: F0.1 até F3.5 estão entregues na `main`. A sequência agora é Pluggy Connect no Next
+> Estado atual: F0.1 até F3.6 e F4.1 até F4.5 estão entregues na `main`. A sequência agora é concluir as pendências restantes das specs
 > e a automação assistida de categorização/tag/meta.
 
 ## Notas de fixes observados em produção/preview

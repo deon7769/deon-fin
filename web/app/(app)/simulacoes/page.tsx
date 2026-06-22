@@ -14,23 +14,31 @@ import {
   CALCULATORS,
   DEFAULT_INPUTS,
   type CalculatorKey,
+  type CalculatorField,
   type SimulationPayload,
+  fieldsForCalculator,
 } from "@/lib/simulacoes";
 
 function isCalculatorKey(value: string | null): value is CalculatorKey {
   return CALCULATORS.some((calculator) => calculator.key === value);
 }
 
-function parseInputValue(value: string, previous: unknown): unknown {
-  if (typeof previous === "number") {
+function parseInputValue(value: string, previous: unknown, field: CalculatorField): unknown {
+  if (field.type === "number") {
+    if (!value.trim()) {
+      return undefined;
+    }
     const normalized = value.replace(",", ".");
     const parsed = Number(normalized);
     return Number.isFinite(parsed) ? parsed : previous;
   }
-  if (typeof previous === "boolean") {
+  if (field.type === "checkbox") {
     return value === "true";
   }
-  if (Array.isArray(previous)) {
+  if (field.type === "select" && typeof previous === "boolean") {
+    return value === "true";
+  }
+  if (field.type === "json") {
     try {
       return JSON.parse(value);
     } catch {
@@ -42,12 +50,14 @@ function parseInputValue(value: string, previous: unknown): unknown {
 
 function SimulationForm({
   value,
+  fields,
   loading,
   onChange,
   onSubmit,
   onReset,
 }: {
   value: SimulationPayload;
+  fields: CalculatorField[];
   loading: boolean;
   onChange: (value: SimulationPayload) => void;
   onSubmit: () => void;
@@ -56,43 +66,69 @@ function SimulationForm({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 md:grid-cols-2">
-        {Object.entries(value).map(([key, fieldValue]) => {
-          const fieldId = `sim-${key}`;
-          if (typeof fieldValue === "boolean") {
+        {fields.map((field) => {
+          const fieldValue = value[field.key];
+          const fieldId = `sim-${field.key}`;
+          if (field.type === "checkbox") {
             return (
-              <label key={key} className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm text-text">
+              <label key={field.key} className="flex h-10 items-center gap-2 rounded-md border border-border px-3 text-sm text-text">
                 <input
                   type="checkbox"
-                  checked={fieldValue}
-                  onChange={(event) => onChange({ ...value, [key]: event.target.checked })}
+                  checked={Boolean(fieldValue)}
+                  onChange={(event) => onChange({ ...value, [field.key]: event.target.checked })}
                   className="h-4 w-4 accent-[var(--accent)]"
                 />
-                {key.replaceAll("_", " ")}
+                {field.label}
               </label>
             );
           }
-          if (Array.isArray(fieldValue)) {
+          if (field.type === "select") {
             return (
-              <label key={key} className="space-y-1 md:col-span-2" htmlFor={fieldId}>
-                <span className="text-xs font-medium uppercase tracking-normal text-muted">{key.replaceAll("_", " ")}</span>
+              <label key={field.key} className="space-y-1" htmlFor={fieldId}>
+                <span className="text-xs font-medium uppercase tracking-normal text-muted">{field.label}</span>
+                <select
+                  id={fieldId}
+                  value={String(fieldValue ?? "")}
+                  onChange={(event) =>
+                    onChange({ ...value, [field.key]: parseInputValue(event.target.value, fieldValue, field) })
+                  }
+                  className="h-10 w-full rounded-md border border-border bg-surface2 px-3 text-sm text-text outline-none transition focus:border-accent"
+                >
+                  {(field.options ?? []).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          }
+          if (field.type === "json") {
+            return (
+              <label key={field.key} className="space-y-1 md:col-span-2" htmlFor={fieldId}>
+                <span className="text-xs font-medium uppercase tracking-normal text-muted">{field.label}</span>
                 <textarea
                   id={fieldId}
-                  value={JSON.stringify(fieldValue)}
-                  onChange={(event) => onChange({ ...value, [key]: parseInputValue(event.target.value, fieldValue) })}
+                  value={JSON.stringify(fieldValue ?? [])}
+                  onChange={(event) =>
+                    onChange({ ...value, [field.key]: parseInputValue(event.target.value, fieldValue, field) })
+                  }
                   className="min-h-20 w-full rounded-md border border-border bg-surface2 px-3 py-2 text-sm text-text outline-none transition focus:border-accent"
                 />
               </label>
             );
           }
           return (
-            <label key={key} className="space-y-1" htmlFor={fieldId}>
-              <span className="text-xs font-medium uppercase tracking-normal text-muted">{key.replaceAll("_", " ")}</span>
+            <label key={field.key} className="space-y-1" htmlFor={fieldId}>
+              <span className="text-xs font-medium uppercase tracking-normal text-muted">{field.label}</span>
               <input
                 id={fieldId}
-                type={typeof fieldValue === "number" ? "number" : "text"}
+                type={field.type === "date" ? "date" : field.type === "number" ? "number" : "text"}
                 step="any"
-                value={String(fieldValue)}
-                onChange={(event) => onChange({ ...value, [key]: parseInputValue(event.target.value, fieldValue) })}
+                value={fieldValue === undefined || fieldValue === null ? "" : String(fieldValue)}
+                onChange={(event) =>
+                  onChange({ ...value, [field.key]: parseInputValue(event.target.value, fieldValue, field) })
+                }
                 className="h-10 w-full rounded-md border border-border bg-surface2 px-3 text-sm text-text outline-none transition focus:border-accent"
               />
             </label>
@@ -136,6 +172,7 @@ export default function SimulacoesPage() {
     () => CALCULATORS.find((item) => item.key === active) ?? CALCULATORS[0],
     [active],
   );
+  const activeFields = useMemo(() => fieldsForCalculator(active), [active]);
 
   const updateInput = (value: SimulationPayload) => {
     setInputs((current) => ({ ...current, [active]: value }));
@@ -189,6 +226,7 @@ export default function SimulacoesPage() {
           <SectionCard title={activeDefinition.label} subtitle={activeDefinition.description}>
             <SimulationForm
               value={inputs[active]}
+              fields={activeFields}
               loading={simulation.isPending}
               onChange={updateInput}
               onSubmit={() => simulation.mutate(inputs[active])}

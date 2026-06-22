@@ -126,17 +126,35 @@ def simulate_pix_parcelado(body: PixParceladoRequest) -> dict[str, Any]:
 @router.post("/cdb")
 def simulate_cdb(body: CdbRequest) -> dict[str, Any]:
     payload = body.model_dump()
-    payload["cdi_aa"] = settings.cdi_aa if payload["cdi_aa"] is None else payload["cdi_aa"]
-    return _simulate(cdb, **payload)
+    used_default = payload["cdi_aa"] is None
+    payload["cdi_aa"] = settings.cdi_aa if used_default else payload["cdi_aa"]
+    result = _simulate(cdb, **payload)
+    if used_default:
+        result["avisos"] = [
+            {
+                "code": "default_cdi_aa",
+                "message": f"CDI anual padrão usado: {payload['cdi_aa']}%.",
+            }
+        ]
+    return result
 
 
 @router.post("/marcacao-mercado")
 def simulate_marcacao_mercado(body: MarcacaoMercadoRequest) -> dict[str, Any]:
     payload = body.model_dump()
+    used_default = payload["tipo"] == "ipca" and payload["ipca_projetado_aa"] is None
     payload["ipca_projetado_aa"] = (
-        settings.ipca_aa if payload["ipca_projetado_aa"] is None else payload["ipca_projetado_aa"]
+        settings.ipca_aa if used_default else payload["ipca_projetado_aa"]
     )
-    return _simulate(marcacao_mercado, **payload)
+    result = _simulate(marcacao_mercado, **payload)
+    if used_default:
+        result["avisos"] = [
+            {
+                "code": "default_ipca_aa",
+                "message": f"IPCA projetado padrão usado: {payload['ipca_projetado_aa']}%.",
+            }
+        ]
+    return result
 
 
 @router.post("/amortizacao")

@@ -10,6 +10,19 @@ export function SimulationResultPanel({ result }: { result: SimulationResponse }
 
   return (
     <div className="space-y-4">
+      {result.avisos?.length ? (
+        <div className="space-y-2">
+          {result.avisos.map((aviso) => (
+            <p
+              key={aviso.code}
+              className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+            >
+              {aviso.message}
+            </p>
+          ))}
+        </div>
+      ) : null}
+
       <div className="grid gap-3 md:grid-cols-3">
         {cards.map((card) => (
           <KpiCard key={card.key} title={card.label} value={card.value} />
