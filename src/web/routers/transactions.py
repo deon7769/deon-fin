@@ -28,6 +28,11 @@ class TransactionBucketPost(BaseModel):
     apply_to_similar: bool = False
 
 
+class TransactionTagPost(BaseModel):
+    tag_id: int | None = None
+    apply_to_similar: bool = False
+
+
 class TransactionCreate(BaseModel):
     account_id: str
     posted_at: str
@@ -146,9 +151,15 @@ def _set_tag_or_raise(
     transaction_id: str,
     *,
     tag_id: int | None,
+    apply_to_similar: bool = False,
 ) -> dict:
     try:
-        return transactions_repo.set_tag(db, transaction_id, tag_id=tag_id)
+        return transactions_repo.set_tag(
+            db,
+            transaction_id,
+            tag_id=tag_id,
+            apply_to_similar=apply_to_similar,
+        )
     except transactions_repo.TransactionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="transação não encontrada") from exc
     except transactions_repo.TagNotFoundError as exc:
@@ -277,5 +288,19 @@ def set_transaction_bucket(
         db,
         transaction_id,
         bucket_id=body.bucket_id,
+        apply_to_similar=body.apply_to_similar,
+    )
+
+
+@router.post("/transactions/{transaction_id}/tag")
+def set_transaction_tag(
+    transaction_id: str,
+    body: TransactionTagPost,
+    db: Database = Depends(get_db),
+) -> dict:
+    return _set_tag_or_raise(
+        db,
+        transaction_id,
+        tag_id=body.tag_id,
         apply_to_similar=body.apply_to_similar,
     )

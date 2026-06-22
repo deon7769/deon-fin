@@ -25,6 +25,23 @@ export function tagById(tags: Tag[], tagId: number | null | undefined): Tag | nu
   return tags.find((tag) => tag.id === tagId) ?? null;
 }
 
+export function tagBucketLabel(tag: Pick<Tag, "bucket_name"> | null | undefined): string {
+  return tag?.bucket_name ?? "Sem meta";
+}
+
+export function tagSourceLabel(source: string | null | undefined): string {
+  if (source === "manual") {
+    return "Manual";
+  }
+  if (source === "rule") {
+    return "Regra";
+  }
+  if (source === "auto") {
+    return "Automática";
+  }
+  return "";
+}
+
 export function isValidTagColor(value: string): boolean {
   return HEX_COLOR_RE.test(value.trim());
 }

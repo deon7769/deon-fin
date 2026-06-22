@@ -11,11 +11,16 @@ type TagSelectProps = {
   value?: number | null;
   options: Tag[];
   onChange?: (tagId: number | null) => void;
+  onChangeWithPropagation?: (tagId: number | null, applyToSimilar: boolean) => void;
   onCreate?: (name: string) => Promise<Tag> | Tag;
   disabled?: boolean;
   placeholder?: string;
   searchPlaceholder?: string;
   loading?: boolean;
+};
+
+type PendingSelection = {
+  tagId: number | null;
 };
 
 function normalizeLabel(value: string): string {
@@ -30,6 +35,7 @@ export function TagSelect({
   value = null,
   options,
   onChange,
+  onChangeWithPropagation,
   onCreate,
   disabled = false,
   placeholder = "Selecione uma tag",
@@ -39,6 +45,7 @@ export function TagSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  const [pending, setPending] = useState<PendingSelection | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const selected = tagById(options, value);
@@ -55,11 +62,24 @@ export function TagSelect({
     setQuery("");
     setError(null);
     setCreating(false);
+    setPending(null);
+  };
+
+  const commit = (tagId: number | null, applyToSimilar: boolean) => {
+    if (onChangeWithPropagation) {
+      onChangeWithPropagation(tagId, applyToSimilar);
+    } else {
+      onChange?.(tagId);
+    }
+    close();
   };
 
   const selectTag = (tagId: number | null) => {
-    onChange?.(tagId);
-    close();
+    if (tagId === null || !onChangeWithPropagation) {
+      commit(tagId, false);
+      return;
+    }
+    setPending({ tagId });
   };
 
   const createTag = async () => {
@@ -74,7 +94,11 @@ export function TagSelect({
     setError(null);
     try {
       const tag = await onCreate(trimmedQuery);
-      onChange?.(tag.id);
+      if (onChangeWithPropagation) {
+        onChangeWithPropagation(tag.id, false);
+      } else {
+        onChange?.(tag.id);
+      }
       close();
     } catch {
       setError("Não foi possível criar a tag.");
@@ -130,72 +154,98 @@ export function TagSelect({
 
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-72 rounded-md border border-border bg-surface p-2 shadow-2xl">
-          <label className="mb-2 flex h-9 items-center gap-2 rounded-md border border-border bg-bg px-2 text-muted">
-            <Search size={15} aria-hidden />
-            <input
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setError(null);
-              }}
-              placeholder={searchPlaceholder}
-              aria-label="Buscar tag"
-              className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-muted"
-            />
-          </label>
-
-          {onCreate ? (
-            <button
-              type="button"
-              disabled={!canCreate}
-              onClick={createTag}
-              className="mb-2 flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium text-accent transition hover:bg-surface2 disabled:cursor-not-allowed disabled:text-muted"
-            >
-              <Plus size={15} aria-hidden />
-              <span className="truncate">{creating ? "Criando..." : `Criar "${trimmedQuery || "tag"}"`}</span>
-            </button>
-          ) : null}
-
-          {error ? <p className="mb-2 px-2 text-xs text-negative">{error}</p> : null}
-
-          <div role="listbox" aria-label="Tag" className="max-h-64 overflow-y-auto">
-            <button
-              type="button"
-              role="option"
-              aria-selected={value === null}
-              onClick={() => selectTag(null)}
-              className="flex h-9 w-full items-center justify-between rounded-md px-2 text-sm text-muted transition hover:bg-surface2 hover:text-text"
-            >
-              <span className="inline-flex items-center gap-2">
-                <X size={15} aria-hidden />
-                <span>Sem tag</span>
-              </span>
-              {value === null && <Check size={16} aria-hidden />}
-            </button>
-
-            {filtered.map((tag) => {
-              const selectedTag = tag.id === value;
-              return (
+          {pending ? (
+            <div className="space-y-2 p-1">
+              <p className="text-xs font-medium text-text">
+                {tagById(options, pending.tagId)?.name ?? "Sem tag"}
+              </p>
+              <div className="flex gap-2">
                 <button
-                  key={tag.id}
+                  type="button"
+                  onClick={() => commit(pending.tagId, false)}
+                  className="h-8 flex-1 rounded-md border border-border px-2 text-xs font-medium text-muted transition hover:bg-surface2 hover:text-text"
+                >
+                  Só esta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => commit(pending.tagId, true)}
+                  className="h-8 flex-1 rounded-md bg-accent px-2 text-xs font-semibold text-accentFg transition hover:brightness-95"
+                >
+                  Aplicar similares
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <label className="mb-2 flex h-9 items-center gap-2 rounded-md border border-border bg-bg px-2 text-muted">
+                <Search size={15} aria-hidden />
+                <input
+                  value={query}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setError(null);
+                  }}
+                  placeholder={searchPlaceholder}
+                  aria-label="Buscar tag"
+                  className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-muted"
+                />
+              </label>
+
+              {onCreate ? (
+                <button
+                  type="button"
+                  disabled={!canCreate}
+                  onClick={createTag}
+                  className="mb-2 flex h-9 w-full items-center gap-2 rounded-md px-2 text-sm font-medium text-accent transition hover:bg-surface2 disabled:cursor-not-allowed disabled:text-muted"
+                >
+                  <Plus size={15} aria-hidden />
+                  <span className="truncate">{creating ? "Criando..." : `Criar "${trimmedQuery || "tag"}"`}</span>
+                </button>
+              ) : null}
+
+              {error ? <p className="mb-2 px-2 text-xs text-negative">{error}</p> : null}
+
+              <div role="listbox" aria-label="Tag" className="max-h-64 overflow-y-auto">
+                <button
                   type="button"
                   role="option"
-                  aria-selected={selectedTag}
-                  onClick={() => selectTag(tag.id)}
-                  className="flex h-10 w-full items-center justify-between gap-3 rounded-md px-2 text-sm text-text transition hover:bg-surface2"
+                  aria-selected={value === null}
+                  onClick={() => selectTag(null)}
+                  className="flex h-9 w-full items-center justify-between rounded-md px-2 text-sm text-muted transition hover:bg-surface2 hover:text-text"
                 >
-                  <Pill color={tag.color} className="min-w-0 max-w-[13rem]">
-                    <span className="truncate">{tag.name}</span>
-                  </Pill>
-                  {selectedTag && <Check size={16} aria-hidden className="shrink-0" />}
+                  <span className="inline-flex items-center gap-2">
+                    <X size={15} aria-hidden />
+                    <span>Sem tag</span>
+                  </span>
+                  {value === null && <Check size={16} aria-hidden />}
                 </button>
-              );
-            })}
 
-            {!filtered.length ? (
-              <div className="px-2 py-4 text-center text-sm text-muted">Nenhuma tag encontrada</div>
-            ) : null}
-          </div>
+                {filtered.map((tag) => {
+                  const selectedTag = tag.id === value;
+                  return (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      role="option"
+                      aria-selected={selectedTag}
+                      onClick={() => selectTag(tag.id)}
+                      className="flex h-10 w-full items-center justify-between gap-3 rounded-md px-2 text-sm text-text transition hover:bg-surface2"
+                    >
+                      <Pill color={tag.color} className="min-w-0 max-w-[13rem]">
+                        <span className="truncate">{tag.name}</span>
+                      </Pill>
+                      {selectedTag && <Check size={16} aria-hidden className="shrink-0" />}
+                    </button>
+                  );
+                })}
+
+                {!filtered.length ? (
+                  <div className="px-2 py-4 text-center text-sm text-muted">Nenhuma tag encontrada</div>
+                ) : null}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

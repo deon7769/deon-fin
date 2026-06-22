@@ -36,6 +36,7 @@ import {
 import { useTransactions } from "@/hooks/useTransactions";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/format";
+import { tagSourceLabel } from "@/lib/tags";
 import {
   parseTransactionAmountInput,
   transactionCategoryLabel,
@@ -452,16 +453,26 @@ export default function TransacoesPage() {
         key: "tag",
         header: "Tag",
         className: "min-w-[190px] px-3 py-3 align-top",
-        cell: (tx) => (
-          <TagSelect
-            value={tx.tag_id ?? null}
-            options={tagsQuery.data ?? []}
-            loading={tagsQuery.isLoading}
-            disabled={setTag.isPending || createTag.isPending}
-            onChange={(tagId) => setTag.mutate({ txId: tx.id, tagId })}
-            onCreate={createInlineTag}
-          />
-        ),
+        cell: (tx) => {
+          const sourceLabel = tagSourceLabel(tx.tag_source);
+          return (
+            <div className="space-y-1">
+              <TagSelect
+                value={tx.tag_id ?? null}
+                options={tagsQuery.data ?? []}
+                loading={tagsQuery.isLoading}
+                disabled={setTag.isPending || createTag.isPending}
+                onChangeWithPropagation={(tagId, applyToSimilar) =>
+                  setTag.mutate({ txId: tx.id, tagId, applyToSimilar })
+                }
+                onCreate={createInlineTag}
+              />
+              {sourceLabel ? (
+                <p className="text-xs text-muted">{sourceLabel}</p>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         key: "hidden",

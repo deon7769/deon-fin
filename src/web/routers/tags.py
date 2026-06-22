@@ -15,11 +15,13 @@ router = APIRouter(prefix="/api", tags=["tags"])
 class TagCreateRequest(BaseModel):
     name: str
     color: str | None = None
+    bucket_id: int | None = None
 
 
 class TagPatchRequest(BaseModel):
     name: str | None = None
     color: str | None = None
+    bucket_id: int | None = None
 
 
 def _fields_set(model: BaseModel) -> set[str]:
@@ -44,7 +46,12 @@ def list_tags(db: Database = Depends(get_db)) -> dict[str, list[dict[str, Any]]]
 @router.post("/tags", status_code=201)
 def create_tag(body: TagCreateRequest, db: Database = Depends(get_db)) -> dict[str, Any]:
     try:
-        return tags_repo.create_tag(db, name=body.name, color=body.color)
+        return tags_repo.create_tag(
+            db,
+            name=body.name,
+            color=body.color,
+            bucket_id=body.bucket_id,
+        )
     except ValueError as exc:
         raise _repo_error_to_http(exc) from exc
 
@@ -61,6 +68,8 @@ def update_tag(
         updates["name"] = body.name
     if "color" in fields:
         updates["color"] = body.color
+    if "bucket_id" in fields:
+        updates["bucket_id"] = body.bucket_id
 
     try:
         tag = tags_repo.update_tag(db, tag_id, **updates)

@@ -61,7 +61,7 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
         row[0]
         for row in conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
     ]
-    assert ids == list(range(1, 20))
+    assert ids == list(range(1, 21))
     assert "idx_tx_reference_month" in _indexes(conn, "transactions")
     assert "idx_tx_tag_id" in _indexes(conn, "transactions")
     assert "idx_tx_bucket_id" in _indexes(conn, "transactions")
@@ -97,6 +97,23 @@ def test_new_database_has_system_total_settings_tables(tmp_path: Path):
     assert "sqlite_autoindex_movement_total_settings_1" in _indexes(
         conn, "movement_total_settings"
     )
+    db.close()
+
+
+def test_new_database_has_tag_classification_schema(tmp_path: Path):
+    db = Database(tmp_path / "new.db")
+    conn = db._conn
+
+    assert "bucket_id" in _columns(conn, "tags")
+    assert "tag_source" in _columns(conn, "transactions")
+    assert {
+        "id",
+        "match_key",
+        "tag_id",
+        "created_at",
+        "updated_at",
+    }.issubset(_columns(conn, "tag_rules"))
+    assert any(index.startswith("sqlite_autoindex_tag_rules") for index in _indexes(conn, "tag_rules"))
     db.close()
 
 
@@ -433,7 +450,7 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
     tmp_db._conn.execute("DELETE FROM schema_migrations")
     tmp_db._conn.commit()
 
-    assert apply_migrations(tmp_db._conn) == 19
+    assert apply_migrations(tmp_db._conn) == 20
     assert apply_migrations(tmp_db._conn) == 0
 
     ids = [
@@ -442,4 +459,4 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
             "SELECT id FROM schema_migrations ORDER BY id"
         ).fetchall()
     ]
-    assert ids == list(range(1, 20))
+    assert ids == list(range(1, 21))

@@ -35,7 +35,7 @@ SELECT_COLS = """
   SELECT t.id, t.account_id, t.posted_at, t.amount, t.description,
          t.raw_description, t.category, t.category_source, t.source,
          t.external_id, t.metadata_json, t.created_at,
-         t.bucket_id, t.bucket_source, t.tag_id, t.reference_month,
+         t.bucket_id, t.bucket_source, t.tag_id, t.tag_source, t.reference_month,
          COALESCE(t.hidden, 0) AS hidden, t.note,
          a.name AS account_name, a.type AS account_type,
          b.name AS bucket_name, b.color AS bucket_color,
@@ -149,6 +149,7 @@ def _serialize_item(
         "bucket_source": row["bucket_source"],
         "bucket": bucket,
         "tag_id": row["tag_id"],
+        "tag_source": row["tag_source"],
         "tag": tag,
         "reference_month": row["reference_month"],
         "hidden": bool(row["hidden"]),
@@ -444,6 +445,7 @@ def create_manual_transaction(
                        bucket_id=?,
                        bucket_source=?,
                        tag_id=?,
+                       tag_source=?,
                        note=?
                  WHERE id=?
                 """,
@@ -452,6 +454,7 @@ def create_manual_transaction(
                     bucket_id,
                     "manual" if bucket_id is not None else None,
                     tag_id,
+                    "manual" if tag_id is not None else None,
                     note,
                     tx.id,
                 ),
@@ -488,7 +491,7 @@ def update_transaction(
         assignments.extend(["bucket_id=?", "bucket_source='manual'"])
         params.append(bucket_id)
     if tag_id is not _UNSET:
-        assignments.append("tag_id=?")
+        assignments.extend(["tag_id=?", "tag_source='manual'"])
         params.append(tag_id)
     if hidden is not _UNSET:
         assignments.append("hidden=?")
@@ -670,18 +673,96 @@ def set_bucket(
     }
 
 
-def set_tag(db: Database, transaction_id: str, *, tag_id: int | None) -> dict[str, Any]:
+def set_tag(
+    db: Database,
+    transaction_id: str,
+    *,
+    tag_id: int | None,
+    apply_to_similar: bool = False,
+) -> dict[str, Any]:
     if tag_id is not None and not tags_repo.tag_exists(db, tag_id):
         raise TagNotFoundError(f"tag_id inválido: {tag_id}")
 
+    rule_upserted = False
+    rule_deleted = False
+    similar_ids: list[str] = []
+
     with db._cursor() as cur:  # type: ignore[attr-defined]
-        cur.execute("SELECT id FROM transactions WHERE id=?", (transaction_id,))
-        if cur.fetchone() is None:
+        cur.execute(
+            """
+            SELECT id, amount, raw_description, description
+              FROM transactions
+             WHERE id=?
+            """,
+            (transaction_id,),
+        )
+        target = cur.fetchone()
+        if target is None:
             raise TransactionNotFoundError(transaction_id)
 
+        match_key = match_key_for(
+            target["raw_description"] or target["description"],
+            float(target["amount"]),
+        )
+
         cur.execute(
-            "UPDATE transactions SET tag_id=? WHERE id=?",
+            "UPDATE transactions SET tag_id=?, tag_source='manual' WHERE id=?",
             (tag_id, transaction_id),
         )
 
-    return {"updated": 1, "tag_id": tag_id}
+        if apply_to_similar and match_key:
+            if tag_id is None:
+                cur.execute("DELETE FROM tag_rules WHERE match_key=?", (match_key,))
+                rule_deleted = cur.rowcount > 0
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO tag_rules (match_key, tag_id)
+                    VALUES (?, ?)
+                    ON CONFLICT(match_key) DO UPDATE SET
+                        tag_id=excluded.tag_id,
+                        updated_at=datetime('now')
+                    """,
+                    (match_key, tag_id),
+                )
+                rule_upserted = True
+
+            if tag_id is not None:
+                cur.execute(
+                    """
+                    SELECT id, amount, raw_description, description
+                      FROM transactions
+                     WHERE id != ?
+                       AND (tag_source IS NULL OR tag_source != 'manual')
+                    """,
+                    (transaction_id,),
+                )
+                candidates = cur.fetchall()
+                for row in candidates:
+                    candidate_key = match_key_for(
+                        row["raw_description"] or row["description"],
+                        float(row["amount"]),
+                    )
+                    if candidate_key != match_key:
+                        continue
+
+                    cur.execute(
+                        """
+                        UPDATE transactions
+                           SET tag_id=?, tag_source='rule'
+                         WHERE id=?
+                        """,
+                        (tag_id, row["id"]),
+                    )
+                    similar_ids.append(row["id"])
+
+    return {
+        "updated": 1,
+        "tag_id": tag_id,
+        "tag_source": "manual",
+        "match_key": match_key,
+        "rule_upserted": rule_upserted,
+        "rule_deleted": rule_deleted,
+        "similar_affected": len(similar_ids),
+        "similar_ids": similar_ids,
+    }

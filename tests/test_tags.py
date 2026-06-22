@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 
 from src.storage import Account, Transaction
-from src.web.repositories import tags_repo
+from src.web.repositories import buckets_repo, tags_repo
 
 
 def _seed_account(db) -> None:
@@ -58,6 +58,29 @@ def test_seed_tags_idempotent_and_non_destructive(tmp_db):
     assert tags_repo.get_tag(tmp_db, saude_id)["color"] == "#111111"
 
 
+def test_seed_tags_assigns_default_parent_buckets_without_overwriting_edits(tmp_db):
+    buckets_repo.seed_buckets(tmp_db)
+
+    assert tags_repo.seed_tags(tmp_db) == 7
+    items = tags_repo.list_tags(tmp_db)
+    alimentacao = next(item for item in items if item["color"] == "#F5B301")
+    educacao = next(item for item in items if item["color"] == "#38BDF8")
+
+    assert alimentacao["bucket_key"] == "conforto"
+    assert alimentacao["bucket_name"] == "Conforto"
+    assert educacao["bucket_key"] == "conhecimento"
+
+    fixed_bucket = next(bucket for bucket in buckets_repo.list_buckets(tmp_db) if bucket["key"] == "custos_fixos")
+    tmp_db._conn.execute(
+        "UPDATE tags SET bucket_id=? WHERE id=?",
+        (fixed_bucket["id"], alimentacao["id"]),
+    )
+    tmp_db._conn.commit()
+
+    assert tags_repo.seed_tags(tmp_db) == 0
+    assert tags_repo.get_tag(tmp_db, alimentacao["id"])["bucket_key"] == "custos_fixos"
+
+
 def test_normalize_color_accepts_hex_and_rejects_other_formats():
     assert tags_repo.normalize_color("#fff") == "#fff"
     assert tags_repo.normalize_color("#FFFFFF") == "#ffffff"
@@ -100,6 +123,20 @@ def test_create_tag_normalizes_values_and_rejects_duplicate_names(tmp_db):
         tags_repo.create_tag(tmp_db, name="pets", color=None)
 
 
+def test_create_tag_accepts_valid_parent_bucket_and_rejects_invalid_parent(tmp_db):
+    buckets_repo.seed_buckets(tmp_db)
+    bucket = next(bucket for bucket in buckets_repo.list_buckets(tmp_db) if bucket["key"] == "prazeres")
+
+    tag = tags_repo.create_tag(tmp_db, name="Streaming", color="#3B82F6", bucket_id=bucket["id"])
+
+    assert tag["bucket_id"] == bucket["id"]
+    assert tag["bucket_key"] == "prazeres"
+    assert tag["bucket_name"] == "Prazeres"
+
+    with pytest.raises(ValueError, match="bucket_id"):
+        tags_repo.create_tag(tmp_db, name="Invalida", color=None, bucket_id=9999)
+
+
 def test_update_tag_partial_and_conflict_rules(tmp_db):
     first = tags_repo.create_tag(tmp_db, name="Saúde", color="#3B82F6")
     tags_repo.create_tag(tmp_db, name="Lazer", color="#9F1239")
@@ -122,6 +159,25 @@ def test_update_tag_partial_and_conflict_rules(tmp_db):
         tags_repo.update_tag(tmp_db, first["id"], name="lazer")
 
     assert tags_repo.update_tag(tmp_db, 9999, name="Nada") is None
+
+
+def test_update_tag_can_change_and_clear_parent_bucket(tmp_db):
+    buckets_repo.seed_buckets(tmp_db)
+    tag = tags_repo.create_tag(tmp_db, name="Software", color="#38BDF8")
+    conhecimento = next(
+        bucket for bucket in buckets_repo.list_buckets(tmp_db) if bucket["key"] == "conhecimento"
+    )
+
+    updated = tags_repo.update_tag(tmp_db, tag["id"], bucket_id=conhecimento["id"])
+    assert updated["bucket_id"] == conhecimento["id"]
+    assert updated["bucket_key"] == "conhecimento"
+
+    cleared = tags_repo.update_tag(tmp_db, tag["id"], bucket_id=None)
+    assert cleared["bucket_id"] is None
+    assert cleared["bucket_key"] is None
+
+    with pytest.raises(ValueError, match="bucket_id"):
+        tags_repo.update_tag(tmp_db, tag["id"], bucket_id=9999)
 
 
 def test_delete_tag_unlinks_transactions_without_deleting_them(tmp_db):

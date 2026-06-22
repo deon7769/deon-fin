@@ -287,7 +287,7 @@ def test_background_sync_fills_missing_reference_month(tmp_path, monkeypatch):
     check = Database(db_path)
     row = check._conn.execute(
         """
-        SELECT reference_month, bucket_id, bucket_source
+        SELECT reference_month, bucket_id, bucket_source, tag_id, tag_source
           FROM transactions
          WHERE description='Synced transaction'
         """
@@ -295,6 +295,8 @@ def test_background_sync_fills_missing_reference_month(tmp_path, monkeypatch):
     assert row["reference_month"] == "2026-06"
     assert row["bucket_id"] is not None
     assert row["bucket_source"] == "auto"
+    assert row["tag_id"] is not None
+    assert row["tag_source"] == "auto"
     check.close()
 
 

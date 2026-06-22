@@ -75,15 +75,24 @@ def test_get_tags_returns_seeded_items(client):
     ]
     assert all(item["color"].startswith("#") for item in items)
     assert all(item["tx_count"] == 0 for item in items)
+    alimentacao = next(item for item in items if item["color"] == "#F5B301")
+    assert alimentacao["bucket_key"] == "conforto"
+    assert alimentacao["bucket_name"] == "Conforto"
 
 
 def test_post_tag_creates_and_rejects_duplicates_and_invalid_color(client):
-    created = client.post("/api/tags", json={"name": " Pets ", "color": "#10B981"})
+    bucket_id = client.get("/api/buckets").json()["items"][2]["id"]
+    created = client.post(
+        "/api/tags",
+        json={"name": " Pets ", "color": "#10B981", "bucket_id": bucket_id},
+    )
 
     assert created.status_code == 201
     body = created.json()
     assert body["name"] == "Pets"
     assert body["color"] == "#10b981"
+    assert body["bucket_id"] == bucket_id
+    assert body["bucket_name"] == "Conforto"
     assert body["tx_count"] == 0
 
     duplicate = client.post("/api/tags", json={"name": "pets", "color": None})
@@ -93,6 +102,10 @@ def test_post_tag_creates_and_rejects_duplicates_and_invalid_color(client):
     invalid = client.post("/api/tags", json={"name": "Outra", "color": "red"})
     assert invalid.status_code == 422
     assert invalid.json()["error"]["code"] == "validation_error"
+
+    invalid_bucket = client.post("/api/tags", json={"name": "Invalida", "bucket_id": 9999})
+    assert invalid_bucket.status_code == 422
+    assert invalid_bucket.json()["error"]["code"] == "validation_error"
 
 
 def test_patch_tag_edits_partial_fields_and_reports_errors(client):
@@ -119,6 +132,31 @@ def test_patch_tag_edits_partial_fields_and_reports_errors(client):
     missing = client.patch("/api/tags/9999", json={"name": "Nada"})
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "not_found"
+
+
+def test_patch_tag_updates_and_clears_parent_bucket(client):
+    tag = client.post("/api/tags", json={"name": "Software", "color": "#38BDF8"}).json()
+    conhecimento_id = next(
+        item["id"]
+        for item in client.get("/api/buckets").json()["items"]
+        if item["key"] == "conhecimento"
+    )
+
+    updated = client.patch(f"/api/tags/{tag['id']}", json={"bucket_id": conhecimento_id})
+
+    assert updated.status_code == 200
+    assert updated.json()["bucket_id"] == conhecimento_id
+    assert updated.json()["bucket_key"] == "conhecimento"
+
+    cleared = client.patch(f"/api/tags/{tag['id']}", json={"bucket_id": None})
+
+    assert cleared.status_code == 200
+    assert cleared.json()["bucket_id"] is None
+    assert cleared.json()["bucket_key"] is None
+
+    invalid = client.patch(f"/api/tags/{tag['id']}", json={"bucket_id": 9999})
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "validation_error"
 
 
 def test_delete_tag_unlinks_transactions_and_returns_count(client, tmp_db):

@@ -540,6 +540,22 @@ def m0019_system_total_settings(conn: sqlite3.Connection) -> None:
     )
 
 
+def m0020_tag_bucket_source_rules(conn: sqlite3.Connection) -> None:
+    _add_column(conn, "tags", "bucket_id", "INTEGER")
+    _add_column(conn, "transactions", "tag_source", "TEXT")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tag_rules (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            match_key  TEXT NOT NULL UNIQUE,
+            tag_id     INTEGER REFERENCES tags(id) ON DELETE SET NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -560,6 +576,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (17, "asset_questions_answers", m0017_asset_questions_answers),
     (18, "investment_etf_asset_class", m0018_investment_etf_asset_class),
     (19, "system_total_settings", m0019_system_total_settings),
+    (20, "tag_bucket_source_rules", m0020_tag_bucket_source_rules),
 ]
 
 

@@ -23,6 +23,7 @@ from ..agent import AnalystError, Categorizer, FinancialAnalyst, build_financial
 from ..agent.buckets import apply_buckets_to_database
 from ..agent.budget import summarize_5030, summarize_executivo, summarize_wishlist
 from ..agent.context import income_value, internal_transfer_credit_ids, spending_value
+from ..agent.tags import apply_tags_to_database
 from ..agent.simulator import simular_amortizacao, simular_compra
 from ..agent.cards import card_monthly_breakdown
 from ..agent import maintenance as mnt
@@ -336,6 +337,7 @@ def _background_sync(item_id: str, days: int) -> None:
         sync_pluggy_item(pc, db, item_id, since=since)
         Categorizer().apply_to_database(db)
         apply_buckets_to_database(db)
+        apply_tags_to_database(db)
         _fill_missing_reference_months(db)
         db.upsert_pluggy_item(item_id, mark_synced=True)
     finally:
@@ -381,6 +383,7 @@ def _sync_all_items(days: int) -> str:
                 log.exception("sync falhou para item %s", it["id"])
         Categorizer().apply_to_database(db)
         apply_buckets_to_database(db)
+        apply_tags_to_database(db)
         _fill_missing_reference_months(db)
         result = f"{ok} conta(s) sincronizada(s)" + (f", {err} com erro" if err else "")
         if errors:

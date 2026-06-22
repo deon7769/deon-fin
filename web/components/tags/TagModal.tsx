@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { X } from "lucide-react";
 import { isValidTagColor, normalizeTagColorInput } from "@/lib/tags";
-import type { Tag } from "@/lib/types";
+import type { Bucket, Tag } from "@/lib/types";
 
 export const TAG_COLOR_PALETTE = [
   "#F5B301",
@@ -22,16 +22,18 @@ type TagModalProps = {
   open: boolean;
   mode: "create" | "edit";
   tag?: Tag | null;
+  buckets?: Bucket[];
   saving?: boolean;
   error?: string | null;
   onClose: () => void;
-  onSubmit: (input: { name: string; color: string | null }) => void | Promise<void>;
+  onSubmit: (input: { name: string; color: string | null; bucket_id: number | null }) => void | Promise<void>;
 };
 
 export function TagModal({
   open,
   mode,
   tag,
+  buckets = [],
   saving = false,
   error = null,
   onClose,
@@ -46,6 +48,7 @@ export function TagModal({
       key={`${mode}-${tag?.id ?? "new"}`}
       mode={mode}
       tag={tag}
+      buckets={buckets}
       saving={saving}
       error={error}
       onClose={onClose}
@@ -57,6 +60,7 @@ export function TagModal({
 function TagModalContent({
   mode,
   tag,
+  buckets = [],
   saving,
   error,
   onClose,
@@ -64,6 +68,7 @@ function TagModalContent({
 }: Omit<TagModalProps, "open">) {
   const [name, setName] = useState(tag?.name ?? "");
   const [color, setColor] = useState(tag?.color ?? TAG_COLOR_PALETTE[0]);
+  const [bucketId, setBucketId] = useState<string>(tag?.bucket_id ? String(tag.bucket_id) : "");
   const [localError, setLocalError] = useState<string | null>(null);
   const title = mode === "create" ? "Criar Tag" : "Editar Tag";
   const submitLabel = saving ? "Salvando..." : "Salvar";
@@ -90,6 +95,7 @@ function TagModalContent({
     await onSubmit({
       name: normalizedName,
       color: normalizedColor,
+      bucket_id: bucketId ? Number(bucketId) : null,
     });
   };
 
@@ -128,6 +134,22 @@ function TagModalContent({
               className="h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-text outline-none placeholder:text-muted focus:border-accent"
               placeholder="Ex.: Pets"
             />
+          </label>
+
+          <label className="block space-y-2">
+            <span className="text-sm font-medium text-text">Meta</span>
+            <select
+              value={bucketId}
+              onChange={(event) => setBucketId(event.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-text outline-none focus:border-accent"
+            >
+              <option value="">Sem meta</option>
+              {buckets.map((bucket) => (
+                <option key={bucket.id} value={bucket.id}>
+                  {bucket.name}
+                </option>
+              ))}
+            </select>
           </label>
 
           <div className="space-y-3">

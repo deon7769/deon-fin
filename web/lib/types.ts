@@ -26,6 +26,10 @@ export type Tag = {
   id: number;
   name: string;
   color?: string | null;
+  bucket_id?: number | null;
+  bucket_key?: string | null;
+  bucket_name?: string | null;
+  bucket_color?: string | null;
   tx_count?: number;
 };
 
@@ -66,6 +70,7 @@ export type Transaction = {
   bucket_source?: string | null;
   bucket?: Pick<Bucket, "id" | "name" | "color"> | null;
   tag_id?: number | null;
+  tag_source?: string | null;
   tag?: Pick<Tag, "id" | "name" | "color"> | null;
   reference_month?: string | null;
   hidden: boolean;

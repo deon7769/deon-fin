@@ -8,8 +8,10 @@ import { Header } from "@/components/layout/Header";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { useBuckets } from "@/hooks/useBuckets";
 import { useCreateTag, useDeleteTag, useUpdateTag } from "@/hooks/useTagMutations";
 import { useTags } from "@/hooks/useTags";
+import { tagBucketLabel } from "@/lib/tags";
 import type { Tag } from "@/lib/types";
 
 type ModalState =
@@ -23,6 +25,7 @@ function errorMessage(error: unknown): string | null {
 export default function TagsPage() {
   const [modal, setModal] = useState<ModalState | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Tag | null>(null);
+  const bucketsQuery = useBuckets();
   const tagsQuery = useTags();
   const createTag = useCreateTag();
   const updateTag = useUpdateTag();
@@ -41,7 +44,7 @@ export default function TagsPage() {
     setModal({ mode: "edit", tag });
   };
 
-  const submitModal = async (input: { name: string; color: string | null }) => {
+  const submitModal = async (input: { name: string; color: string | null; bucket_id: number | null }) => {
     if (!modal) {
       return;
     }
@@ -79,6 +82,15 @@ export default function TagsPage() {
       key: "name",
       header: "Nome",
       cell: (tag) => <span className="font-medium text-text">{tag.name}</span>,
+    },
+    {
+      key: "bucket",
+      header: "Meta",
+      cell: (tag) => (
+        <span className="text-muted">
+          {tagBucketLabel(tag)}
+        </span>
+      ),
     },
     {
       key: "usage",
@@ -191,6 +203,7 @@ export default function TagsPage() {
         open={modal !== null}
         mode={modal?.mode ?? "create"}
         tag={modal?.mode === "edit" ? modal.tag : null}
+        buckets={bucketsQuery.data ?? []}
         saving={createTag.isPending || updateTag.isPending}
         error={errorMessage(createTag.error) ?? errorMessage(updateTag.error)}
         onClose={() => setModal(null)}

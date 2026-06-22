@@ -7,6 +7,7 @@ import type { Tag } from "@/lib/types";
 export type TagInput = {
   name: string;
   color?: string | null;
+  bucket_id?: number | null;
 };
 
 export type DeleteTagResponse = {

@@ -194,14 +194,27 @@ def test_patch_transaction_accepts_all_partial_fields(client, tmp_db):
     assert body["bucket_id"] == bucket_id
     assert body["bucket_source"] == "manual"
     assert body["tag_id"] == tag_id
+    assert body["tag_source"] == "manual"
     assert body["hidden"] is True
     assert body["note"] == "Conferir depois"
     assert body["reference_month"] == "2026-07"
     row = tmp_db._conn.execute(
-        "SELECT bucket_id, bucket_source, tag_id, hidden, note, reference_month FROM transactions WHERE id=?",
+        """
+        SELECT bucket_id, bucket_source, tag_id, tag_source, hidden, note, reference_month
+          FROM transactions
+         WHERE id=?
+        """,
         (tx.id,),
     ).fetchone()
-    assert tuple(row) == (bucket_id, "manual", tag_id, 1, "Conferir depois", "2026-07")
+    assert tuple(row) == (
+        bucket_id,
+        "manual",
+        tag_id,
+        "manual",
+        1,
+        "Conferir depois",
+        "2026-07",
+    )
 
 
 def test_patch_transaction_validates_empty_body_fk_and_reference_month(client, tmp_db):
@@ -224,6 +237,64 @@ def test_patch_transaction_validates_empty_body_fk_and_reference_month(client, t
     missing = client.patch("/api/transactions/missing", json={"hidden": True})
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "not_found"
+
+
+def test_post_transaction_tag_propagates_to_similar(client, tmp_db):
+    _seed_account(tmp_db)
+    target = _insert_tx(tmp_db, external_id="api-tag-rule-1")
+    similar = _insert_tx(tmp_db, external_id="api-tag-rule-2")
+    different = Transaction(
+        account_id="api-checking",
+        posted_at=date(2026, 6, 20),
+        amount=Decimal("-12.00"),
+        description="Uber API",
+        raw_description="UBER API",
+        category="Taxi and ride-hailing",
+        source="test",
+        external_id="api-tag-rule-3",
+    )
+    manual = _insert_tx(tmp_db, external_id="api-tag-rule-4")
+    tmp_db.insert_transactions([different])
+    tag_id = client.get("/api/tags").json()["items"][0]["id"]
+    manual_tag_id = client.get("/api/tags").json()["items"][1]["id"]
+    tmp_db._conn.execute(
+        "UPDATE transactions SET tag_id=?, tag_source='manual' WHERE id=?",
+        (manual_tag_id, manual.id),
+    )
+    tmp_db._conn.commit()
+
+    response = client.post(
+        f"/api/transactions/{target.id}/tag",
+        json={"tag_id": tag_id, "apply_to_similar": True},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tag_id"] == tag_id
+    assert body["tag_source"] == "manual"
+    assert body["similar_ids"] == [similar.id]
+    rows = {
+        row["id"]: (row["tag_id"], row["tag_source"])
+        for row in tmp_db._conn.execute(
+            "SELECT id, tag_id, tag_source FROM transactions ORDER BY external_id"
+        )
+    }
+    assert rows[target.id] == (tag_id, "manual")
+    assert rows[similar.id] == (tag_id, "rule")
+    assert rows[different.id] == (None, None)
+    assert rows[manual.id] == (manual_tag_id, "manual")
+
+    invalid = client.post(
+        f"/api/transactions/{target.id}/tag",
+        json={"tag_id": 9999, "apply_to_similar": True},
+    )
+    assert invalid.status_code == 422
+
+    missing = client.post(
+        "/api/transactions/missing/tag",
+        json={"tag_id": tag_id, "apply_to_similar": True},
+    )
+    assert missing.status_code == 404
 
 
 def test_create_manual_transaction_uses_type_sign_and_reference_month(client, tmp_db):

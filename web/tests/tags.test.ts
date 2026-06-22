@@ -1,10 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { filterTags, isValidTagColor, normalizeTagColorInput, tagById } from "@/lib/tags";
+import {
+  filterTags,
+  isValidTagColor,
+  normalizeTagColorInput,
+  tagBucketLabel,
+  tagById,
+  tagSourceLabel,
+} from "@/lib/tags";
 import type { Tag } from "@/lib/types";
 
 const tags: Tag[] = [
-  { id: 1, name: "Saúde", color: "#3B82F6", tx_count: 2 },
+  {
+    id: 1,
+    name: "Saúde",
+    color: "#3B82F6",
+    tx_count: 2,
+    bucket_id: 2,
+    bucket_name: "Custos Fixos",
+  },
   { id: 2, name: "Lazer", color: "#9F1239", tx_count: 0 },
   { id: 3, name: "Alimentação", color: "#F5B301", tx_count: 5 },
 ];
@@ -29,5 +43,14 @@ describe("tag helpers", () => {
     expect(isValidTagColor("#F5B301")).toBe(true);
     expect(isValidTagColor("red")).toBe(false);
     expect(isValidTagColor("ff0000")).toBe(false);
+  });
+
+  it("formats parent meta and tag source labels", () => {
+    expect(tagBucketLabel(tags[0])).toBe("Custos Fixos");
+    expect(tagBucketLabel(tags[1])).toBe("Sem meta");
+    expect(tagSourceLabel("manual")).toBe("Manual");
+    expect(tagSourceLabel("rule")).toBe("Regra");
+    expect(tagSourceLabel("auto")).toBe("Automática");
+    expect(tagSourceLabel(null)).toBe("");
   });
 });

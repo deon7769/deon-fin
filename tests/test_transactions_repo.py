@@ -299,3 +299,83 @@ def test_update_transaction_bucket_marks_manual_without_rule_side_effects(tmp_db
 
     assert cleared["bucket_id"] is None
     assert buckets_repo.list_rules(tmp_db) == []
+
+
+def test_update_transaction_tag_marks_manual(tmp_db):
+    _seed_accounts(tmp_db)
+    tags_repo.seed_tags(tmp_db)
+    tx = _insert(tmp_db, description="Microsoft Curso", external_id="repo-tag-manual-1")
+    tag = tags_repo.list_tags(tmp_db)[0]
+
+    updated = transactions_repo.update_transaction(tmp_db, tx.id, tag_id=tag["id"])
+
+    assert updated["tag_id"] == tag["id"]
+    assert updated["tag_source"] == "manual"
+
+    cleared = transactions_repo.update_transaction(tmp_db, tx.id, tag_id=None)
+
+    assert cleared["tag_id"] is None
+    assert cleared["tag_source"] == "manual"
+    row = tmp_db._conn.execute(
+        "SELECT tag_id, tag_source FROM transactions WHERE id=?",
+        (tx.id,),
+    ).fetchone()
+    assert (row["tag_id"], row["tag_source"]) == (None, "manual")
+
+
+def test_set_tag_applies_to_similar_without_overwriting_manual(tmp_db):
+    _seed_accounts(tmp_db)
+    tags_repo.seed_tags(tmp_db)
+    target = _insert(
+        tmp_db,
+        amount="-20.00",
+        description="IFOOD RESTAURANTE",
+        external_id="repo-tag-rule-1",
+    )
+    similar = _insert(
+        tmp_db,
+        amount="-35.00",
+        description="IFOOD RESTAURANTE",
+        external_id="repo-tag-rule-2",
+    )
+    different = _insert(
+        tmp_db,
+        amount="-10.00",
+        description="UBER TRIP",
+        external_id="repo-tag-rule-3",
+    )
+    manual = _insert(
+        tmp_db,
+        amount="-12.00",
+        description="IFOOD RESTAURANTE",
+        external_id="repo-tag-rule-4",
+    )
+    tag = tags_repo.list_tags(tmp_db)[0]
+    manual_tag = tags_repo.list_tags(tmp_db)[1]
+    tmp_db._conn.execute(
+        "UPDATE transactions SET tag_id=?, tag_source='manual' WHERE id=?",
+        (manual_tag["id"], manual.id),
+    )
+    tmp_db._conn.commit()
+
+    result = transactions_repo.set_tag(
+        tmp_db,
+        target.id,
+        tag_id=tag["id"],
+        apply_to_similar=True,
+    )
+
+    assert result["tag_id"] == tag["id"]
+    assert result["tag_source"] == "manual"
+    assert result["rule_upserted"] is True
+    assert result["similar_ids"] == [similar.id]
+    rows = {
+        row["id"]: (row["tag_id"], row["tag_source"])
+        for row in tmp_db._conn.execute(
+            "SELECT id, tag_id, tag_source FROM transactions ORDER BY external_id"
+        )
+    }
+    assert rows[target.id] == (tag["id"], "manual")
+    assert rows[similar.id] == (tag["id"], "rule")
+    assert rows[different.id] == (None, None)
+    assert rows[manual.id] == (manual_tag["id"], "manual")
