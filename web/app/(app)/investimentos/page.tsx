@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, BriefcaseBusiness, CircleDollarSign, PieChart, RefreshCw } from "lucide-react";
+import { AlertCircle, BriefcaseBusiness, CircleDollarSign, Pencil, PieChart, Plus, RefreshCw } from "lucide-react";
+import { InvestmentAssetModal } from "@/components/investimentos/InvestmentAssetModal";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -9,9 +10,16 @@ import { MoneyText } from "@/components/ui/MoneyText";
 import { Pill } from "@/components/ui/Pill";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { useInvestments, useRefreshInvestmentQuotes } from "@/hooks/useInvestments";
+import {
+  useCreateInvestmentAsset,
+  useDeleteInvestmentAsset,
+  useInvestments,
+  useRefreshInvestmentQuotes,
+  useTickerSearch,
+  useUpdateInvestmentAsset,
+} from "@/hooks/useInvestments";
 import { formatDate } from "@/lib/format";
-import type { InvestmentAsset, InvestmentClassSummary } from "@/lib/types";
+import type { InvestmentAsset, InvestmentAssetInput, InvestmentClassSummary } from "@/lib/types";
 
 const CLASS_COLORS: Record<string, string> = {
   acoes_nac: "#3b82f6",
@@ -124,10 +132,10 @@ function priceSourceLabel(value: string | null) {
   return "sem fonte";
 }
 
-function AssetsTable({ assets }: { assets: InvestmentAsset[] }) {
+function AssetsTable({ assets, onEdit }: { assets: InvestmentAsset[]; onEdit: (asset: InvestmentAsset) => void }) {
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-[1080px] w-full border-collapse text-sm">
+      <table className="min-w-[1160px] w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-normal text-muted">
             <th className="py-3 pr-4">Tipo</th>
@@ -138,6 +146,7 @@ function AssetsTable({ assets }: { assets: InvestmentAsset[] }) {
             <th className="px-4 py-3 text-right">Preço</th>
             <th className="px-4 py-3">Status</th>
             <th className="py-3 pl-4">Atualização</th>
+            <th className="py-3 pl-4 text-right">Ação</th>
           </tr>
         </thead>
         <tbody>
@@ -173,6 +182,17 @@ function AssetsTable({ assets }: { assets: InvestmentAsset[] }) {
                 <div>{displayDate(asset.price_updated_at ?? asset.as_of_date)}</div>
                 <div className="mt-1 text-xs">{priceSourceLabel(asset.price_source)}</div>
               </td>
+              <td className="py-3 pl-4 text-right">
+                <button
+                  type="button"
+                  onClick={() => onEdit(asset)}
+                  aria-label={`Editar ${asset.ticker ?? asset.name ?? "ativo"}`}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted transition hover:bg-surface2 hover:text-text"
+                  title="Editar"
+                >
+                  <Pencil size={16} aria-hidden />
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -183,9 +203,74 @@ function AssetsTable({ assets }: { assets: InvestmentAsset[] }) {
 
 export default function InvestimentosPage() {
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [modalAsset, setModalAsset] = useState<InvestmentAsset | null>(null);
+  const [modalMode, setModalMode] = useState<"create" | "edit" | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [tickerSearch, setTickerSearch] = useState("");
+  const [modalAssetClass, setModalAssetClass] = useState("acoes_nac");
   const investments = useInvestments(includeInactive);
   const refreshQuotes = useRefreshInvestmentQuotes();
+  const createAsset = useCreateInvestmentAsset();
+  const updateAsset = useUpdateInvestmentAsset();
+  const deleteAsset = useDeleteInvestmentAsset();
+  const tickerOptions = useTickerSearch(tickerSearch, modalAssetClass);
   const data = investments.data;
+  const modalOpen = modalMode !== null;
+  const modalSaving = createAsset.isPending || updateAsset.isPending;
+
+  const openCreateModal = () => {
+    setModalMode("create");
+    setModalAsset(null);
+    setModalError(null);
+    setTickerSearch("");
+    setModalAssetClass("acoes_nac");
+  };
+
+  const openEditModal = (asset: InvestmentAsset) => {
+    setModalMode("edit");
+    setModalAsset(asset);
+    setModalError(null);
+    setTickerSearch(asset.ticker ?? "");
+    setModalAssetClass(asset.asset_class);
+  };
+
+  const closeModal = () => {
+    setModalMode(null);
+    setModalAsset(null);
+    setModalError(null);
+    setTickerSearch("");
+  };
+
+  const submitAsset = async (input: InvestmentAssetInput) => {
+    try {
+      setModalError(null);
+      if (modalMode === "edit" && modalAsset) {
+        await updateAsset.mutateAsync({ id: modalAsset.id, input });
+      } else {
+        await createAsset.mutateAsync(input);
+      }
+      closeModal();
+    } catch (error) {
+      setModalError(error instanceof Error ? error.message : "Não foi possível salvar o ativo.");
+    }
+  };
+
+  const removeAsset = async () => {
+    if (!modalAsset) {
+      return;
+    }
+    const confirmed = window.confirm(`Remover ${modalAsset.ticker ?? modalAsset.name ?? "ativo"}?`);
+    if (!confirmed) {
+      return;
+    }
+    try {
+      setModalError(null);
+      await deleteAsset.mutateAsync(modalAsset.id);
+      closeModal();
+    } catch (error) {
+      setModalError(error instanceof Error ? error.message : "Não foi possível remover o ativo.");
+    }
+  };
 
   return (
     <>
@@ -202,15 +287,25 @@ export default function InvestimentosPage() {
             />
             Incluir encerrados
           </label>
-          <button
-            type="button"
-            onClick={() => refreshQuotes.mutate()}
-            disabled={refreshQuotes.isPending}
-            className="inline-flex h-10 w-fit items-center gap-2 rounded-md bg-blue-500 px-3 text-sm font-medium text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw size={16} aria-hidden className={refreshQuotes.isPending ? "animate-spin" : undefined} />
-            {refreshQuotes.isPending ? "Atualizando..." : "Atualizar cotações"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex h-10 w-fit items-center gap-2 rounded-md bg-blue-500 px-3 text-sm font-medium text-white transition hover:bg-blue-600"
+            >
+              <Plus size={16} aria-hidden />
+              Adicionar ativo
+            </button>
+            <button
+              type="button"
+              onClick={() => refreshQuotes.mutate()}
+              disabled={refreshQuotes.isPending}
+              className="inline-flex h-10 w-fit items-center gap-2 rounded-md border border-blue-400/40 bg-blue-500/10 px-3 text-sm font-medium text-blue-200 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw size={16} aria-hidden className={refreshQuotes.isPending ? "animate-spin" : undefined} />
+              {refreshQuotes.isPending ? "Atualizando..." : "Atualizar cotações"}
+            </button>
+          </div>
         </div>
 
         {investments.isError ? (
@@ -245,6 +340,16 @@ export default function InvestimentosPage() {
                 <EmptyState
                   icon={<PieChart size={28} aria-hidden />}
                   title="Nenhum ativo sincronizado"
+                  action={
+                    <button
+                      type="button"
+                      onClick={openCreateModal}
+                      className="inline-flex h-9 items-center gap-2 rounded-md bg-blue-500 px-3 text-sm font-medium text-white transition hover:bg-blue-600"
+                    >
+                      <Plus size={16} aria-hidden />
+                      Adicionar ativo
+                    </button>
+                  }
                 />
               </SectionCard>
             ) : (
@@ -253,7 +358,7 @@ export default function InvestimentosPage() {
                   title="Ativos"
                   subtitle={`${data.assets.length} posição(ões)`}
                 >
-                  <AssetsTable assets={data.assets} />
+                  <AssetsTable assets={data.assets} onEdit={openEditModal} />
                 </SectionCard>
 
                 <SectionCard
@@ -267,6 +372,21 @@ export default function InvestimentosPage() {
           </>
         )}
       </div>
+
+      <InvestmentAssetModal
+        open={modalOpen}
+        mode={modalMode ?? "create"}
+        asset={modalAsset}
+        tickerOptions={tickerOptions.data ?? []}
+        saving={modalSaving}
+        deleting={deleteAsset.isPending}
+        error={modalError}
+        onClose={closeModal}
+        onSubmit={submitAsset}
+        onDelete={modalMode === "edit" ? removeAsset : undefined}
+        onTickerSearchChange={setTickerSearch}
+        onAssetClassChange={setModalAssetClass}
+      />
     </>
   );
 }

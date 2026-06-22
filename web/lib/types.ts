@@ -340,6 +340,19 @@ export type InvestmentRefreshQuotesResponse = {
   skipped: number;
 };
 
+export type InvestmentAssetInput = {
+  asset_class: string;
+  ticker?: string;
+  name?: string;
+  quantity?: number;
+  manual_value?: number;
+};
+
+export type InvestmentTickerSearchItem = {
+  ticker: string;
+  name: string;
+};
+
 export type InvestmentClassSummary = {
   asset_class: string;
   label: string;
