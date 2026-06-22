@@ -353,6 +353,34 @@ export type InvestmentTickerSearchItem = {
   name: string;
 };
 
+export type InvestmentTargetsMap = Record<string, number>;
+
+export type InvestmentTargetClass = {
+  asset_class: string;
+  label: string;
+  target_pct: number;
+};
+
+export type InvestmentTargetsResponse = {
+  targets: InvestmentTargetsMap;
+  classes: InvestmentTargetClass[];
+  perfil: string;
+  ultimo_aporte: number | null;
+  sum_pct: number;
+  valid: boolean;
+};
+
+export type InvestmentProfilePreset = {
+  key: string;
+  label: string;
+  description: string;
+  targets: InvestmentTargetsMap;
+};
+
+export type InvestmentProfilesResponse = {
+  profiles: InvestmentProfilePreset[];
+};
+
 export type InvestmentClassSummary = {
   asset_class: string;
   label: string;

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from ...agent.portfolio import quotes
 from ...storage import Database
 from ..dependencies import get_db
+from ..errors import error_response
 from ..repositories import portfolio_repo
 
 router = APIRouter(prefix="/api", tags=["portfolio"])
@@ -29,6 +30,11 @@ class AssetPatchRequest(BaseModel):
     manual_value: float | None = None
 
 
+class TargetsSaveRequest(BaseModel):
+    targets: dict[str, float]
+    perfil: str | None = None
+
+
 def _fields_set(model: BaseModel) -> set[str]:
     fields = getattr(model, "model_fields_set", None)
     if fields is None:
@@ -46,6 +52,37 @@ def investments_summary(
     db: Database = Depends(get_db),
 ) -> dict[str, Any]:
     return portfolio_repo.portfolio_summary(db, include_inactive=include_inactive)
+
+
+@router.get("/investments/profiles")
+def investment_profiles() -> dict[str, Any]:
+    return portfolio_repo.get_investment_profiles()
+
+
+@router.get("/investments/targets")
+def investment_targets(db: Database = Depends(get_db)) -> dict[str, Any]:
+    return portfolio_repo.get_allocation_targets(db)
+
+
+@router.put("/investments/targets")
+def save_investment_targets(
+    body: TargetsSaveRequest,
+    db: Database = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        return portfolio_repo.save_allocation_targets(
+            db,
+            body.targets,
+            perfil=body.perfil,
+        )
+    except ValueError as exc:
+        if str(exc) == "targets_sum":
+            return error_response(
+                422,
+                "targets_sum",
+                "A soma das metas deve ser 100%.",
+            )
+        raise _repo_error(exc) from exc
 
 
 @router.get("/investments/ticker-search")

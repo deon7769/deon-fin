@@ -2,7 +2,11 @@ import { api } from "@/lib/api";
 import type {
   InvestmentAsset,
   InvestmentAssetInput,
+  InvestmentProfilePreset,
+  InvestmentProfilesResponse,
   InvestmentRefreshQuotesResponse,
+  InvestmentTargetsMap,
+  InvestmentTargetsResponse,
   InvestmentsResponse,
   InvestmentTickerSearchItem,
 } from "@/lib/types";
@@ -57,6 +61,38 @@ export function buildAssetPayload(values: InvestmentAssetFormValues): Investment
   };
 }
 
+export function sumInvestmentTargets(targets: InvestmentTargetsMap): number {
+  return Number(
+    Object.values(targets)
+      .reduce((total, value) => total + Number(value || 0), 0)
+      .toFixed(2),
+  );
+}
+
+export function investmentTargetStatus(total: number): {
+  state: "under" | "valid" | "over";
+  message: string;
+  canSave: boolean;
+} {
+  if (Math.abs(total - 100) < 0.001) {
+    return { state: "valid", message: "Total completo", canSave: true };
+  }
+  if (total > 100) {
+    const overflow = Number((total - 100).toFixed(2));
+    return {
+      state: "over",
+      message: `O valor ultrapassou ${overflow}% do valor das metas`,
+      canSave: false,
+    };
+  }
+  const missing = Number((100 - total).toFixed(2));
+  return { state: "under", message: `Faltam ${missing}% para 100%`, canSave: false };
+}
+
+export function targetsFromProfile(profile: InvestmentProfilePreset): InvestmentTargetsMap {
+  return { ...profile.targets };
+}
+
 export function getInvestments(includeInactive = false, signal?: AbortSignal) {
   return api.get<InvestmentsResponse>(
     "/investments",
@@ -85,4 +121,16 @@ export function updateInvestmentAsset(id: number, input: Partial<InvestmentAsset
 
 export function deleteInvestmentAsset(id: number) {
   return api.del<{ deleted_id: number }>(`/investments/assets/${id}`);
+}
+
+export function getInvestmentTargets(signal?: AbortSignal) {
+  return api.get<InvestmentTargetsResponse>("/investments/targets", undefined, signal);
+}
+
+export function getInvestmentProfiles(signal?: AbortSignal) {
+  return api.get<InvestmentProfilesResponse>("/investments/profiles", undefined, signal);
+}
+
+export function saveInvestmentTargets(input: { targets: InvestmentTargetsMap; perfil?: string }) {
+  return api.put<InvestmentTargetsResponse>("/investments/targets", input);
 }

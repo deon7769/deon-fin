@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertCircle, BriefcaseBusiness, CircleDollarSign, Pencil, PieChart, Plus, RefreshCw } from "lucide-react";
 import { InvestmentAssetModal } from "@/components/investimentos/InvestmentAssetModal";
+import { InvestmentTabs } from "@/components/investimentos/InvestmentTabs";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -277,6 +278,8 @@ export default function InvestimentosPage() {
       <Header title="Investimentos" subtitle="Carteira sincronizada pelas conexões bancárias." />
 
       <div className="space-y-5 p-4 sm:p-6">
+        <InvestmentTabs />
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <label className="inline-flex w-fit items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted">
             <input

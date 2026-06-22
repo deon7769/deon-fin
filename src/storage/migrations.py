@@ -390,6 +390,49 @@ def m0015_portfolio_quotes_and_manual_adjustments(conn: sqlite3.Connection) -> N
     )
 
 
+def m0016_investment_allocation_targets(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS allocation_targets (
+            asset_class TEXT PRIMARY KEY,
+            target_pct  REAL NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS investment_profile (
+            id            INTEGER PRIMARY KEY CHECK (id = 1),
+            perfil        TEXT,
+            ultimo_aporte REAL,
+            updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    for asset_class in (
+        "acoes_nac",
+        "acoes_int",
+        "fii",
+        "reit",
+        "cripto",
+        "rf",
+        "rf_int",
+    ):
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO allocation_targets (asset_class, target_pct)
+            VALUES (?, 0)
+            """,
+            (asset_class,),
+        )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO investment_profile (id, perfil)
+        VALUES (1, 'custom')
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -406,6 +449,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (13, "savings_goals", m0013_savings_goals),
     (14, "portfolio", m0014_portfolio),
     (15, "portfolio_quotes_and_manual_adjustments", m0015_portfolio_quotes_and_manual_adjustments),
+    (16, "investment_allocation_targets", m0016_investment_allocation_targets),
 ]
 
 

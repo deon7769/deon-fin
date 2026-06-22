@@ -4,12 +4,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createInvestmentAsset,
   deleteInvestmentAsset,
+  getInvestmentProfiles,
+  getInvestmentTargets,
   getInvestments,
   refreshInvestmentQuotes,
+  saveInvestmentTargets,
   searchInvestmentTickers,
   updateInvestmentAsset,
 } from "@/lib/investments";
-import type { InvestmentAssetInput } from "@/lib/types";
+import type { InvestmentAssetInput, InvestmentTargetsMap } from "@/lib/types";
 
 export function useInvestments(includeInactive = false) {
   return useQuery({
@@ -68,6 +71,35 @@ export function useDeleteInvestmentAsset() {
   return useMutation({
     mutationFn: (id: number) => deleteInvestmentAsset(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["investments"] });
+    },
+  });
+}
+
+export function useInvestmentTargets() {
+  return useQuery({
+    queryKey: ["investments", "targets"],
+    queryFn: ({ signal }) => getInvestmentTargets(signal),
+    staleTime: 30_000,
+  });
+}
+
+export function useInvestmentProfiles() {
+  return useQuery({
+    queryKey: ["investments", "profiles"],
+    queryFn: ({ signal }) => getInvestmentProfiles(signal),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useSaveInvestmentTargets() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { targets: InvestmentTargetsMap; perfil?: string }) =>
+      saveInvestmentTargets(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["investments", "targets"] });
       queryClient.invalidateQueries({ queryKey: ["investments"] });
     },
   });

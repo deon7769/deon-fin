@@ -236,3 +236,73 @@ def test_patch_pluggy_asset_quantity_marks_manual_adjustment_and_next_sync_clear
     assert refreshed["current_value"] == 451.0
     assert refreshed["manually_adjusted"] is False
     assert refreshed["manual_adjusted_at"] is None
+
+
+def test_investment_profiles_and_targets_contract(client):
+    profiles = client.get("/api/investments/profiles")
+
+    assert profiles.status_code == 200
+    body = profiles.json()
+    assert [profile["key"] for profile in body["profiles"]] == [
+        "conservador",
+        "moderado",
+        "arrojado",
+    ]
+    assert all(round(sum(profile["targets"].values()), 2) == 100 for profile in body["profiles"])
+
+    targets = client.get("/api/investments/targets")
+
+    assert targets.status_code == 200
+    payload = targets.json()
+    assert payload["perfil"] == "custom"
+    assert payload["sum_pct"] == 0.0
+    assert payload["valid"] is False
+    assert set(payload["targets"]) == {
+        "acoes_nac",
+        "acoes_int",
+        "fii",
+        "reit",
+        "cripto",
+        "rf",
+        "rf_int",
+    }
+
+
+def test_save_investment_targets_rejects_invalid_sum(client):
+    response = client.put(
+        "/api/investments/targets",
+        json={"targets": {"rf": 60, "acoes_nac": 20}},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "targets_sum"
+    assert "100%" in response.json()["error"]["message"]
+
+
+def test_save_investment_targets_detects_matching_profile(client):
+    response = client.put(
+        "/api/investments/targets",
+        json={
+            "perfil": "custom",
+            "targets": {
+                "rf": 35,
+                "rf_int": 5,
+                "acoes_nac": 20,
+                "acoes_int": 15,
+                "fii": 15,
+                "reit": 5,
+                "cripto": 5,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["perfil"] == "moderado"
+    assert body["sum_pct"] == 100.0
+    assert body["valid"] is True
+    assert body["targets"]["acoes_int"] == 15.0
+
+    persisted = client.get("/api/investments/targets").json()
+    assert persisted["perfil"] == "moderado"
+    assert persisted["targets"] == body["targets"]

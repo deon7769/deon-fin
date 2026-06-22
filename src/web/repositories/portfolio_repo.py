@@ -29,6 +29,51 @@ ASSET_CLASS_ORDER = {
 
 VALID_ASSET_CLASSES = set(ASSET_CLASS_LABELS)
 
+INVESTMENT_PROFILES: dict[str, dict[str, Any]] = {
+    "conservador": {
+        "key": "conservador",
+        "label": "Conservador",
+        "description": "Prioriza renda fixa e baixa volatilidade.",
+        "targets": {
+            "rf": 60.0,
+            "rf_int": 10.0,
+            "acoes_nac": 10.0,
+            "acoes_int": 5.0,
+            "fii": 13.0,
+            "reit": 2.0,
+            "cripto": 0.0,
+        },
+    },
+    "moderado": {
+        "key": "moderado",
+        "label": "Moderado",
+        "description": "Equilibra renda fixa, bolsa, FIIs e exposição internacional.",
+        "targets": {
+            "rf": 35.0,
+            "rf_int": 5.0,
+            "acoes_nac": 20.0,
+            "acoes_int": 15.0,
+            "fii": 15.0,
+            "reit": 5.0,
+            "cripto": 5.0,
+        },
+    },
+    "arrojado": {
+        "key": "arrojado",
+        "label": "Arrojado",
+        "description": "Aumenta renda variável, exterior e cripto.",
+        "targets": {
+            "rf": 10.0,
+            "rf_int": 0.0,
+            "acoes_nac": 30.0,
+            "acoes_int": 25.0,
+            "fii": 15.0,
+            "reit": 10.0,
+            "cripto": 10.0,
+        },
+    },
+}
+
 
 def _money(value: Any) -> float:
     return round(float(value or 0.0), 2)
@@ -58,6 +103,22 @@ def _validate_asset_class(asset_class: str) -> str:
     if value not in VALID_ASSET_CLASSES:
         raise ValueError("classe de ativo inválida")
     return value
+
+
+def _ordered_asset_classes() -> list[str]:
+    return sorted(VALID_ASSET_CLASSES, key=lambda value: ASSET_CLASS_ORDER.get(value, 999))
+
+
+def _targets_sum(targets: dict[str, float]) -> float:
+    return round(sum(float(targets.get(asset_class, 0.0)) for asset_class in VALID_ASSET_CLASSES), 2)
+
+
+def _profile_for_targets(targets: dict[str, float]) -> str:
+    for key, profile in INVESTMENT_PROFILES.items():
+        preset = profile["targets"]
+        if all(abs(float(targets.get(asset_class, 0.0)) - float(preset.get(asset_class, 0.0))) < 0.001 for asset_class in VALID_ASSET_CLASSES):
+            return key
+    return "custom"
 
 
 def _ticker(value: Any) -> str | None:
@@ -566,3 +627,104 @@ def portfolio_summary(db: Database, *, include_inactive: bool = False) -> dict[s
         "by_class": by_class,
         "assets": assets,
     }
+
+
+def seed_allocation_targets(db: Database) -> None:
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        for asset_class in _ordered_asset_classes():
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO allocation_targets (asset_class, target_pct)
+                VALUES (?, 0)
+                """,
+                (asset_class,),
+            )
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO investment_profile (id, perfil)
+            VALUES (1, 'custom')
+            """
+        )
+
+
+def get_investment_profiles() -> dict[str, Any]:
+    return {
+        "profiles": [INVESTMENT_PROFILES[key] for key in ("conservador", "moderado", "arrojado")]
+    }
+
+
+def _targets_response(db: Database) -> dict[str, Any]:
+    seed_allocation_targets(db)
+    rows = db._conn.execute(
+        "SELECT asset_class, target_pct FROM allocation_targets"
+    ).fetchall()
+    targets = {asset_class: 0.0 for asset_class in _ordered_asset_classes()}
+    for row in rows:
+        asset_class = row["asset_class"]
+        if asset_class in VALID_ASSET_CLASSES:
+            targets[asset_class] = _money(row["target_pct"])
+    profile = db._conn.execute(
+        "SELECT perfil, ultimo_aporte, updated_at FROM investment_profile WHERE id=1"
+    ).fetchone()
+    sum_pct = _targets_sum(targets)
+    classes = [
+        {
+            "asset_class": asset_class,
+            "label": ASSET_CLASS_LABELS[asset_class],
+            "target_pct": targets[asset_class],
+        }
+        for asset_class in _ordered_asset_classes()
+    ]
+    return {
+        "targets": targets,
+        "classes": classes,
+        "perfil": profile["perfil"] if profile else "custom",
+        "ultimo_aporte": _money(profile["ultimo_aporte"]) if profile and profile["ultimo_aporte"] is not None else None,
+        "sum_pct": sum_pct,
+        "valid": abs(sum_pct - 100.0) < 0.001,
+    }
+
+
+def get_allocation_targets(db: Database) -> dict[str, Any]:
+    return _targets_response(db)
+
+
+def save_allocation_targets(
+    db: Database,
+    targets: dict[str, Any],
+    *,
+    perfil: str | None = None,
+) -> dict[str, Any]:
+    normalized = {asset_class: 0.0 for asset_class in _ordered_asset_classes()}
+    for asset_class, value in targets.items():
+        normalized_class = _validate_asset_class(asset_class)
+        pct = _number(value)
+        if pct is None or pct < 0 or pct > 100:
+            raise ValueError("percentual inválido")
+        normalized[normalized_class] = round(float(pct), 2)
+    if abs(_targets_sum(normalized) - 100.0) >= 0.001:
+        raise ValueError("targets_sum")
+
+    detected_profile = _profile_for_targets(normalized)
+
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        for asset_class, target_pct in normalized.items():
+            cur.execute(
+                """
+                INSERT INTO allocation_targets (asset_class, target_pct)
+                VALUES (?, ?)
+                ON CONFLICT(asset_class) DO UPDATE SET target_pct=excluded.target_pct
+                """,
+                (asset_class, target_pct),
+            )
+        cur.execute(
+            """
+            INSERT INTO investment_profile (id, perfil, updated_at)
+            VALUES (1, ?, datetime('now'))
+            ON CONFLICT(id) DO UPDATE SET
+                perfil=excluded.perfil,
+                updated_at=datetime('now')
+            """,
+            (detected_profile,),
+        )
+    return _targets_response(db)
