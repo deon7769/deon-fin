@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-B3_WHOLE_UNIT_CLASSES = {"acoes_nac", "fii"}
+B3_WHOLE_UNIT_CLASSES = {"acoes_nac", "etf", "fii"}
 DEFAULT_FRACTIONAL_CLASSES = {"acoes_int", "reit", "cripto"}
-NO_SCORE_CLASSES = {"rf", "rf_int", "cripto"}
+NO_SCORE_CLASSES = {"rf", "rf_int", "cripto", "etf"}
 
 
 def _money(value: float) -> float:

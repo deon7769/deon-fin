@@ -40,6 +40,21 @@ class FakePluggyInvestments:
                 "status": "ACTIVE",
             },
             {
+                "id": "inv-auvp",
+                "itemId": "item-btg",
+                "name": "AUVP11",
+                "code": "AUVP11",
+                "type": "EQUITY",
+                "subtype": "STOCK",
+                "currencyCode": "BRL",
+                "quantity": 3,
+                "value": 109.0,
+                "balance": 327.0,
+                "amount": 327.0,
+                "date": "2026-06-21T03:00:00.000Z",
+                "status": "ACTIVE",
+            },
+            {
                 "id": "inv-cdb",
                 "itemId": "item-btg",
                 "name": "CDB - BANCO BTG PACTUAL S.A.",
@@ -80,14 +95,15 @@ class FakePluggyInvestments:
 def test_sync_pluggy_investments_upserts_assets_and_transactions(tmp_db: Database):
     result = sync_pluggy_investments(FakePluggyInvestments(), tmp_db, "item-btg")
 
-    assert result.assets_read == 3
-    assert result.assets_upserted == 3
+    assert result.assets_read == 4
+    assert result.assets_upserted == 4
     assert result.transactions_read == 1
     assert result.transactions_upserted == 1
 
     assets = portfolio_repo.list_assets(tmp_db, include_inactive=True)
     assert [(asset["ticker"], asset["asset_class"]) for asset in assets] == [
         ("WEGE3", "acoes_nac"),
+        ("AUVP11", "etf"),
         ("MXRF11", "fii"),
         ("CDB123", "rf"),
     ]
@@ -142,7 +158,7 @@ def test_sync_pluggy_investments_is_idempotent_and_updates_values(tmp_db: Databa
     assert result.assets_read == 1
     assert result.assets_upserted == 1
     assets = portfolio_repo.list_assets(tmp_db, include_inactive=True)
-    assert len(assets) == 3
+    assert len(assets) == 4
     wege = next(asset for asset in assets if asset["ticker"] == "WEGE3")
     assert wege["quantity"] == 11.0
     assert wege["current_value"] == 473.0

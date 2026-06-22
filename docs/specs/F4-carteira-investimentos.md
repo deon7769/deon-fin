@@ -75,7 +75,7 @@ heurística de aporte que só compra (nunca vende) sempre o que está mais abaix
 
 ## 3. Classes de ativo
 
-As 7 classes do print (dropdown "Tipo de investimento"):
+As 8 classes do print (dropdown "Tipo de investimento"):
 `Ações Nacionais`, `Ações Internacionais`, `Fundos Imobiliários` (FIIs), `REITs`, `Criptomoedas`,
 `Renda Fixa`, `Renda Fixa Internacional`.
 
@@ -92,7 +92,7 @@ As 7 classes do print (dropdown "Tipo de investimento"):
 -- Uma posição/ativo da carteira (uma linha por ticker)
 CREATE TABLE IF NOT EXISTS portfolio_assets (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  asset_class   TEXT NOT NULL,         -- 'acoes_nac' | 'acoes_int' | 'fii' | 'reit' | 'cripto' | 'rf' | 'rf_int'
+  asset_class   TEXT NOT NULL,         -- 'acoes_nac' | 'acoes_int' | 'etf' | 'fii' | 'reit' | 'cripto' | 'rf' | 'rf_int'
   ticker        TEXT,                  -- 'PETR4', 'HGLG11', 'BTC'… (null p/ renda fixa sem ticker)
   name          TEXT,
   quantity      REAL NOT NULL DEFAULT 0,
@@ -164,18 +164,18 @@ CREATE TABLE IF NOT EXISTS investment_profile (
   que 10**; cada uma vale um peso aplicado **conforme o total** (o denominador `peso_total`). A "Nota" exibida é
   `nota`; **só nota > 0 recebe aporte** (§10).
 - **Seeds:** as perguntas padrão dos dois diagramas (ROE, CAGR, dividendos, P&D, tempo de mercado; e
-  líder/perenidade/governança/independência/endividamento) e as 7 classes em `allocation_targets` (0% inicial).
+  líder/perenidade/governança/independência/endividamento) e as 8 classes em `allocation_targets` (0% inicial).
   Botões "Restaurar padrões" e "Usar modelo" repõem/aplicam esses seeds.
 
 ## 5. Dados de mercado (cotações em tempo real)
 
-> **Decisão (confirmada):** provedor primário **`brapi.dev`** (B3 ações/FIIs + cripto); internacionais
+> **Decisão (confirmada):** provedor primário **`brapi.dev`** (B3 ações/ETFs/FIIs + cripto); internacionais
 > (REITs/ações/RF int) complementados por **Yahoo/Finnhub**. A chave fica no **servidor** (`BRAPI_TOKEN`).
 
-Necessário para preço atual de ações/FIIs/REITs/cripto:
+Necessário para preço atual de ações/ETFs/FIIs/REITs/cripto:
 - **Camada provider** `src/agent/portfolio/quotes.py` com interface `get_quote(ticker, asset_class) -> {price, currency, ts}`
   e busca de ticker `search_ticker(q, asset_class) -> [{ticker, name}]` (autocomplete da tela "Adicionar ativo").
-- **Provider primário sugerido:** **brapi.dev** (B3: ações/FIIs; tem cripto) — chave gratuita/paga; endpoints
+- **Provider primário sugerido:** **brapi.dev** (B3: ações/ETFs/FIIs; tem cripto) — chave gratuita/paga; endpoints
   `/quote/{tickers}` e `/available?search=`. Cripto via brapi ou **CoinGecko**. Ações/REITs internacionais via
   brapi (limitado) ou **Finnhub/Yahoo** (complemento para ativos internacionais).
 - **Cache** (ex.: 15 min) em tabela/メmória para não estourar limites e manter a UI rápida; "última atualização"
@@ -204,8 +204,8 @@ Necessário para preço atual de ações/FIIs/REITs/cripto:
   abaixo), `quantity`, `value`, `balance`, `status` (**só `ACTIVE` é posição**; `TOTAL_WITHDRAWAL` = encerrado).
   Para renda fixa: `issuer`, `rate`/`rateType`/`fixedAnnualRate`, `issueDate`/`dueDate`. Transações do ativo:
   `type` (BUY/SELL), `movementType`, `tradeDate`, `quantity`, `value`, `amount`, `netAmount`.
-- **Mapa type/subtype → classe:** `EQUITY/STOCK` → Ações (Nacional se ticker B3; **sufixo "11" = FII/ETF** →
-  Fundos Imobiliários, salvo ETF conhecido); `FIXED_INCOME/CDB|LCI|LCA…` → Renda Fixa; cripto/internacional por
+- **Mapa type/subtype → classe:** `EQUITY/STOCK` → Ações (Nacional se ticker B3; **ETF conhecido/subtype ETF = ETF**;
+  demais sufixos "11" = Fundos Imobiliários); `FIXED_INCOME/CDB|LCI|LCA…` → Renda Fixa; cripto/internacional por
   `currencyCode`/mercado. A classe vinda do Pluggy é **sugerida** e o usuário pode **corrigir** (vários FIIs
   chegam como `EQUITY`). Lista real do BTG p/ teste: ISAE3, BBDC3, GGRC11, AUVP11, WEGE3, TRXF11, HYPE3,
   BTLG11, SAPR3, KLBN3, LEVE3, MXRF11, BBAS3, ITSA3 (+ 2 CDB).
@@ -220,15 +220,15 @@ Necessário para preço atual de ações/FIIs/REITs/cripto:
 ## 7. Aba **Ativos** (`/investimentos`)
 
 **UI (do print):** título "Ativos — Gerencie os ativos que você possui", busca, botão **"Adicionar ativo"**,
-seletor de moeda (BRL), **pills de filtro por classe** (Todos + as 7 classes), **Lista de Ativos** e **donut
+seletor de moeda (BRL), **pills de filtro por classe** (Todos + as 8 classes), **Lista de Ativos** e **donut
 "Carteira"** com total e % por classe.
 
 - **Tabela "Lista de Ativos":** colunas **Tipo** (badge da classe), **Ticker**, **Valor atual** (`qtd*preço`),
   **Percentual (%) na carteira** (`valor_atual/PL` — o mesmo % do donut; o peso **dentro da classe** p/ o aporte
   vem das **notas**, não deste %), **Nota**,
   **Quantidade**, **Última atualização** (do preço), **Ação** (Editar). Ordenar por nota/percentual.
-- **Donut "Carteira":** `valor_total = Σ valor_atual`; fatias por classe com %. Legenda lista as 7 classes.
-- **Adicionar ativo (modal):** dropdown "Tipo de investimento" (7 classes) → campo **Ticker** com
+- **Donut "Carteira":** `valor_total = Σ valor_atual`; fatias por classe com %. Legenda lista as 8 classes.
+- **Adicionar ativo (modal):** dropdown "Tipo de investimento" (8 classes) → campo **Ticker** com
   **autocomplete** (`search_ticker`, ex.: "pet" → PETR3/PETR4/PETZ3) → **Quantidade** → "Adicionar". Para
   Renda Fixa, em vez de ticker/qtd, **valor informado** (§3/§16).
 - **Editar ativo (modal):** Tipo, Ticker, Quantidade, cartões **Pontos positivos / Pontos negativos /
@@ -417,7 +417,7 @@ Cada fatia segue TDD (pytest no backend, Vitest no front) e os contratos de §12
 
 ## 16. Decisões em aberto (preciso confirmar com você)
 **Resolvidas (2026-06-21/22):**
-1. ✅ **Cotações:** **brapi.dev** (B3 ações/FIIs + cripto) como primário; internacionais via **Yahoo/Finnhub**.
+1. ✅ **Cotações:** **brapi.dev** (B3 ações/ETFs/FIIs + cripto) como primário; internacionais via **Yahoo/Finnhub**.
    Você fornece a chave (`BRAPI_TOKEN`, fica no servidor).
 2. ✅ **Fórmula do "Método Burro":** confirmada pelos exemplos (§10.1) — nota = positivas−negativas (começa em
    −N, +2 por "Sim"); só notas > 0; aporte distribuído **∝ déficit** (sem carteira vira ∝ nota); unidades

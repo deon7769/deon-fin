@@ -238,6 +238,68 @@ def test_patch_pluggy_asset_quantity_marks_manual_adjustment_and_next_sync_clear
     assert refreshed["manual_adjusted_at"] is None
 
 
+def test_auvp11_is_etf_and_class_edit_survives_pluggy_sync(client, tmp_db):
+    asset_id = portfolio_repo.upsert_pluggy_asset(
+        tmp_db,
+        {
+            "id": "inv-auvp",
+            "name": "AUVP11",
+            "code": "AUVP11",
+            "type": "EQUITY",
+            "subtype": "STOCK",
+            "currencyCode": "BRL",
+            "quantity": 2,
+            "value": 110,
+            "balance": 220,
+            "status": "ACTIVE",
+            "date": "2026-06-21T03:00:00.000Z",
+        },
+    )
+
+    body = client.get("/api/investments").json()
+    assert body["by_class"] == [
+        {
+            "asset_class": "etf",
+            "label": "ETFs",
+            "count": 1,
+            "current_value": 220.0,
+            "pct": 100.0,
+        }
+    ]
+    assert body["assets"][0]["asset_class"] == "etf"
+    assert body["assets"][0]["asset_class_label"] == "ETFs"
+
+    patched = client.patch(
+        f"/api/investments/assets/{asset_id}",
+        json={"asset_class": "etf", "quantity": 2},
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["asset_class"] == "etf"
+
+    portfolio_repo.upsert_pluggy_asset(
+        tmp_db,
+        {
+            "id": "inv-auvp",
+            "name": "AUVP11",
+            "code": "AUVP11",
+            "type": "EQUITY",
+            "subtype": "STOCK",
+            "currencyCode": "BRL",
+            "quantity": 2,
+            "value": 111,
+            "balance": 222,
+            "status": "ACTIVE",
+            "date": "2026-06-22T03:00:00.000Z",
+        },
+    )
+
+    refreshed = client.get("/api/investments").json()["assets"][0]
+    assert refreshed["asset_class"] == "etf"
+    assert refreshed["asset_class_label"] == "ETFs"
+    assert refreshed["current_value"] == 222.0
+
+
 def test_investment_profiles_and_targets_contract(client):
     profiles = client.get("/api/investments/profiles")
 
@@ -260,6 +322,7 @@ def test_investment_profiles_and_targets_contract(client):
     assert set(payload["targets"]) == {
         "acoes_nac",
         "acoes_int",
+        "etf",
         "fii",
         "reit",
         "cripto",

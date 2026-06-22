@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
 from typing import Any
 
 from ...agent.portfolio.aporte import calcular_aporte
@@ -11,6 +12,7 @@ from ...storage import Database
 ASSET_CLASS_LABELS = {
     "acoes_nac": "Ações nacionais",
     "acoes_int": "Ações internacionais",
+    "etf": "ETFs",
     "fii": "FIIs",
     "reit": "REITs",
     "cripto": "Cripto",
@@ -20,6 +22,7 @@ ASSET_CLASS_LABELS = {
 
 ASSET_CLASS_ORDER = {
     "acoes_nac": 10,
+    "etf": 15,
     "fii": 20,
     "rf": 30,
     "cripto": 40,
@@ -29,6 +32,29 @@ ASSET_CLASS_ORDER = {
 }
 
 VALID_ASSET_CLASSES = set(ASSET_CLASS_LABELS)
+
+ETF_SUBTYPES = {
+    "ETF",
+    "ETFS",
+    "EXCHANGE_TRADED_FUND",
+    "INDEX_FUND",
+    "FUNDO_DE_INDICE",
+}
+
+B3_ETF_TICKERS = {
+    "AUVP11",
+    "BOVA11",
+    "BOVV11",
+    "DIVO11",
+    "GOLD11",
+    "HASH11",
+    "IVVB11",
+    "PIBB11",
+    "SMAL11",
+    "SPXI11",
+    "WRLD11",
+    "XFIX11",
+}
 
 INVESTMENT_PROFILES: dict[str, dict[str, Any]] = {
     "conservador": {
@@ -40,6 +66,7 @@ INVESTMENT_PROFILES: dict[str, dict[str, Any]] = {
             "rf_int": 10.0,
             "acoes_nac": 10.0,
             "acoes_int": 5.0,
+            "etf": 0.0,
             "fii": 13.0,
             "reit": 2.0,
             "cripto": 0.0,
@@ -54,6 +81,7 @@ INVESTMENT_PROFILES: dict[str, dict[str, Any]] = {
             "rf_int": 5.0,
             "acoes_nac": 20.0,
             "acoes_int": 15.0,
+            "etf": 0.0,
             "fii": 15.0,
             "reit": 5.0,
             "cripto": 5.0,
@@ -68,6 +96,7 @@ INVESTMENT_PROFILES: dict[str, dict[str, Any]] = {
             "rf_int": 0.0,
             "acoes_nac": 30.0,
             "acoes_int": 25.0,
+            "etf": 0.0,
             "fii": 15.0,
             "reit": 10.0,
             "cripto": 10.0,
@@ -90,6 +119,15 @@ def _number(value: Any) -> float | None:
 def _text(value: Any) -> str | None:
     text = str(value or "").strip()
     return text or None
+
+
+def _descriptor(value: Any) -> str:
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    return text.encode("ascii", "ignore").decode("ascii").upper()
+
+
+def _descriptor_key(value: Any) -> str:
+    return _descriptor(value).replace("-", "_").replace(" ", "_")
 
 
 def _date(value: Any) -> str | None:
@@ -138,12 +176,24 @@ def classify_pluggy_investment(investment: dict[str, Any]) -> str:
     provider_type = (investment.get("type") or "").upper()
     provider_subtype = (investment.get("subtype") or "").upper()
     ticker = (_text(investment.get("code")) or _text(investment.get("name")) or "").upper()
+    subtype_key = _descriptor_key(provider_subtype)
+    name_descriptor = _descriptor(investment.get("name"))
     if provider_type == "FIXED_INCOME":
         return "rf"
     if provider_type == "CRYPTO":
         return "cripto"
     if provider_type == "EQUITY" and provider_subtype in {"REIT", "REITS"}:
         return "reit"
+    if (
+        provider_type == "EQUITY"
+        and (
+            ticker in B3_ETF_TICKERS
+            or subtype_key in ETF_SUBTYPES
+            or " ETF" in f" {name_descriptor} "
+            or "FUNDO DE INDICE" in name_descriptor
+        )
+    ):
+        return "etf"
     if provider_type == "EQUITY" and ticker.endswith("11"):
         return "fii"
     if provider_type == "EQUITY":
@@ -577,6 +627,7 @@ def list_assets(db: Database, *, include_inactive: bool = False) -> list[dict[st
          ORDER BY
               CASE asset_class
                 WHEN 'acoes_nac' THEN 10
+                WHEN 'etf' THEN 15
                 WHEN 'fii' THEN 20
                 WHEN 'rf' THEN 30
                 WHEN 'cripto' THEN 40

@@ -414,6 +414,7 @@ def m0016_investment_allocation_targets(conn: sqlite3.Connection) -> None:
     for asset_class in (
         "acoes_nac",
         "acoes_int",
+        "etf",
         "fii",
         "reit",
         "cripto",
@@ -497,6 +498,24 @@ def m0017_asset_questions_answers(conn: sqlite3.Connection) -> None:
             )
 
 
+def m0018_investment_etf_asset_class(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO allocation_targets (asset_class, target_pct)
+        VALUES ('etf', 0)
+        """
+    )
+    conn.execute(
+        """
+        UPDATE portfolio_assets
+           SET asset_class='etf',
+               updated_at=datetime('now')
+         WHERE asset_class='fii'
+           AND UPPER(COALESCE(ticker, name, '')) IN ('AUVP11')
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -515,6 +534,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (15, "portfolio_quotes_and_manual_adjustments", m0015_portfolio_quotes_and_manual_adjustments),
     (16, "investment_allocation_targets", m0016_investment_allocation_targets),
     (17, "asset_questions_answers", m0017_asset_questions_answers),
+    (18, "investment_etf_asset_class", m0018_investment_etf_asset_class),
 ]
 
 

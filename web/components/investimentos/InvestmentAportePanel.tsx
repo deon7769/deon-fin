@@ -31,6 +31,7 @@ type InvestmentAportePanelProps = {
 
 const CLASS_COLORS: Record<string, string> = {
   acoes_nac: "#3b82f6",
+  etf: "#14b8a6",
   fii: "#22c55e",
   rf: "#f59e0b",
   cripto: "#a855f7",

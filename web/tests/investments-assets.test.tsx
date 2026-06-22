@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { InvestmentAssetModal } from "@/components/investimentos/InvestmentAssetModal";
-import { buildAssetPayload } from "@/lib/investments";
+import { buildAssetPayload, INVESTMENT_CLASSES } from "@/lib/investments";
 import type { InvestmentAsset, InvestmentAssetAnswersResponse } from "@/lib/types";
 
 const asset: InvestmentAsset = {
@@ -72,6 +72,23 @@ describe("investment asset form", () => {
       ticker: "WEGE3",
       name: "Weg",
       quantity: 10.5,
+    });
+  });
+
+  it("offers ETFs as a separate asset class", () => {
+    expect(INVESTMENT_CLASSES).toContainEqual({ value: "etf", label: "ETFs" });
+    expect(
+      buildAssetPayload({
+        assetClass: "etf",
+        ticker: " auvp11 ",
+        name: "",
+        quantity: "3",
+        manualValue: "",
+      }),
+    ).toEqual({
+      asset_class: "etf",
+      ticker: "AUVP11",
+      quantity: 3,
     });
   });
 

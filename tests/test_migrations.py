@@ -59,7 +59,7 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
         row[0]
         for row in conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
     ]
-    assert ids == list(range(1, 18))
+    assert ids == list(range(1, 19))
     assert "idx_tx_reference_month" in _indexes(conn, "transactions")
     assert "idx_tx_tag_id" in _indexes(conn, "transactions")
     assert "idx_tx_bucket_id" in _indexes(conn, "transactions")
@@ -178,6 +178,7 @@ def test_new_database_has_investment_allocation_targets(tmp_path: Path):
     assert {row["asset_class"] for row in rows} == {
         "acoes_nac",
         "acoes_int",
+        "etf",
         "fii",
         "reit",
         "cripto",
@@ -187,6 +188,35 @@ def test_new_database_has_investment_allocation_targets(tmp_path: Path):
     assert all(row["target_pct"] == 0 for row in rows)
     profile = conn.execute("SELECT perfil FROM investment_profile WHERE id=1").fetchone()
     assert profile["perfil"] == "custom"
+    db.close()
+
+
+def test_etf_migration_reclassifies_existing_auvp11_assets(tmp_path: Path):
+    db = Database(tmp_path / "new.db")
+    conn = db._conn
+    conn.execute(
+        """
+        INSERT INTO portfolio_assets (
+            asset_class, ticker, name, quantity, source, external_id,
+            current_value, unit_price, provider_type, provider_subtype, status
+        )
+        VALUES ('fii', 'AUVP11', 'AUVP11', 2, 'pluggy', 'inv-auvp',
+                220, 110, 'EQUITY', 'STOCK', 'ACTIVE')
+        """
+    )
+    conn.execute("DELETE FROM schema_migrations WHERE id=18")
+    conn.commit()
+
+    assert apply_migrations(conn) == 1
+
+    row = conn.execute(
+        "SELECT asset_class FROM portfolio_assets WHERE external_id='inv-auvp'"
+    ).fetchone()
+    assert row["asset_class"] == "etf"
+    target = conn.execute(
+        "SELECT target_pct FROM allocation_targets WHERE asset_class='etf'"
+    ).fetchone()
+    assert target["target_pct"] == 0
     db.close()
 
 
@@ -375,7 +405,7 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
     tmp_db._conn.execute("DELETE FROM schema_migrations")
     tmp_db._conn.commit()
 
-    assert apply_migrations(tmp_db._conn) == 17
+    assert apply_migrations(tmp_db._conn) == 18
     assert apply_migrations(tmp_db._conn) == 0
 
     ids = [
@@ -384,4 +414,4 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
             "SELECT id FROM schema_migrations ORDER BY id"
         ).fetchall()
     ]
-    assert ids == list(range(1, 18))
+    assert ids == list(range(1, 19))

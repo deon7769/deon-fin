@@ -10,7 +10,7 @@ from ...config import settings
 from ...storage import Database
 
 
-QUOTEABLE_CLASSES = {"acoes_nac", "acoes_int", "fii", "reit", "cripto"}
+QUOTEABLE_CLASSES = {"acoes_nac", "acoes_int", "etf", "fii", "reit", "cripto"}
 
 Quote = dict[str, Any]
 QuoteFetcher = Callable[[list[str], str, str | None], dict[str, Quote]]

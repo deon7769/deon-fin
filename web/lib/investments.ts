@@ -24,6 +24,7 @@ import type {
 export const INVESTMENT_CLASSES = [
   { value: "acoes_nac", label: "Ações nacionais" },
   { value: "acoes_int", label: "Ações internacionais" },
+  { value: "etf", label: "ETFs" },
   { value: "fii", label: "Fundos imobiliários" },
   { value: "reit", label: "REITs" },
   { value: "cripto", label: "Criptomoedas" },
