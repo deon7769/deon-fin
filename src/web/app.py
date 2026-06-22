@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -487,6 +487,10 @@ def create_app() -> FastAPI:
     @app.api_route("/legacy", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False)
     def legacy(request: Request) -> Response:
         return _render_legacy_index(request)
+
+    @app.api_route("/simulador", methods=["GET", "HEAD"], include_in_schema=False)
+    def simulador_redirect() -> RedirectResponse:
+        return RedirectResponse("/simulacoes")
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

@@ -70,13 +70,26 @@ def test_deep_route_serves_exported_route_or_spa_shell(tmp_path, monkeypatch):
     assert "Metas export" in response.text
 
 
+def test_old_simulator_route_redirects_to_simulations_hub(tmp_path, monkeypatch):
+    client = _client_with_export(tmp_path, monkeypatch)
+
+    response = client.get("/simulador", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/simulacoes"
+
+
 def test_head_requests_are_supported_for_next_export_routes(tmp_path, monkeypatch):
     client = _client_with_export(tmp_path, monkeypatch)
 
-    for path in ["/", "/metas", "/simulador", "/transacoes/?month=2026-06"]:
+    for path in ["/", "/metas", "/transacoes/?month=2026-06"]:
         response = client.head(path)
         assert response.status_code == 200
         assert response.text == ""
+
+    redirect = client.head("/simulador", follow_redirects=False)
+    assert redirect.status_code == 307
+    assert redirect.headers["location"] == "/simulacoes"
 
 
 def test_next_asset_is_served_from_export(tmp_path, monkeypatch):
