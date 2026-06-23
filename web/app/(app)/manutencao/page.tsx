@@ -15,6 +15,7 @@ import {
   type EditableColumn,
 } from "@/components/manutencao/EditableMaintenanceTable";
 import { CategoryMapPreview } from "@/components/manutencao/CategoryMapPreview";
+import { ClassificationAuditPanel } from "@/components/manutencao/ClassificationAuditPanel";
 import { ClassificationHealthPanel } from "@/components/manutencao/ClassificationHealthPanel";
 import { ClassificationRulesPanel } from "@/components/manutencao/ClassificationRulesPanel";
 import { HealthChecklist } from "@/components/manutencao/HealthChecklist";
@@ -32,6 +33,7 @@ import { useBuckets } from "@/hooks/useBuckets";
 import {
   useApplyMaintenanceClassificationBulk,
   useMaintenance,
+  useMaintenanceClassificationAudit,
   useMaintenanceClassificationRules,
   useMaintenanceSystemTotals,
   usePreviewMaintenanceClassificationBulk,
@@ -210,6 +212,7 @@ export default function ManutencaoPage() {
   const buckets = useBuckets();
   const tags = useTags();
   const classificationRules = useMaintenanceClassificationRules();
+  const classificationAudit = useMaintenanceClassificationAudit();
   const saveClassificationRule = useSaveMaintenanceClassificationRule();
   const reprocessClassification = useReprocessMaintenanceClassification();
   const previewClassificationBulk = usePreviewMaintenanceClassificationBulk();
@@ -405,6 +408,12 @@ export default function ManutencaoPage() {
                 await saveClassificationRule.mutateAsync(payload);
                 await classificationRules.refetch();
               }}
+            />
+
+            <ClassificationAuditPanel
+              data={classificationAudit.data}
+              loading={classificationAudit.isLoading}
+              error={classificationAudit.error}
             />
 
             <div className="grid gap-5 xl:grid-cols-2">

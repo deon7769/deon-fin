@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { MaintenanceSavePayload } from "@/lib/maintenance";
 import type {
+  MaintenanceClassificationAuditResponse,
   MaintenanceClassificationBulkApplyResponse,
   MaintenanceClassificationBulkPreviewResponse,
   MaintenanceClassificationBulkRequest,
@@ -62,6 +63,7 @@ export function useSaveMaintenanceSystemTotals() {
 
 function invalidateClassificationData(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+  void queryClient.invalidateQueries({ queryKey: ["maintenance", "classification-audit"] });
   void queryClient.invalidateQueries({ queryKey: ["maintenance", "classification-rules"] });
   void queryClient.invalidateQueries({ queryKey: ["transactions"] });
   void queryClient.invalidateQueries({ queryKey: ["tags"] });
@@ -112,6 +114,19 @@ export function useMaintenanceClassificationRules() {
     queryFn: ({ signal }) =>
       api.get<MaintenanceClassificationRulesResponse>(
         "/maintenance/classification/rules",
+        undefined,
+        signal,
+      ),
+    staleTime: 30_000,
+  });
+}
+
+export function useMaintenanceClassificationAudit() {
+  return useQuery({
+    queryKey: ["maintenance", "classification-audit"],
+    queryFn: ({ signal }) =>
+      api.get<MaintenanceClassificationAuditResponse>(
+        "/maintenance/classification/audit",
         undefined,
         signal,
       ),

@@ -108,11 +108,14 @@ Atualizado em: 2026-06-23
   - a fila "sem Tag" usa gasto real via `spending_value`, evitando pagamento de fatura, transferências e movimentações que não são consumo;
   - a fila "sem Meta" também usa gasto real, mas continua respeitando categorias bloqueadas para pote;
   - botões abrem Transações já filtrada por `quality=missing_tag` ou `quality=missing_bucket`.
+  - itens fora das filas por política ficam visíveis como "Ignorados por política", com motivo como transferência interna, pagamento de fatura ou custo financeiro sem pote.
 - Ações operacionais de classificação:
   - reprocessamento de Meta/Tag a partir da Manutenção;
   - aplicação em massa com prévia para filas acionáveis;
   - revisão de regras aprendidas (`tag_rules` e `bucket_rules`);
-  - edição do destino da regra ou remoção segura antes de novo reprocessamento.
+  - edição do destino da regra ou remoção segura antes de novo reprocessamento;
+  - auditoria persistida das aplicações em massa e edições/remoções de regras em `/api/maintenance/classification/audit`;
+  - tela `/manutencao` mostra o histórico recente de auditoria.
 
 ### Transações
 
@@ -194,13 +197,14 @@ Atualizado em: 2026-06-23
 - Tags granulares por de/para: `docs/superpowers/specs/2026-06-23-category-translated-tags-design.md`.
 - Saúde da classificação: `docs/superpowers/plans/2026-06-23-maintenance-classification-health.md`.
 - Regras aprendidas em Manutenção: `docs/superpowers/plans/2026-06-23-maintenance-classification-rules.md`.
+- Auditoria de classificação em Manutenção: `docs/superpowers/plans/2026-06-23-maintenance-classification-audit.md`.
 - Conciliação de metas de poupança: `docs/specs/F2.8-metas-conciliacao-transacoes.md`.
 
 ## Pendências conhecidas
 
 ### Classificação e Manutenção
 
-- Painel de saúde já permite reprocessar classificação, aplicar Tag/Meta em massa com prévia e revisar regras aprendidas; próximos ajustes são melhorar auditoria do que foi alterado.
+- Painel de saúde já permite reprocessar classificação, aplicar Tag/Meta em massa com prévia, revisar regras aprendidas, ver itens ignorados por política e auditar as ações recentes.
 - Melhorar o fluxo "aplicar/sugerir para similares" no frontend:
   - deixar claro quantos registros foram afetados;
   - atualizar a lista sem recarregar a página inteira;
@@ -210,10 +214,8 @@ Atualizado em: 2026-06-23
   - propor tradução;
   - propor Tag;
   - propor Meta pai.
-- Separar claramente nas filas:
-  - "ignorado por política" (transferências, fatura, impostos financeiros quando aplicável).
 - Validar em produção o fluxo completo de aprendizado visual de Tag; o painel já lista `tag_rules`, mas levantamento anterior indicou `tag_rules=0`.
-- Registrar histórico/auditoria das alterações em massa e das mudanças de regras.
+- Validar em produção se o histórico cobre os casos reais de aplicação em massa e alterações de regras.
 
 ### Categorias, Tags e resumos
 
@@ -285,24 +287,25 @@ Atualizado em: 2026-06-23
 - Planejar migração futura de SQLite para PostgreSQL quando multiusuário/escala exigir.
 - Revisar retenção e rotação de backups.
 - Adicionar jobs/rotinas observáveis para sync e reclassificação.
-- Endpoint/admin para reprocessar classificação pela UI já existe; próximo passo é registrar histórico e observabilidade dessas execuções.
+- Endpoint/admin para reprocessar classificação pela UI já existe; a auditoria recente registra aplicações em massa e mudanças de regras, faltando evoluir observabilidade de execuções automáticas.
 
 ## Próximas sprints recomendadas
 
 1. **F4 follow-ups de Investimentos**
    - Revisar detalhamento dos JSONs BTG/Pluggy para proventos e movimentações.
 
-2. **Manutenção - ignorados e auditoria**
-   - Separar itens ignorados por política nas filas de classificação.
-   - Registrar histórico das aplicações em massa e edições de regras.
+2. **Classificação aprendida - validação em produção**
+   - Confirmar criação de `tag_rules` no fluxo "aplicar similares".
+   - Validar auditoria com dados reais de produção.
+   - Ajustar propagação percebida quando a lista não atualiza imediatamente.
 
 3. **Transações - polish operacional**
    - Melhorar multiselects de Tags/Contas/origens se a lista real ficar longa.
    - Destaques visuais para itens acionáveis vindos da Manutenção.
 
-4. **Classificação aprendida - validação em produção**
-   - Confirmar criação de `tag_rules` no fluxo "aplicar similares".
-   - Ajustar propagação percebida pelo usuário quando a lista não atualiza imediatamente.
+4. **Manutenção - sugestões de tradução/classificação**
+   - Propor tradução, Tag e Meta para categorias vistas sem de/para.
+   - Transformar exceções recorrentes em regras revisáveis.
 
 5. **Renda e transferências**
    - Suite de testes com casos reais de PIX próprio, PIX externo, Koopere, dividendos, estorno e cashback.

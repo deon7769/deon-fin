@@ -20,6 +20,7 @@ import type {
   MaintenanceClassificationBulkKind,
   MaintenanceClassificationBulkPreviewResponse,
   MaintenanceClassificationBulkRequest,
+  MaintenanceClassificationPolicyIssue,
   MaintenanceClassificationReprocessResponse,
   MaintenanceResponse,
   Tag,
@@ -95,6 +96,44 @@ function CoverageTile({
   );
 }
 
+function PolicyIgnoredColumn({
+  title,
+  count,
+  rows,
+}: {
+  title: string;
+  count: number;
+  rows: MaintenanceClassificationPolicyIssue[];
+}) {
+  return (
+    <div className="rounded-md border border-border bg-bg p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-text">{title}</p>
+          <p className="mt-1 text-xs text-muted">{count} lançamento(s) fora da fila acionável</p>
+        </div>
+      </div>
+      {rows.length ? (
+        <ul className="mt-3 space-y-2">
+          {rows.slice(0, 4).map((row) => (
+            <li key={`${title}-${row.id}`} className="min-w-0 rounded-md bg-surface2 px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="truncate text-sm font-medium text-text">{row.description}</span>
+                <MoneyText value={row.amount_abs} className="text-sm font-semibold" />
+              </div>
+              <p className="mt-1 text-xs text-muted">
+                {row.date} · {row.account_name?.trim() || "Sem conta"} · {row.reason_label}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-muted">Nenhum lançamento ignorado por política.</p>
+      )}
+    </div>
+  );
+}
+
 function qualityQueueHref(
   quality: "missing_tag" | "missing_bucket",
   month?: string | null,
@@ -122,6 +161,10 @@ export function ClassificationHealthPanel({
   const coverage = classificationCoverage(data);
   const missingTag = classificationIssueRows(data, "missing_tag");
   const missingBucket = classificationIssueRows(data, "missing_bucket");
+  const ignoredTagPolicy = data.classification_health?.ignored_tag_policy ?? [];
+  const ignoredBucketPolicy = data.classification_health?.ignored_bucket_policy ?? [];
+  const ignoredTagPolicyCount = data.classification_health?.ignored_tag_policy_count ?? 0;
+  const ignoredBucketPolicyCount = data.classification_health?.ignored_bucket_policy_count ?? 0;
   const missingTagHref = qualityQueueHref("missing_tag", month);
   const missingBucketHref = qualityQueueHref("missing_bucket", month);
   const [bulkKind, setBulkKind] = useState<MaintenanceClassificationBulkKind>("tag");
@@ -324,6 +367,30 @@ export function ClassificationHealthPanel({
             reviewCount={coverage.missingBucketReviewCount}
           />
         </div>
+
+        {(ignoredTagPolicyCount > 0 || ignoredBucketPolicyCount > 0) ? (
+          <div className="space-y-3 rounded-md border border-border bg-surface2 p-4">
+            <div>
+              <h3 className="text-sm font-semibold text-text">Ignorados por política</h3>
+              <p className="mt-1 text-xs text-muted">
+                Lançamentos sem Tag/Meta que não entram nas filas por serem transferência,
+                pagamento de fatura, investimento, renda ou categoria bloqueada para pote.
+              </p>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-2">
+              <PolicyIgnoredColumn
+                title="Sem Tag"
+                count={ignoredTagPolicyCount}
+                rows={ignoredTagPolicy}
+              />
+              <PolicyIgnoredColumn
+                title="Sem Meta"
+                count={ignoredBucketPolicyCount}
+                rows={ignoredBucketPolicy}
+              />
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid gap-5 xl:grid-cols-2">
           <div className="space-y-3">

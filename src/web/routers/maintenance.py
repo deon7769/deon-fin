@@ -10,7 +10,13 @@ from ...agent.buckets import apply_buckets_to_database
 from ...agent.tags import apply_tags_to_database
 from ...storage import Database
 from ..dependencies import get_db
-from ..repositories import buckets_repo, system_totals_repo, tags_repo, transactions_repo
+from ..repositories import (
+    buckets_repo,
+    classification_audit_repo,
+    system_totals_repo,
+    tags_repo,
+    transactions_repo,
+)
 
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 _YEAR_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
@@ -108,24 +114,33 @@ def _classification_rules_response(db: Database) -> dict[str, list[dict[str, Any
     }
 
 
-def _save_classification_rule(db: Database, body: ClassificationRulePatch) -> None:
+def _save_classification_rule(db: Database, body: ClassificationRulePatch) -> dict[str, Any]:
     match_key = _clean_match_key(body.match_key)
     if body.target_id is None:
         if body.kind == "tag":
             tags_repo.delete_rule(db, match_key)
         else:
             buckets_repo.delete_rule(db, match_key)
-        return
+        return {
+            "action": "rule_delete",
+            "kind": body.kind,
+            "target_id": None,
+            "target_name": None,
+            "match_key": match_key,
+        }
 
+    target_name = _target_name(db, body.kind, body.target_id)
     if body.kind == "tag":
-        if tags_repo.get_tag(db, body.target_id) is None:
-            raise HTTPException(status_code=422, detail=f"tag_id inválido: {body.target_id}")
         tags_repo.upsert_rule(db, match_key, body.target_id)
-        return
-
-    if not buckets_repo.bucket_exists(db, body.target_id):
-        raise HTTPException(status_code=422, detail=f"bucket_id inválido: {body.target_id}")
-    buckets_repo.upsert_rule(db, match_key, body.target_id)
+    else:
+        buckets_repo.upsert_rule(db, match_key, body.target_id)
+    return {
+        "action": "rule_update",
+        "kind": body.kind,
+        "target_id": body.target_id,
+        "target_name": target_name,
+        "match_key": match_key,
+    }
 
 
 def _preview_item(item: dict[str, Any]) -> dict[str, Any]:
@@ -242,6 +257,16 @@ def apply_classification_bulk(
     ids = [item["id"] for item in _classification_candidates(db, kind=body.kind, month=preview["month"])]
     patch = {"tag_id": body.target_id} if body.kind == "tag" else {"bucket_id": body.target_id}
     result = transactions_repo.bulk_update_transactions(db, ids, **patch)
+    classification_audit_repo.record(
+        db,
+        action="bulk_apply",
+        kind=body.kind,
+        target_id=body.target_id,
+        target_name=preview["target_name"],
+        affected_count=int(result["updated"]),
+        preview_total=int(preview["total"]),
+        metadata={"month": preview["month"], "not_found": result["not_found"]},
+    )
     return {
         "kind": body.kind,
         "target_id": body.target_id,
@@ -258,10 +283,19 @@ def list_classification_rules(db: Database = Depends(get_db)) -> dict:
     return _classification_rules_response(db)
 
 
+@router.get("/classification/audit")
+def list_classification_audit(
+    limit: int = 20,
+    db: Database = Depends(get_db),
+) -> dict:
+    return {"items": classification_audit_repo.list_recent(db, limit=limit)}
+
+
 @router.patch("/classification/rules")
 def save_classification_rule(
     body: ClassificationRulePatch,
     db: Database = Depends(get_db),
 ) -> dict:
-    _save_classification_rule(db, body)
+    audit = _save_classification_rule(db, body)
+    classification_audit_repo.record(db, **audit)
     return _classification_rules_response(db)

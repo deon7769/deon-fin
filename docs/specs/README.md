@@ -60,7 +60,8 @@ specs assumem.
    metas de alocação, RF por valor informado, badge manual na UI, dataset do Mapa, `investido_total` sem duplicar, tema azul).
 2. **Manutenção/Classificação** — filtros acionáveis "sem Tag"/"sem Meta" e filtros avançados de Transações já
    entraram; filtros por `tag_source`/`bucket_source`, reprocessamento e aplicação em massa com prévia também entraram;
-   revisão/edição de regras aprendidas também entrou; próximos: filas de ignorados por política e auditoria/histórico.
+   revisão/edição de regras aprendidas, ignorados por política e auditoria/histórico também entraram; próximo: validar
+   com dados reais de produção e melhorar sugestões para traduções/classificações pendentes.
 3. **F5 — Hardening** na ordem: **F5.1** (WAL/busy_timeout) → **F5.2** (fonte única de cálculo) → **F5.3**
    (decompor `app.py`) → **F5.4** (lifespan) → **F5.5** (sunset do legado, quando houver paridade).
 4. **F2.8 polish** — melhorar heurística de candidatas, preview de conciliação e direção de resgate/subtração.
@@ -91,6 +92,8 @@ specs assumem.
 | F3.2/F2.2 polish | ✅ entregue | Manutenção abre filas acionáveis de Transações com `quality=missing_tag` e `quality=missing_bucket`. |
 | F2.2 filtros avançados | ✅ entregue | Drawer de filtros de Transações com período, mês, valor, tipo, metas, tags, contas, ocultas e transferências internas. |
 | Manutenção regras aprendidas | ✅ entregue | `/api/maintenance/classification/rules` lista/edita/remove `tag_rules` e `bucket_rules`; `/manutencao` mostra painel de revisão. |
+| Manutenção ignorados por política | ✅ entregue | `classification_health` separa itens fora das filas por política e `/manutencao` mostra motivo/contagem. |
+| Manutenção auditoria de classificação | ✅ entregue | `classification_audit_log` registra aplicações em massa e mudanças de regras; `/manutencao` exibe histórico recente. |
 | F4 follow-ups | 📋 verificar | 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100%, RF, badge UI, dataset Mapa, tema azul…). |
 | F5 | 📋 backlog | Hardening: WAL, fonte única de cálculo, decompor app.py, lifespan, sunset legado. |
 
@@ -158,6 +161,16 @@ Registradas em 2026-06-21 para encaixar nas próximas sprints:
     de reprocessar. Plano em
     `docs/superpowers/plans/2026-06-23-maintenance-classification-rules.md`.
 
+12. **Ignorados por política em Manutenção:** entregue em 2026-06-23. A saúde da classificação passou a separar
+    itens que não entram nas filas acionáveis por política, como transferências internas, pagamento de fatura,
+    investimentos/renda e custos financeiros sem pote. Plano em
+    `docs/superpowers/plans/2026-06-23-maintenance-policy-ignored.md`.
+
+13. **Auditoria de classificação em Manutenção:** entregue em 2026-06-23. Aplicações em massa e edições/remoções
+    de regras aprendidas passam a registrar histórico em `classification_audit_log`, exposto em
+    `/api/maintenance/classification/audit` e renderizado em `/manutencao`. Plano em
+    `docs/superpowers/plans/2026-06-23-maintenance-classification-audit.md`.
+
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.
 
@@ -170,6 +183,7 @@ Specs de feature **acrescentam migrations a essa lista** (nunca destrutivas, gua
 - F2.5: `accounts.sort_order`, `accounts.pluggy_item_id` + backfill de `account_balances` a partir de `accounts.metadata_json`.
 - F2.6: `savings_goals` (metas de poupança — **confirmado**) + import inicial de `family_profile["metas"]`.
 - F2.8: `transactions.savings_goal_id` + índice `idx_tx_savings_goal` para conciliação de transações com metas de poupança.
+- Manutenção/Classificação: `classification_audit_log` + índice `idx_classification_audit_created` para histórico recente de aplicações em massa e regras.
 
 ## Decisões/reconciliações descobertas na análise do código (registro)
 

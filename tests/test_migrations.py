@@ -56,17 +56,19 @@ def test_new_database_has_new_transaction_columns_and_tables(tmp_path: Path):
         "asset_answers",
         "account_total_settings",
         "movement_total_settings",
+        "classification_audit_log",
     }.issubset(_tables(conn))
 
     ids = [
         row[0]
         for row in conn.execute("SELECT id FROM schema_migrations ORDER BY id").fetchall()
     ]
-    assert ids == list(range(1, 22))
+    assert ids == list(range(1, 23))
     assert "idx_tx_reference_month" in _indexes(conn, "transactions")
     assert "idx_tx_tag_id" in _indexes(conn, "transactions")
     assert "idx_tx_bucket_id" in _indexes(conn, "transactions")
     assert "idx_tx_savings_goal" in _indexes(conn, "transactions")
+    assert "idx_classification_audit_created" in _indexes(conn, "classification_audit_log")
 
     hidden = {
         row[1]: row for row in conn.execute("PRAGMA table_info(transactions)").fetchall()
@@ -144,6 +146,26 @@ def test_new_database_has_savings_goals_table(tmp_path: Path):
     }.issubset(_columns(conn, "savings_goals"))
     assert "savings_goal_id" in _columns(conn, "transactions")
     assert "idx_tx_savings_goal" in _indexes(conn, "transactions")
+    db.close()
+
+
+def test_new_database_has_classification_audit_log(tmp_path: Path):
+    db = Database(tmp_path / "new.db")
+    conn = db._conn
+
+    assert {
+        "id",
+        "action",
+        "kind",
+        "target_id",
+        "target_name",
+        "match_key",
+        "affected_count",
+        "preview_total",
+        "metadata_json",
+        "created_at",
+    }.issubset(_columns(conn, "classification_audit_log"))
+    assert "idx_classification_audit_created" in _indexes(conn, "classification_audit_log")
     db.close()
 
 
@@ -454,7 +476,7 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
     tmp_db._conn.execute("DELETE FROM schema_migrations")
     tmp_db._conn.commit()
 
-    assert apply_migrations(tmp_db._conn) == 21
+    assert apply_migrations(tmp_db._conn) == 22
     assert apply_migrations(tmp_db._conn) == 0
 
     ids = [
@@ -463,4 +485,4 @@ def test_apply_migrations_recovers_when_schema_migrations_was_cleared(tmp_db):
             "SELECT id FROM schema_migrations ORDER BY id"
         ).fetchall()
     ]
-    assert ids == list(range(1, 22))
+    assert ids == list(range(1, 23))

@@ -566,6 +566,31 @@ def m0021_savings_goal_transaction_links(conn: sqlite3.Connection) -> None:
     )
 
 
+def m0022_classification_audit_log(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS classification_audit_log (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            action         TEXT NOT NULL,
+            kind           TEXT NOT NULL,
+            target_id      INTEGER,
+            target_name    TEXT,
+            match_key      TEXT,
+            affected_count INTEGER NOT NULL DEFAULT 0,
+            preview_total  INTEGER NOT NULL DEFAULT 0,
+            metadata_json  TEXT,
+            created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_classification_audit_created
+            ON classification_audit_log(created_at DESC, id DESC)
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -588,6 +613,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (19, "system_total_settings", m0019_system_total_settings),
     (20, "tag_bucket_source_rules", m0020_tag_bucket_source_rules),
     (21, "savings_goal_transaction_links", m0021_savings_goal_transaction_links),
+    (22, "classification_audit_log", m0022_classification_audit_log),
 ]
 
 

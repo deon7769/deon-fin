@@ -19,8 +19,8 @@ Status em **2026-06-23**:
 - Em desenvolvimento local, a API roda em `http://127.0.0.1:8000` e o Next em `http://127.0.0.1:3000`.
 - A partir da F3.1, a imagem Docker embute o build estático do Next: `/` serve a nova UI, `/api` segue na FastAPI e o legado fica em `/legacy` com rollback via `LEGACY_UI=1`.
 - O workflow `.github/workflows/ci-cd.yml` roda pytest, testes/build do frontend e build Docker. O deploy automático para a VPS já existe e executa `scripts/vps_deploy.sh` quando os secrets SSH estiverem configurados.
-- Manutenção já abre filas acionáveis em Transações para gastos reais sem Tag ou sem Meta via `quality=missing_tag` e `quality=missing_bucket`.
-- Manutenção também revisa regras aprendidas de Tag/Meta (`tag_rules` e `bucket_rules`), permitindo trocar o destino ou remover regra ruim antes de reprocessar.
+- Manutenção já abre filas acionáveis em Transações para gastos reais sem Tag ou sem Meta via `quality=missing_tag` e `quality=missing_bucket`, separando também itens ignorados por política.
+- Manutenção também revisa regras aprendidas de Tag/Meta (`tag_rules` e `bucket_rules`), permitindo trocar o destino ou remover regra ruim antes de reprocessar, com auditoria recente das aplicações em massa e mudanças de regra.
 
 ## Setup rápido
 
@@ -118,7 +118,7 @@ scripts/
 Ordem atual das próximas sprints:
 
 1. **Investimentos BTG/Pluggy:** aprofundar amostras reais de JSON, proventos, movimentações e reconciliação.
-2. **Manutenção/classificação:** separar itens ignorados por política nas filas e registrar histórico das aplicações em massa.
+2. **Classificação aprendida:** validar em produção auditoria, criação de regras e percepção de propagação para registros similares.
 3. **Transações:** refinar multiselects, bulk actions e revisão visual depois dos filtros avançados, filtros acionáveis e origem `tag_source`/`bucket_source`.
 4. **Renda e transferências:** revisar PIX próprio/externo, Koopere, dividendos, estorno e cashback com testes de cálculo.
 5. **Consolidação técnica:** WAL/busy timeout no SQLite, fonte única de cálculo financeiro, decomposição de `app.py` e sunset gradual do legado.

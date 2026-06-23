@@ -3,6 +3,7 @@ import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ClassificationHealthPanel } from "@/components/manutencao/ClassificationHealthPanel";
+import { ClassificationAuditPanel } from "@/components/manutencao/ClassificationAuditPanel";
 import { ClassificationRulesPanel } from "@/components/manutencao/ClassificationRulesPanel";
 import { EditableMaintenanceTable } from "@/components/manutencao/EditableMaintenanceTable";
 import { PrivacyProvider } from "@/providers/PrivacyProvider";
@@ -59,6 +60,8 @@ const sample: MaintenanceResponse = {
     bucket_sources: { manual: 3, rule: 1, auto: 4, none: 2 },
     missing_tag_review_count: 1,
     missing_bucket_review_count: 1,
+    ignored_tag_policy_count: 1,
+    ignored_bucket_policy_count: 2,
     missing_tag: [
       {
         id: "tx-missing-tag",
@@ -79,6 +82,43 @@ const sample: MaintenanceResponse = {
         category: "Services",
         category_label: "Serviços",
         amount_abs: 120,
+      },
+    ],
+    ignored_tag_policy: [
+      {
+        id: "tx-card-payment",
+        date: "2026-06-04",
+        description: "Pagamento fatura",
+        account_name: "Card",
+        category: "Payment",
+        category_label: "Payment",
+        amount_abs: 900,
+        reason: "card_payment",
+        reason_label: "Pagamento de fatura",
+      },
+    ],
+    ignored_bucket_policy: [
+      {
+        id: "tx-card-payment",
+        date: "2026-06-04",
+        description: "Pagamento fatura",
+        account_name: "Card",
+        category: "Payment",
+        category_label: "Payment",
+        amount_abs: 900,
+        reason: "card_payment",
+        reason_label: "Pagamento de fatura",
+      },
+      {
+        id: "tx-iof",
+        date: "2026-06-05",
+        description: "IOF",
+        account_name: "Bank",
+        category: "Tax on financial operations",
+        category_label: "Tax on financial operations",
+        amount_abs: 22,
+        reason: "financial_cost",
+        reason_label: "Custo financeiro sem pote",
       },
     ],
   },
@@ -242,6 +282,9 @@ describe("maintenance helpers", () => {
     expect(html).toContain("quality=missing_tag");
     expect(html).toContain("Abrir fila sem Meta");
     expect(html).toContain("quality=missing_bucket");
+    expect(html).toContain("Ignorados por política");
+    expect(html).toContain("Pagamento de fatura");
+    expect(html).toContain("Custo financeiro sem pote");
   });
 
   it("renders classification action controls for reprocess and bulk preview", () => {
@@ -318,6 +361,48 @@ describe("maintenance helpers", () => {
     expect(html).toContain("-uber viagem");
     expect(html).toContain("Conforto");
     expect(html).toContain("Remover regra");
+  });
+
+  it("renders classification audit history", () => {
+    const html = renderToStaticMarkup(
+      createElement(ClassificationAuditPanel, {
+        data: {
+          items: [
+            {
+              id: 3,
+              action: "rule_update",
+              kind: "tag",
+              target_id: 2,
+              target_name: "Mercado",
+              match_key: "-ifood mercado",
+              affected_count: 0,
+              preview_total: 0,
+              metadata: {},
+              created_at: "2026-06-23T10:00:00",
+            },
+            {
+              id: 2,
+              action: "bulk_apply",
+              kind: "bucket",
+              target_id: 1,
+              target_name: "Conforto",
+              match_key: null,
+              affected_count: 4,
+              preview_total: 4,
+              metadata: { month: "2026-06", not_found: [] },
+              created_at: "2026-06-23T09:00:00",
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(html).toContain("Auditoria de classificação");
+    expect(html).toContain("Regra atualizada");
+    expect(html).toContain("Aplicação em massa");
+    expect(html).toContain("Mercado");
+    expect(html).toContain("-ifood mercado");
+    expect(html).toContain("4 de 4");
   });
 
   it("renders wide editable sections as responsive field groups", () => {

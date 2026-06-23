@@ -23,9 +23,15 @@ from ..agent import AnalystError, Categorizer, FinancialAnalyst, build_financial
 from ..agent.buckets import CATEGORY_BUCKET_MAP, apply_buckets_to_database
 from ..agent.budget import summarize_5030, summarize_executivo, summarize_wishlist
 from ..agent.context import (
+    CREDIT_TYPES,
+    FINANCIAL_COST_CATEGORIES,
+    INTERNAL_TRANSFER_MATCH_CATEGORIES,
+    INVESTMENT_CATEGORIES,
     account_owner_aliases,
     income_value,
     internal_transfer_credit_ids,
+    is_card_payment_like,
+    is_own_account_transfer_like,
     spending_value,
 )
 from ..agent.tags import apply_tags_to_database
@@ -330,6 +336,13 @@ _CLASSIFICATION_SOURCES = ("manual", "rule", "auto")
 _BLOCKED_CLASSIFICATION_CATEGORY_KEYS = {
     key for key, bucket_key in CATEGORY_BUCKET_MAP.items() if bucket_key is None
 }
+_INTERNAL_TRANSFER_CATEGORY_KEYS = {
+    value.strip().lower() for value in INTERNAL_TRANSFER_MATCH_CATEGORIES
+}
+_INVESTMENT_CATEGORY_KEYS = {value.strip().lower() for value in INVESTMENT_CATEGORIES}
+_FINANCIAL_COST_CATEGORY_KEYS = {
+    value.strip().lower() for value in FINANCIAL_COST_CATEGORIES
+}
 
 
 def _classification_source_counts(rows: list[Any], column: str) -> dict[str, int]:
@@ -354,6 +367,66 @@ def _classification_issue_row(row: Any, cat_map: dict[str, str]) -> dict[str, An
         "category": category,
         "category_label": mnt.translate_category(category or "(sem categoria)", cat_map),
         "amount_abs": round(abs(float(row["amount"] or 0.0)), 2),
+    }
+
+
+def _classification_policy_reason(
+    row: Any,
+    owner_names: list[str] | tuple[str, ...],
+    *,
+    bucket_policy: bool,
+) -> tuple[str, str]:
+    amount = float(row["amount"] or 0.0)
+    category = row["category"]
+    category_key = str(category or "").strip().lower()
+    account_type = row["account_type"]
+    description = row["description"]
+    raw_description = row["raw_description"]
+
+    if is_card_payment_like(
+        amount,
+        account_type,
+        category,
+        description=description,
+        raw_description=raw_description,
+    ):
+        return "card_payment", "Pagamento de fatura"
+    if category_key in _INTERNAL_TRANSFER_CATEGORY_KEYS or is_own_account_transfer_like(
+        amount,
+        account_type,
+        category,
+        description=description,
+        raw_description=raw_description,
+        owner_names=owner_names,
+    ):
+        return "internal_transfer", "Transferência interna"
+    if category_key in _INVESTMENT_CATEGORY_KEYS:
+        return "investment", "Investimento/aporte"
+    if bucket_policy and category_key in _FINANCIAL_COST_CATEGORY_KEYS:
+        return "financial_cost", "Custo financeiro sem pote"
+    if bucket_policy and category_key in _BLOCKED_CLASSIFICATION_CATEGORY_KEYS:
+        return "blocked_bucket", "Categoria sem pote por política"
+    if amount > 0 and (account_type or "").upper() not in CREDIT_TYPES:
+        return "income", "Receita/entrada"
+    return "non_spending", "Movimento sem consumo"
+
+
+def _classification_policy_row(
+    row: Any,
+    cat_map: dict[str, str],
+    owner_names: list[str] | tuple[str, ...],
+    *,
+    bucket_policy: bool,
+) -> dict[str, Any]:
+    reason, reason_label = _classification_policy_reason(
+        row,
+        owner_names,
+        bucket_policy=bucket_policy,
+    )
+    return {
+        **_classification_issue_row(row, cat_map),
+        "reason": reason,
+        "reason_label": reason_label,
     }
 
 
@@ -395,6 +468,20 @@ def _classification_health(db: Database, cat_map: dict[str, str]) -> dict[str, A
     ]
     missing_tag = [row for row in spending_rows if row["tag_id"] is None]
     missing_bucket = [row for row in bucket_actionable_rows if row["bucket_id"] is None]
+    spending_row_ids = {row["id"] for row in spending_rows}
+    bucket_actionable_row_ids = {row["id"] for row in bucket_actionable_rows}
+    ignored_tag_policy = [
+        row
+        for row in rows
+        if row["tag_id"] is None
+        and row["id"] not in spending_row_ids
+    ]
+    ignored_bucket_policy = [
+        row
+        for row in rows
+        if row["bucket_id"] is None
+        and row["id"] not in bucket_actionable_row_ids
+    ]
 
     return {
         "total_transactions": total,
@@ -406,8 +493,18 @@ def _classification_health(db: Database, cat_map: dict[str, str]) -> dict[str, A
         "bucket_sources": _classification_source_counts(rows, "bucket_source"),
         "missing_tag_review_count": len(missing_tag),
         "missing_bucket_review_count": len(missing_bucket),
+        "ignored_tag_policy_count": len(ignored_tag_policy),
+        "ignored_bucket_policy_count": len(ignored_bucket_policy),
         "missing_tag": [_classification_issue_row(row, cat_map) for row in missing_tag[:10]],
         "missing_bucket": [_classification_issue_row(row, cat_map) for row in missing_bucket[:10]],
+        "ignored_tag_policy": [
+            _classification_policy_row(row, cat_map, owner_names, bucket_policy=False)
+            for row in ignored_tag_policy[:10]
+        ],
+        "ignored_bucket_policy": [
+            _classification_policy_row(row, cat_map, owner_names, bucket_policy=True)
+            for row in ignored_bucket_policy[:10]
+        ],
     }
 
 

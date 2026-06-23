@@ -248,6 +248,94 @@ def test_maintenance_classification_rules_can_be_listed_updated_and_deleted(clie
     assert deleted.json()["bucket_rules"] == []
 
 
+def test_maintenance_classification_audit_tracks_bulk_apply_and_rule_changes(client, tmp_db):
+    _seed_account(tmp_db)
+    tags_repo.seed_tags(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    tag = tags_repo.list_tags(tmp_db)[0]
+    next_tag = tags_repo.list_tags(tmp_db)[1]
+    first = _insert_tx(
+        tmp_db,
+        external_id="maint-audit-1",
+        description="Ifood mercado um",
+        category="Food delivery",
+    )
+    second = _insert_tx(
+        tmp_db,
+        external_id="maint-audit-2",
+        description="Ifood mercado dois",
+        category="Food delivery",
+    )
+
+    bulk = client.post(
+        "/api/maintenance/classification/bulk-apply",
+        json={"kind": "tag", "target_id": tag["id"], "month": "2026-06"},
+    )
+    updated = client.patch(
+        "/api/maintenance/classification/rules",
+        json={"kind": "tag", "match_key": "-ifood mercado", "target_id": next_tag["id"]},
+    )
+    deleted = client.patch(
+        "/api/maintenance/classification/rules",
+        json={"kind": "tag", "match_key": "-ifood mercado", "target_id": None},
+    )
+    audit = client.get("/api/maintenance/classification/audit")
+
+    assert bulk.status_code == 200
+    assert bulk.json()["updated"] == 2
+    assert {first.id, second.id}.issubset(
+        {
+            row["id"]
+            for row in tmp_db._conn.execute(
+                "SELECT id FROM transactions WHERE tag_id=?",
+                (tag["id"],),
+            ).fetchall()
+        }
+    )
+    assert updated.status_code == 200
+    assert deleted.status_code == 200
+    assert audit.status_code == 200
+    body = audit.json()
+    assert body["items"][:3] == [
+        {
+            "id": 3,
+            "action": "rule_delete",
+            "kind": "tag",
+            "target_id": None,
+            "target_name": None,
+            "match_key": "-ifood mercado",
+            "affected_count": 0,
+            "preview_total": 0,
+            "metadata": {},
+            "created_at": body["items"][0]["created_at"],
+        },
+        {
+            "id": 2,
+            "action": "rule_update",
+            "kind": "tag",
+            "target_id": next_tag["id"],
+            "target_name": next_tag["name"],
+            "match_key": "-ifood mercado",
+            "affected_count": 0,
+            "preview_total": 0,
+            "metadata": {},
+            "created_at": body["items"][1]["created_at"],
+        },
+        {
+            "id": 1,
+            "action": "bulk_apply",
+            "kind": "tag",
+            "target_id": tag["id"],
+            "target_name": tag["name"],
+            "match_key": None,
+            "affected_count": 2,
+            "preview_total": 2,
+            "metadata": {"month": "2026-06", "not_found": []},
+            "created_at": body["items"][2]["created_at"],
+        },
+    ]
+
+
 def test_maintenance_classification_rules_validate_targets(client, tmp_db):
     response = client.patch(
         "/api/maintenance/classification/rules",

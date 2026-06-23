@@ -350,8 +350,12 @@ def test_maintenance_endpoint_returns_profile_and_overrides(client, monkeypatch)
             "bucket_sources": {"manual": 0, "rule": 0, "auto": 0, "none": 0},
             "missing_tag_review_count": 0,
             "missing_bucket_review_count": 0,
+            "ignored_tag_policy_count": 0,
+            "ignored_bucket_policy_count": 0,
             "missing_tag": [],
             "missing_bucket": [],
+            "ignored_tag_policy": [],
+            "ignored_bucket_policy": [],
         },
     }
 
@@ -441,7 +445,18 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
         category="Payment",
         external_id="health-card-payment",
     )
-    tmp_db.insert_transactions([classified, needs_review, intentional_transfer, card_payment])
+    financial_cost = Transaction(
+        account_id="bank-health",
+        posted_at=date(2026, 6, 5),
+        amount=Decimal("-22.00"),
+        description="IOF sem meta",
+        source="test",
+        category="Tax on financial operations",
+        external_id="health-iof",
+    )
+    tmp_db.insert_transactions(
+        [classified, needs_review, intentional_transfer, card_payment, financial_cost]
+    )
     tmp_db._conn.execute(
         """
         UPDATE transactions
@@ -461,15 +476,17 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
 
     assert response.status_code == 200
     assert response.json()["classification_health"] == {
-        "total_transactions": 4,
+        "total_transactions": 5,
         "tagged": 1,
-        "untagged": 3,
+        "untagged": 4,
         "bucketed": 1,
-        "unbucketed": 3,
-        "tag_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 3},
-        "bucket_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 3},
-        "missing_tag_review_count": 1,
+        "unbucketed": 4,
+        "tag_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 4},
+        "bucket_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 4},
+        "missing_tag_review_count": 2,
         "missing_bucket_review_count": 1,
+        "ignored_tag_policy_count": 2,
+        "ignored_bucket_policy_count": 3,
         "missing_tag": [
             {
                 "id": needs_review.id,
@@ -479,6 +496,15 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
                 "category": "Pet Shops",
                 "category_label": "Pet Shops",
                 "amount_abs": 35.0,
+            },
+            {
+                "id": financial_cost.id,
+                "date": "2026-06-05",
+                "description": "IOF sem meta",
+                "account_name": "Bank",
+                "category": "Tax on financial operations",
+                "category_label": "Tax on financial operations",
+                "amount_abs": 22.0,
             }
         ],
         "missing_bucket": [
@@ -491,6 +517,65 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
                 "category_label": "Pet Shops",
                 "amount_abs": 35.0,
             }
+        ],
+        "ignored_tag_policy": [
+            {
+                "id": card_payment.id,
+                "date": "2026-06-04",
+                "description": "Pagamento online",
+                "account_name": "Card",
+                "category": "Payment",
+                "category_label": "Payment",
+                "amount_abs": 900.0,
+                "reason": "card_payment",
+                "reason_label": "Pagamento de fatura",
+            },
+            {
+                "id": intentional_transfer.id,
+                "date": "2026-06-03",
+                "description": "PIX proprio",
+                "account_name": "Bank",
+                "category": "Transfer - PIX",
+                "category_label": "Transfer - PIX",
+                "amount_abs": 100.0,
+                "reason": "internal_transfer",
+                "reason_label": "Transferência interna",
+            },
+        ],
+        "ignored_bucket_policy": [
+            {
+                "id": card_payment.id,
+                "date": "2026-06-04",
+                "description": "Pagamento online",
+                "account_name": "Card",
+                "category": "Payment",
+                "category_label": "Payment",
+                "amount_abs": 900.0,
+                "reason": "card_payment",
+                "reason_label": "Pagamento de fatura",
+            },
+            {
+                "id": intentional_transfer.id,
+                "date": "2026-06-03",
+                "description": "PIX proprio",
+                "account_name": "Bank",
+                "category": "Transfer - PIX",
+                "category_label": "Transfer - PIX",
+                "amount_abs": 100.0,
+                "reason": "internal_transfer",
+                "reason_label": "Transferência interna",
+            },
+            {
+                "id": financial_cost.id,
+                "date": "2026-06-05",
+                "description": "IOF sem meta",
+                "account_name": "Bank",
+                "category": "Tax on financial operations",
+                "category_label": "Tax on financial operations",
+                "amount_abs": 22.0,
+                "reason": "financial_cost",
+                "reason_label": "Custo financeiro sem pote",
+            },
         ],
     }
 

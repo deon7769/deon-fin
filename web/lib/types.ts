@@ -609,6 +609,11 @@ export type MaintenanceClassificationIssue = {
   amount_abs: number;
 };
 
+export type MaintenanceClassificationPolicyIssue = MaintenanceClassificationIssue & {
+  reason: string;
+  reason_label: string;
+};
+
 export type MaintenanceClassificationHealth = {
   total_transactions: number;
   tagged: number;
@@ -619,8 +624,12 @@ export type MaintenanceClassificationHealth = {
   bucket_sources: Record<"manual" | "rule" | "auto" | "none", number>;
   missing_tag_review_count: number;
   missing_bucket_review_count: number;
+  ignored_tag_policy_count: number;
+  ignored_bucket_policy_count: number;
   missing_tag: MaintenanceClassificationIssue[];
   missing_bucket: MaintenanceClassificationIssue[];
+  ignored_tag_policy: MaintenanceClassificationPolicyIssue[];
+  ignored_bucket_policy: MaintenanceClassificationPolicyIssue[];
 };
 
 export type MaintenanceResponse = {
@@ -717,6 +726,23 @@ export type MaintenanceClassificationRulePatch = {
   kind: MaintenanceClassificationRuleKind;
   match_key: string;
   target_id: number | null;
+};
+
+export type MaintenanceClassificationAuditItem = {
+  id: number;
+  action: string;
+  kind: MaintenanceClassificationRuleKind;
+  target_id: number | null;
+  target_name?: string | null;
+  match_key?: string | null;
+  affected_count: number;
+  preview_total: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type MaintenanceClassificationAuditResponse = {
+  items: MaintenanceClassificationAuditItem[];
 };
 
 export type ScenarioSimulationRequest = {

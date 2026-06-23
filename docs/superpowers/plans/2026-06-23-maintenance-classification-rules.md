@@ -28,7 +28,7 @@
 
 **Proximas sprints sugeridas:**
 
-- Separar explicitamente itens ignorados por politica nas filas de classificacao.
+- Itens ignorados por politica foram separados em `2026-06-23-maintenance-policy-ignored.md`.
 - Registrar historico/auditoria das aplicacoes em massa e edicoes de regras.
 - Validar em producao se o fluxo "aplicar similares" esta criando `tag_rules` como esperado.
 - Melhorar feedback visual quando a propagacao para similares atualiza registros fora da pagina atual.
