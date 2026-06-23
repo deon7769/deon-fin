@@ -216,7 +216,7 @@ def delete_tag(db: Database, tag_id: int) -> dict[str, int] | None:
         return None
 
     with db._cursor() as cur:  # type: ignore[attr-defined]
-        cur.execute("UPDATE transactions SET tag_id=NULL WHERE tag_id=?", (tag_id,))
+        cur.execute("UPDATE transactions SET tag_id=NULL, tag_source=NULL WHERE tag_id=?", (tag_id,))
         untagged = max(cur.rowcount, 0)
         cur.execute("DELETE FROM tags WHERE id=?", (tag_id,))
 

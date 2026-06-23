@@ -186,8 +186,14 @@ def test_delete_tag_unlinks_transactions_without_deleting_them(tmp_db):
     tagged_a = _insert_tx(tmp_db, "tags-delete-1")
     tagged_b = _insert_tx(tmp_db, "tags-delete-2")
     untouched = _insert_tx(tmp_db, "tags-delete-3")
-    tmp_db._conn.execute("UPDATE transactions SET tag_id=? WHERE id=?", (tag["id"], tagged_a.id))
-    tmp_db._conn.execute("UPDATE transactions SET tag_id=? WHERE id=?", (tag["id"], tagged_b.id))
+    tmp_db._conn.execute(
+        "UPDATE transactions SET tag_id=?, tag_source='manual' WHERE id=?",
+        (tag["id"], tagged_a.id),
+    )
+    tmp_db._conn.execute(
+        "UPDATE transactions SET tag_id=?, tag_source='rule' WHERE id=?",
+        (tag["id"], tagged_b.id),
+    )
     tmp_db._conn.commit()
 
     result = tags_repo.delete_tag(tmp_db, tag["id"])
@@ -195,12 +201,12 @@ def test_delete_tag_unlinks_transactions_without_deleting_them(tmp_db):
     assert result == {"deleted_id": tag["id"], "untagged": 2}
     assert tmp_db.count_transactions() == 3
     rows = tmp_db._conn.execute(
-        "SELECT id, tag_id FROM transactions ORDER BY external_id"
+        "SELECT id, tag_id, tag_source FROM transactions ORDER BY external_id"
     ).fetchall()
-    assert [(row["id"], row["tag_id"]) for row in rows] == [
-        (tagged_a.id, None),
-        (tagged_b.id, None),
-        (untouched.id, None),
+    assert [(row["id"], row["tag_id"], row["tag_source"]) for row in rows] == [
+        (tagged_a.id, None, None),
+        (tagged_b.id, None, None),
+        (untouched.id, None, None),
     ]
     assert tags_repo.get_tag(tmp_db, tag["id"]) is None
 

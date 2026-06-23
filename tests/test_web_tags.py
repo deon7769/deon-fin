@@ -164,8 +164,14 @@ def test_delete_tag_unlinks_transactions_and_returns_count(client, tmp_db):
     tag = client.post("/api/tags", json={"name": "Pets", "color": "#10B981"}).json()
     tagged_a = _insert_tx(tmp_db, "web-tags-delete-1")
     tagged_b = _insert_tx(tmp_db, "web-tags-delete-2")
-    tmp_db._conn.execute("UPDATE transactions SET tag_id=? WHERE id=?", (tag["id"], tagged_a.id))
-    tmp_db._conn.execute("UPDATE transactions SET tag_id=? WHERE id=?", (tag["id"], tagged_b.id))
+    tmp_db._conn.execute(
+        "UPDATE transactions SET tag_id=?, tag_source='manual' WHERE id=?",
+        (tag["id"], tagged_a.id),
+    )
+    tmp_db._conn.execute(
+        "UPDATE transactions SET tag_id=?, tag_source='auto' WHERE id=?",
+        (tag["id"], tagged_b.id),
+    )
     tmp_db._conn.commit()
 
     deleted = client.delete(f"/api/tags/{tag['id']}")
@@ -174,9 +180,9 @@ def test_delete_tag_unlinks_transactions_and_returns_count(client, tmp_db):
     assert deleted.json() == {"deleted_id": tag["id"], "untagged": 2}
     assert tmp_db.count_transactions() == 2
     assert [
-        row["tag_id"]
-        for row in tmp_db._conn.execute("SELECT tag_id FROM transactions ORDER BY external_id")
-    ] == [None, None]
+        (row["tag_id"], row["tag_source"])
+        for row in tmp_db._conn.execute("SELECT tag_id, tag_source FROM transactions ORDER BY external_id")
+    ] == [(None, None), (None, None)]
 
     missing = client.delete(f"/api/tags/{tag['id']}")
     assert missing.status_code == 404
