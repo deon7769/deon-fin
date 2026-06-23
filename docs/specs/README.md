@@ -5,6 +5,9 @@ interface do print: dashboard dark com Painel, Orçamento, Metas, Contas, Fatura
 com um frontend **Next.js** consumindo a API. Após a paridade das telas principais, Manutenção e Simulador
 entram como extensões do mesmo layout.
 
+Para o consolidado atualizado do que já foi entregue, o que está em produção e o que ainda falta, veja
+[`../STATUS.md`](../STATUS.md).
+
 **Cada arquivo `Fx.y` é uma tarefa** — detalhada o suficiente para um agente/dev implementar de ponta a ponta
 (backend + frontend + testes). Comece sempre pelo **`00-contexto-e-arquitetura.md`** (o primer): ele fixa o
 modelo de dados, as reconciliações com o código atual, as convenções de API e o design system que todos os
