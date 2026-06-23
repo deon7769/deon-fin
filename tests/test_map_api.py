@@ -53,11 +53,22 @@ def test_investment_map_lists_light_country_payload(tmp_db, monkeypatch):
     assert by_code["BR"] == {
         "code": "BR",
         "name": "Brasil",
+        "name_intl": "Brazil",
+        "main_index": "Ibovespa",
         "tier": "medium",
+        "tier_label": "Médio Risco",
         "color": "#F59E0B",
     }
     assert by_code["DE"]["tier"] == "top"
-    assert set(by_code["US"]) == {"code", "name", "tier", "color"}
+    assert set(by_code["US"]) == {
+        "code",
+        "name",
+        "name_intl",
+        "main_index",
+        "tier",
+        "tier_label",
+        "color",
+    }
 
 
 def test_investment_map_country_detail_is_case_insensitive(tmp_db, monkeypatch):

@@ -43,16 +43,33 @@ def test_list_country_ratings_returns_light_map_payload():
     assert by_code["DE"] == {
         "code": "DE",
         "name": "Alemanha",
+        "name_intl": "Germany",
+        "main_index": "DAX",
         "tier": "top",
+        "tier_label": "AAA (Prime)",
         "color": "#2563EB",
     }
     assert by_code["BR"] == {
         "code": "BR",
         "name": "Brasil",
+        "name_intl": "Brazil",
+        "main_index": "Ibovespa",
         "tier": "medium",
+        "tier_label": "Médio Risco",
         "color": "#F59E0B",
     }
-    assert set(by_code["US"]) == {"code", "name", "tier", "color"}
+    assert set(by_code["US"]) == {
+        "code",
+        "name",
+        "name_intl",
+        "main_index",
+        "tier",
+        "tier_label",
+        "color",
+    }
+    assert "ratings" not in by_code["US"]
+    assert "empresas" not in by_code["US"]
+    assert "etfs" not in by_code["US"]
 
 
 def test_get_country_rating_is_case_insensitive_and_returns_detail():

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 
 import { InvestmentMapPanel } from "@/components/investimentos/InvestmentMapPanel";
@@ -11,10 +11,8 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
 import {
   useInvestmentCountry,
-  useInvestmentCountryDetails,
   useInvestmentMap,
 } from "@/hooks/useInvestments";
-import { buildInvestmentCountryDetailsMap } from "@/lib/investments";
 
 function MapSkeleton() {
   return (
@@ -58,22 +56,7 @@ export default function InvestmentMapPage() {
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
   const activeCode = selectedCode ?? mapQuery.data?.[0]?.code ?? null;
   const countryQuery = useInvestmentCountry(activeCode);
-  const detailQueries = useInvestmentCountryDetails(mapQuery.data ?? []);
-  const countryDetails = useMemo(
-    () =>
-      buildInvestmentCountryDetailsMap([
-        ...detailQueries.map((query) => query.data),
-        countryQuery.data,
-      ]),
-    [countryQuery.data, detailQueries],
-  );
-
-  const selectedCountry = useMemo(() => {
-    if (!activeCode) {
-      return null;
-    }
-    return countryQuery.data ?? countryDetails[activeCode.toUpperCase()] ?? null;
-  }, [activeCode, countryDetails, countryQuery.data]);
+  const selectedCountry = activeCode ? countryQuery.data ?? null : null;
 
   return (
     <>
@@ -92,7 +75,6 @@ export default function InvestmentMapPage() {
             selectedCode={activeCode}
             selectedCountry={selectedCountry}
             loadingCountry={countryQuery.isLoading}
-            countryDetails={countryDetails}
             countryError={countryQuery.isError && countryQuery.error instanceof Error ? countryQuery.error.message : null}
             onSelectCountry={setSelectedCode}
           />

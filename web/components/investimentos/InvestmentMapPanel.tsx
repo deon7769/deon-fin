@@ -65,6 +65,9 @@ export function filterInvestmentMapCountries(
     return [
       country.code,
       country.name,
+      country.name_intl,
+      country.main_index,
+      country.tier_label,
       detail?.name,
       detail?.name_intl,
       detail?.main_index,
@@ -289,11 +292,13 @@ export function InvestmentMapPanel({
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {[
           ["top", "AAA", "#2563EB"],
           ["high", "AA/A", "#22C55E"],
           ["medium", "BBB/BB", "#F59E0B"],
+          ["speculative", "B/CCC", "#EF4444"],
+          ["nodata", "Sem dados", "#3A3A3E"],
         ].map(([key, label, color]) => (
           <div key={key} className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm text-muted">
             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} aria-hidden />

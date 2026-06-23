@@ -66,7 +66,10 @@ def list_country_ratings() -> list[dict[str, str]]:
             {
                 "code": code,
                 "name": str(country.get("name") or code),
+                "name_intl": str(country.get("name_intl") or country.get("name") or code),
+                "main_index": str(country.get("main_index") or ""),
                 "tier": tier,
+                "tier_label": str(country.get("tier_label") or tier),
                 "color": color_for_tier(tier),
             }
         )

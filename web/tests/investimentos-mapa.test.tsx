@@ -12,8 +12,24 @@ import { buildInvestmentCountryDetailsMap } from "@/lib/investments";
 import type { InvestmentCountryDetail, InvestmentMapCountry } from "@/lib/types";
 
 const countries: InvestmentMapCountry[] = [
-  { code: "BR", name: "Brasil", tier: "medium", color: "#F59E0B" },
-  { code: "US", name: "Estados Unidos", tier: "top", color: "#2563EB" },
+  {
+    code: "BR",
+    name: "Brasil",
+    name_intl: "Brazil",
+    main_index: "Ibovespa",
+    tier: "medium",
+    tier_label: "Médio Risco",
+    color: "#F59E0B",
+  },
+  {
+    code: "US",
+    name: "Estados Unidos",
+    name_intl: "United States",
+    main_index: "S&P 500",
+    tier: "top",
+    tier_label: "AAA (Prime)",
+    color: "#2563EB",
+  },
 ];
 
 const detail: InvestmentCountryDetail = {
@@ -50,6 +66,8 @@ describe("InvestmentMapPanel", () => {
     expect(html).toContain("Brasil");
     expect(html).toContain("Médio Risco");
     expect(html).toContain("Ibovespa");
+    expect(html).toContain("B/CCC");
+    expect(html).toContain("Sem dados");
   });
 
   it("renders an explicit empty state when no map countries are available", () => {
@@ -77,7 +95,8 @@ describe("InvestmentMapPanel", () => {
   });
 
   it("filters countries by country name or main index and keeps selection case-insensitive", () => {
-    expect(filterInvestmentMapCountries(countries, { BR: detail }, "ibov")).toEqual([countries[0]]);
+    expect(filterInvestmentMapCountries(countries, {}, "ibov")).toEqual([countries[0]]);
+    expect(filterInvestmentMapCountries(countries, {}, "brazil")).toEqual([countries[0]]);
     expect(filterInvestmentMapCountries(countries, { BR: detail }, "estados")).toEqual([countries[1]]);
     expect(filterInvestmentMapCountries(countries, { BR: detail }, "br")).toEqual([countries[0]]);
   });

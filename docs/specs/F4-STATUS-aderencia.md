@@ -41,8 +41,10 @@ Itens de polish a **conferir** contra os specs (podem já estar ok; checar e, se
    quando têm meta; RF sem unidade distribui por valor; cripto/ETF continuam dependendo de preço/cota.
 4. ✅ **Badge "manual" na lista** (front) e regra "Pluggy sobrescreve no próximo sync" no `upsert_pluggy_asset`
    (overview §6 / F4.1 §5) — confirmar UI + comportamento do sync.
-5. **Mapa — dataset:** conferir cobertura de países em `country_ratings.py` (US, BR, DE, IN, RU + principais) e o
-   GeoJSON/tiles; selo de risco e abas Índices/Empresas/ETFs (F4.5).
+5. ✅ **Mapa — dataset/UX:** dataset estático cobre US, BR, DE, IN, RU e principais já seedados; o payload leve
+   de `/api/investments/map` agora inclui `name_intl`, `main_index` e `tier_label`, permitindo busca por país ou
+   índice sem pré-carregar o detalhe de todos os países. Legenda visual cobre as 5 faixas do spec: AAA, AA/A,
+   BBB/BB, B/CCC e Sem dados.
 6. ✅ **`investido_total` aditivo sem duplicar:** o contexto/dashboard legado agora usa
    `portfolio_assets.current_value` como `investido_total` quando há carteira detalhada; os aportes detectados em
    transações ficam separados em `aportes_periodo_total` e continuam alimentando o 50/30/20 como fluxo mensal.

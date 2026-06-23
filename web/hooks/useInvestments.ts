@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   calcularInvestmentAporte,
   confirmarInvestmentAporte,
@@ -28,7 +28,6 @@ import type {
   InvestmentAssetInput,
   InvestmentAporteConfirmInput,
   InvestmentAporteCalculateInput,
-  InvestmentMapCountry,
   InvestmentQuestionInput,
   InvestmentTargetsMap,
 } from "@/lib/types";
@@ -125,16 +124,6 @@ export function useInvestmentCountry(code: string | null) {
     queryFn: ({ signal }) => getInvestmentCountry(code as string, signal),
     enabled: Boolean(code),
     staleTime: 5 * 60_000,
-  });
-}
-
-export function useInvestmentCountryDetails(countries: InvestmentMapCountry[]) {
-  return useQueries({
-    queries: countries.map((country) => ({
-      queryKey: ["investments", "map", country.code],
-      queryFn: ({ signal }: { signal: AbortSignal }) => getInvestmentCountry(country.code, signal),
-      staleTime: 5 * 60_000,
-    })),
   });
 }
 

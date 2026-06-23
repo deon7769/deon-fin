@@ -446,7 +446,10 @@ export type InvestmentCountryTier = "top" | "high" | "medium" | "speculative" | 
 export type InvestmentMapCountry = {
   code: string;
   name: string;
+  name_intl: string;
+  main_index: string;
   tier: InvestmentCountryTier;
+  tier_label: string;
   color: string;
 };
 

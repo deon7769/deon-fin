@@ -156,6 +156,10 @@ Atualizado em: 2026-06-23
   - quando há carteira detalhada, usa `portfolio_assets.current_value`;
   - aportes detectados no extrato ficam em `aportes_periodo_total`;
   - orçamento 50/30/20 continua usando os aportes do período como fluxo mensal.
+- Mapa F4 refinado:
+  - payload leve inclui nome internacional, índice principal e selo de risco;
+  - busca por índice funciona sem pré-carregar todos os detalhes;
+  - legenda mostra AAA, AA/A, BBB/BB, B/CCC e Sem dados.
 
 ## Documentos principais
 
@@ -269,7 +273,6 @@ Atualizado em: 2026-06-23
 ## Próximas sprints recomendadas
 
 1. **F4 follow-ups de Investimentos**
-   - Conferir dataset/UX do Mapa em produção com países principais.
    - Revisar detalhamento dos JSONs BTG/Pluggy para proventos e movimentações.
 
 2. **Manutenção - ações de classificação**
