@@ -115,7 +115,8 @@ describe("InvestmentAportePanel", () => {
 
     expect(html).toContain("Nenhuma sugestao executavel para este aporte.");
     expect(html).not.toContain("<table");
-    expect(html).toContain("Ajuste ativos, precos ou metas antes de confirmar.");
+    expect(html).toContain("Os ativos elegiveis precisam ter nota acima de 0");
+    expect(html).toContain("marque respostas positivas no Score");
   });
 
   it("uses MoneyText for the confirmation modal suggested amount", () => {

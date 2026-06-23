@@ -293,7 +293,12 @@ export function InvestmentAportePanel({
             ) : (
               <div className="rounded-md border border-dashed border-border bg-bg px-4 py-5 text-sm text-muted">
                 <p className="font-medium text-text">Nenhuma sugestao executavel para este aporte.</p>
-                <p className="mt-1">Ajuste ativos, precos ou metas antes de confirmar.</p>
+                <p className="mt-1">
+                  Os ativos elegiveis precisam ter nota acima de 0, preco valido e meta configurada.
+                </p>
+                <p className="mt-1">
+                  Abra um ativo em Investimentos e marque respostas positivas no Score antes de confirmar.
+                </p>
               </div>
             )}
           </SectionCard>

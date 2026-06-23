@@ -395,6 +395,27 @@ function ScoreAnswersSection({
         </button>
       </div>
 
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-md border border-border bg-bg px-3 py-2">
+          <p className="text-xs text-muted">Pontos positivos</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-positive">
+            {scoreLabel(scoreAnswers.score.pontos_positivos)}
+          </p>
+        </div>
+        <div className="rounded-md border border-border bg-bg px-3 py-2">
+          <p className="text-xs text-muted">Pontos negativos</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-negative">
+            {scoreLabel(scoreAnswers.score.pontos_negativos)}
+          </p>
+        </div>
+        <div className="rounded-md border border-border bg-bg px-3 py-2">
+          <p className="text-xs text-muted">Pontuacao final</p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-blue-200">
+            {scoreLabel(scoreAnswers.score.nota)}
+          </p>
+        </div>
+      </div>
+
       <div className="mt-3 space-y-2">
         {scoreAnswers.questions.map((question) => (
           <label

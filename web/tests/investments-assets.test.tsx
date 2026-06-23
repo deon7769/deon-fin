@@ -153,6 +153,9 @@ describe("investment asset form", () => {
 
     expect(html).toContain("Score");
     expect(html).toContain("Nota 10");
+    expect(html).toContain("Pontos positivos");
+    expect(html).toContain("Pontos negativos");
+    expect(html).toContain("Pontuacao final");
     expect(html).toContain("ROE historico maior que 8%?");
     expect(html).toContain("Salvar respostas");
   });
