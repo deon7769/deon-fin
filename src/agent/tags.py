@@ -5,28 +5,39 @@ from typing import Any
 from ..storage import Database
 from . import maintenance as mnt
 from .buckets import CATEGORY_BUCKET_MAP, match_key_for
-
-BLOCKED_CATEGORY_KEYS = {
-    key
-    for key, bucket_key in CATEGORY_BUCKET_MAP.items()
-    if bucket_key is None
-}
-
-TAG_MERCHANT_MAP: dict[str, str] = {
-    "ifood": "Alimentação",
-    "mercado": "Alimentação",
-    "supermercado": "Alimentação",
-    "uber": "Transporte",
-    "posto": "Transporte",
-    "netflix": "Lazer",
-    "spotify": "Lazer",
-    "microsoft": "Educação",
-    "openai": "Educação",
-}
+from .context import FINANCIAL_COST_CATEGORIES, NON_SPENDING_CATEGORIES
 
 
 def _norm(value: str | None) -> str:
     return (value or "").strip().lower()
+
+
+_BUCKETLESS_CATEGORY_KEYS = {
+    key
+    for key, bucket_key in CATEGORY_BUCKET_MAP.items()
+    if bucket_key is None
+}
+_FINANCIAL_COST_CATEGORY_KEYS = {_norm(category) for category in FINANCIAL_COST_CATEGORIES}
+BLOCKED_CATEGORY_KEYS = (
+    _BUCKETLESS_CATEGORY_KEYS - _FINANCIAL_COST_CATEGORY_KEYS
+) | {_norm(category) for category in NON_SPENDING_CATEGORIES}
+
+TAG_MERCHANT_MAP: dict[str, tuple[str, str | None]] = {
+    "ifood": ("Delivery", "conforto"),
+    "ifd": ("Delivery", "conforto"),
+    "apple.com/bill": ("Serviços digitais", "prazeres"),
+    "applecombill": ("Serviços digitais", "prazeres"),
+    "mercado": ("Mercado", "conforto"),
+    "supermercado": ("Mercado", "conforto"),
+    "uber": ("Táxi/App", "custos_fixos"),
+    "posto": ("Combustível", "custos_fixos"),
+    "gnv": ("Combustível", "custos_fixos"),
+    "netflix": ("Streaming de vídeo", "prazeres"),
+    "spotify": ("Streaming de música", "prazeres"),
+    "microsoft": ("Educação", "conhecimento"),
+    "openai": ("Educação", "conhecimento"),
+    "openrouter": ("Educação", "conhecimento"),
+}
 
 
 def _tag_ids_by_name(db: Database) -> dict[str, int]:
@@ -81,11 +92,11 @@ def _translated_category_tag(row: Any, cat_map: dict[str, str]) -> tuple[str, st
     return translated, bucket_key
 
 
-def _merchant_tag_name(row: Any) -> str | None:
+def _merchant_tag(row: Any) -> tuple[str, str | None] | None:
     raw = _norm(row["raw_description"] or row["description"])
-    for needle, tag_name in TAG_MERCHANT_MAP.items():
+    for needle, tag in TAG_MERCHANT_MAP.items():
         if needle in raw:
-            return tag_name
+            return tag
     return None
 
 
@@ -135,7 +146,7 @@ def apply_tags_to_database(db: Database) -> dict[str, int]:
                     tag, created = tags_repo.get_or_create_tag(
                         db,
                         name=tag_name,
-                        color=None,
+                        color=tags_repo.default_tag_color(tag_name),
                         bucket_id=bucket_id,
                     )
                     target_id = int(tag["id"])
@@ -143,10 +154,20 @@ def apply_tags_to_database(db: Database) -> dict[str, int]:
                     stats["created_tags"] += 1 if created else 0
                     source = "auto"
                 else:
-                    tag_name = _merchant_tag_name(row)
-                    if tag_name:
-                        target_id = tag_ids.get(_norm(tag_name))
-                        source = "auto" if target_id is not None else None
+                    merchant_tag = _merchant_tag(row)
+                    if merchant_tag:
+                        tag_name, bucket_key = merchant_tag
+                        bucket_id = bucket_ids.get(bucket_key or "")
+                        tag, created = tags_repo.get_or_create_tag(
+                            db,
+                            name=tag_name,
+                            color=tags_repo.default_tag_color(tag_name),
+                            bucket_id=bucket_id,
+                        )
+                        target_id = int(tag["id"])
+                        tag_ids[_norm(tag["name"])] = target_id
+                        stats["created_tags"] += 1 if created else 0
+                        source = "auto"
 
             if target_id is None or source is None:
                 stats["unmatched"] += 1

@@ -93,6 +93,7 @@ def test_apply_tags_creates_granular_tag_from_translated_category_without_overwr
 
     delivery = _tag_by_name(tmp_db, "Delivery")
     assert delivery["bucket_key"] == "conforto"
+    assert delivery["color"] is not None
     rows = {
         row["id"]: (row["tag_id"], row["tag_source"])
         for row in tmp_db._conn.execute("SELECT id, tag_id, tag_source FROM transactions")
@@ -101,6 +102,52 @@ def test_apply_tags_creates_granular_tag_from_translated_category_without_overwr
     assert rows[manual.id] == (lazer["id"], "manual")
     assert stats["by_map"] == 1
     assert stats["skipped_manual"] == 1
+    assert stats["created_tags"] == 1
+
+
+def test_apply_tags_creates_tag_for_financial_cost_category_without_parent_bucket(tmp_db):
+    _seed_account(tmp_db)
+    tx = _insert(
+        tmp_db,
+        external_id="agent-tags-financial-cost-1",
+        description="IOF INTERNACIONAL",
+        category="Tax on financial operations",
+    )
+
+    stats = apply_tags_to_database(tmp_db)
+
+    iof = _tag_by_name(tmp_db, "IOF")
+    row = tmp_db._conn.execute(
+        "SELECT tag_id, tag_source FROM transactions WHERE id=?",
+        (tx.id,),
+    ).fetchone()
+    assert iof["bucket_key"] is None
+    assert iof["color"] is not None
+    assert (row["tag_id"], row["tag_source"]) == (iof["id"], "auto")
+    assert stats["by_map"] == 1
+    assert stats["created_tags"] == 1
+
+
+def test_apply_tags_uses_merchant_fallback_for_uncategorized_store(tmp_db):
+    _seed_account(tmp_db)
+    tx = _insert(
+        tmp_db,
+        external_id="agent-tags-merchant-fallback-1",
+        description="APPLECOMBILL SAO PAULO BRA",
+        category=None,
+    )
+
+    stats = apply_tags_to_database(tmp_db)
+
+    digital = _tag_by_name(tmp_db, "Serviços digitais")
+    row = tmp_db._conn.execute(
+        "SELECT tag_id, tag_source FROM transactions WHERE id=?",
+        (tx.id,),
+    ).fetchone()
+    assert digital["bucket_key"] == "prazeres"
+    assert digital["color"] is not None
+    assert (row["tag_id"], row["tag_source"]) == (digital["id"], "auto")
+    assert stats["by_map"] == 1
     assert stats["created_tags"] == 1
 
 

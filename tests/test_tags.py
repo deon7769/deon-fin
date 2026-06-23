@@ -81,6 +81,16 @@ def test_seed_tags_assigns_default_parent_buckets_without_overwriting_edits(tmp_
     assert tags_repo.get_tag(tmp_db, alimentacao["id"])["bucket_key"] == "custos_fixos"
 
 
+def test_seed_tags_backfills_missing_custom_tag_colors_without_overwriting_edits(tmp_db):
+    blank = tags_repo.create_tag(tmp_db, name="Mercado", color=None)
+    custom = tags_repo.create_tag(tmp_db, name="Pets", color="#10B981")
+
+    tags_repo.seed_tags(tmp_db)
+
+    assert tags_repo.get_tag(tmp_db, blank["id"])["color"] is not None
+    assert tags_repo.get_tag(tmp_db, custom["id"])["color"] == "#10b981"
+
+
 def test_normalize_color_accepts_hex_and_rejects_other_formats():
     assert tags_repo.normalize_color("#fff") == "#fff"
     assert tags_repo.normalize_color("#FFFFFF") == "#ffffff"

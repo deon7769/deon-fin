@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import re
 import sqlite3
 from typing import Any
@@ -18,6 +19,20 @@ TAG_SEED: list[dict[str, str]] = [
 
 _HEX_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
 _UNSET = object()
+_AUTO_COLOR_PALETTE = [
+    "#0ea5e9",
+    "#14b8a6",
+    "#84cc16",
+    "#f59e0b",
+    "#ef4444",
+    "#ec4899",
+    "#8b5cf6",
+    "#6366f1",
+    "#64748b",
+    "#22c55e",
+    "#f97316",
+    "#06b6d4",
+]
 
 
 def normalize_color(color: str | None) -> str | None:
@@ -41,6 +56,12 @@ def normalize_name(name: str) -> str:
     return normalized
 
 
+def default_tag_color(name: str) -> str:
+    normalized = normalize_name(name).casefold()
+    digest = hashlib.sha1(normalized.encode("utf-8")).digest()
+    return _AUTO_COLOR_PALETTE[digest[0] % len(_AUTO_COLOR_PALETTE)]
+
+
 def _bucket_id_by_key(db: Database) -> dict[str, int]:
     from . import buckets_repo
 
@@ -57,6 +78,27 @@ def _validate_bucket_id(db: Database, bucket_id: int | None) -> int | None:
     if not buckets_repo.bucket_exists(db, parsed):
         raise ValueError(f"bucket_id invalido: {bucket_id}")
     return parsed
+
+
+def backfill_missing_tag_colors(db: Database) -> int:
+    rows = db._conn.execute(
+        """
+        SELECT id, name
+          FROM tags
+         WHERE color IS NULL OR TRIM(COALESCE(color, '')) = ''
+         ORDER BY id
+        """
+    ).fetchall()
+    if not rows:
+        return 0
+
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        for row in rows:
+            cur.execute(
+                "UPDATE tags SET color=? WHERE id=?",
+                (default_tag_color(str(row["name"])), row["id"]),
+            )
+    return len(rows)
 
 
 def seed_tags(db: Database) -> int:
@@ -77,12 +119,14 @@ def seed_tags(db: Database) -> int:
                 },
             )
             inserted += max(cur.rowcount, 0)
+    backfill_missing_tag_colors(db)
     return inserted
 
 
 def seed_tags_if_empty(db: Database) -> int:
     count = db._conn.execute("SELECT COUNT(*) FROM tags").fetchone()[0]
     if count:
+        backfill_missing_tag_colors(db)
         return 0
     return seed_tags(db)
 

@@ -65,6 +65,9 @@ Atualizado em: 2026-06-23
   - Ex.: `Taxi and ride-hailing` -> `Táxi/App`.
   - Ex.: `Digital services` -> `Serviços digitais`.
 - Tags granulares recebem Meta pai quando há regra no mapa categoria -> pote.
+- Tags criadas automaticamente recebem cor determinística e `seed_tags` faz backfill de cores ausentes sem sobrescrever cores editadas.
+- Custos financeiros reais sem Meta, como `Tax on financial operations` -> `IOF`, agora recebem Tag automática sem forçar vínculo a um pote.
+- Fallback conservador por lojista cobre padrões óbvios sem categoria Pluggy, como Apple billing, Ifood/IFD, Uber, GNV/posto, Netflix/Spotify, OpenAI/OpenRouter/Microsoft.
 - `transactions.category` permanece como dado bruto da integração para auditoria.
 - `python -m src.cli categorize` reaplica categoria, Meta, Tag e competência em dados já existentes.
 
@@ -91,7 +94,8 @@ Atualizado em: 2026-06-23
   - cobertura de Tags e Metas;
   - contagem por origem `manual`, `rule`, `auto`, `none`;
   - filas acionáveis de lançamentos sem Tag e sem Meta;
-  - transferências/pagamentos intencionalmente fora da classificação não entram nas filas acionáveis.
+  - a fila "sem Tag" usa gasto real via `spending_value`, evitando pagamento de fatura, transferências e movimentações que não são consumo;
+  - a fila "sem Meta" também usa gasto real, mas continua respeitando categorias bloqueadas para pote.
 
 ### Contas e cartões
 
@@ -169,12 +173,13 @@ Atualizado em: 2026-06-23
   - "sem Tag acionável";
   - "sem Meta acionável";
   - "ignorado por política" (transferências, fatura, impostos financeiros quando aplicável).
+- Persistir e auditar regras de Tag aprendidas na produção; levantamento atual indicou `tag_rules=0`, então o aprendizado visual ainda precisa ser validado ponta a ponta.
 
 ### Categorias, Tags e resumos
 
 - Preservar resumos por categoria nas telas atuais, mas evoluir gradualmente para também mostrar resumos por Tag e por Meta.
 - Decidir se Tags padrão amplas antigas (`Alimentação`, `Lazer`, etc.) continuam como opções manuais ou se serão migradas para Tags granulares.
-- Melhorar cores de Tags criadas automaticamente pelo de/para.
+- Revisar a paleta automática de Tags depois de validar visualmente com dados reais.
 - Adicionar filtros por `tag_source` e `bucket_source` em Transações.
 
 ### Renda e transferências

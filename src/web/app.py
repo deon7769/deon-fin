@@ -358,11 +358,12 @@ def _classification_issue_row(row: Any, cat_map: dict[str, str]) -> dict[str, An
 
 
 def _classification_health(db: Database, cat_map: dict[str, str]) -> dict[str, Any]:
+    owner_names = account_owner_aliases(db.list_accounts())
     rows = db._conn.execute(
         """
-        SELECT t.id, t.posted_at, t.description, t.category, t.amount,
+        SELECT t.id, t.posted_at, t.description, t.raw_description, t.category, t.amount,
                t.tag_id, t.tag_source, t.bucket_id, t.bucket_source,
-               t.account_id, a.name AS account_name, a.institution
+               t.account_id, a.name AS account_name, a.institution, a.type AS account_type
           FROM transactions t
           LEFT JOIN accounts a ON a.id = t.account_id
          ORDER BY abs(t.amount) DESC, t.posted_at DESC, t.id DESC
@@ -373,13 +374,27 @@ def _classification_health(db: Database, cat_map: dict[str, str]) -> dict[str, A
     tagged = sum(1 for row in rows if row["tag_id"] is not None)
     bucketed = sum(1 for row in rows if row["bucket_id"] is not None)
 
-    actionable_rows = [
+    spending_rows = [
         row
         for row in rows
-        if (str(row["category"] or "").strip().lower() not in _BLOCKED_CLASSIFICATION_CATEGORY_KEYS)
+        if spending_value(
+            float(row["amount"] or 0.0),
+            row["account_type"],
+            row["category"],
+            description=row["description"],
+            raw_description=row["raw_description"],
+            owner_names=owner_names,
+        )
+        > 0
     ]
-    missing_tag = [row for row in actionable_rows if row["tag_id"] is None]
-    missing_bucket = [row for row in actionable_rows if row["bucket_id"] is None]
+    bucket_actionable_rows = [
+        row
+        for row in spending_rows
+        if str(row["category"] or "").strip().lower()
+        not in _BLOCKED_CLASSIFICATION_CATEGORY_KEYS
+    ]
+    missing_tag = [row for row in spending_rows if row["tag_id"] is None]
+    missing_bucket = [row for row in bucket_actionable_rows if row["bucket_id"] is None]
 
     return {
         "total_transactions": total,

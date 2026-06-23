@@ -394,6 +394,9 @@ def test_maintenance_endpoint_reports_missing_category_translations(client, tmp_
 
 def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monkeypatch):
     tmp_db.upsert_account(Account(id="bank-health", source="test", name="Bank", type="BANK"))
+    tmp_db.upsert_account(
+        Account(id="card-health", source="test", name="Card", type="CREDIT_CARD")
+    )
     buckets_repo.seed_buckets(tmp_db)
     conforto = next(bucket for bucket in buckets_repo.list_buckets(tmp_db) if bucket["key"] == "conforto")
     delivery = tags_repo.create_tag(
@@ -429,7 +432,16 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
         category="Transfer - PIX",
         external_id="health-transfer",
     )
-    tmp_db.insert_transactions([classified, needs_review, intentional_transfer])
+    card_payment = Transaction(
+        account_id="card-health",
+        posted_at=date(2026, 6, 4),
+        amount=Decimal("-900.00"),
+        description="Pagamento online",
+        source="test",
+        category="Payment",
+        external_id="health-card-payment",
+    )
+    tmp_db.insert_transactions([classified, needs_review, intentional_transfer, card_payment])
     tmp_db._conn.execute(
         """
         UPDATE transactions
@@ -449,13 +461,13 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
 
     assert response.status_code == 200
     assert response.json()["classification_health"] == {
-        "total_transactions": 3,
+        "total_transactions": 4,
         "tagged": 1,
-        "untagged": 2,
+        "untagged": 3,
         "bucketed": 1,
-        "unbucketed": 2,
-        "tag_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 2},
-        "bucket_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 2},
+        "unbucketed": 3,
+        "tag_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 3},
+        "bucket_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 3},
         "missing_tag_review_count": 1,
         "missing_bucket_review_count": 1,
         "missing_tag": [
