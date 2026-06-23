@@ -58,8 +58,8 @@ specs assumem.
 
 1. **F4 follow-ups** — verificar/finalizar os 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100% das
    metas de alocação, RF por valor informado, badge manual na UI, dataset do Mapa, `investido_total` sem duplicar, tema azul).
-2. **Manutenção/Classificação** — filtros acionáveis "sem Tag" e "sem Meta" já foram ligados a Transações;
-   próximos: reprocessar pela UI, aplicação em massa com prévia e filtros por `tag_source`/`bucket_source`.
+2. **Manutenção/Classificação** — filtros acionáveis "sem Tag"/"sem Meta" e filtros avançados de Transações já
+   entraram; próximos: reprocessar pela UI, aplicação em massa com prévia e filtros por `tag_source`/`bucket_source`.
 3. **F5 — Hardening** na ordem: **F5.1** (WAL/busy_timeout) → **F5.2** (fonte única de cálculo) → **F5.3**
    (decompor `app.py`) → **F5.4** (lifespan) → **F5.5** (sunset do legado, quando houver paridade).
 4. **F2.8 polish** — melhorar heurística de candidatas, preview de conciliação e direção de resgate/subtração.
@@ -88,6 +88,7 @@ specs assumem.
 | F4.1–F4.5 | ✅ entregue | Módulo Investimentos: Ativos+brapi, Metas de alocação, Perguntas/nota, Aportar (Método Burro), Mapa. Aderência confirmada em `F4-STATUS-aderencia.md`. |
 | F2.8 | ✅ entregue | Conciliação transações ↔ metas de poupança (`savings_goal_id`): Guardado derivado, endpoints, modal em Metas e edição/filtro em Transações. |
 | F3.2/F2.2 polish | ✅ entregue | Manutenção abre filas acionáveis de Transações com `quality=missing_tag` e `quality=missing_bucket`. |
+| F2.2 filtros avançados | ✅ entregue | Drawer de filtros de Transações com período, mês, valor, tipo, metas, tags, contas, ocultas e transferências internas. |
 | F4 follow-ups | 📋 verificar | 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100%, RF, badge UI, dataset Mapa, tema azul…). |
 | F5 | 📋 backlog | Hardening: WAL, fonte única de cálculo, decompor app.py, lifespan, sunset legado. |
 
@@ -144,6 +145,11 @@ Registradas em 2026-06-21 para encaixar nas próximas sprints:
    com `quality=missing_tag` ou `quality=missing_bucket`; o backend filtra apenas gastos reais revisáveis e a UI
    exibe o badge do filtro aplicado. Plano em
    `docs/superpowers/plans/2026-06-23-maintenance-transaction-quality-filters.md`.
+
+10. **Filtros avançados em Transações:** entregue em 2026-06-23. A tela ganhou busca rápida + drawer de filtros
+    com período, mês de referência, faixa de valor, tipo, Metas, Tags, Contas, ocultas, transferências internas,
+    qualidade de classificação e metas de poupança. Plano em
+    `docs/superpowers/plans/2026-06-23-transacoes-filtros-avancados.md`.
 
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.

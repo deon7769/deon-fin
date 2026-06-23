@@ -111,10 +111,21 @@ Atualizado em: 2026-06-23
 
 ### Transações
 
+- Painel "Filtros e Busca" com busca rápida e drawer "Mais filtros" inspirado nos prints:
+  - período por data exata;
+  - mês de referência;
+  - faixa de valor;
+  - tipo Receita/Despesa;
+  - Metas/potes, incluindo "Sem meta";
+  - Tags, incluindo "Sem tag";
+  - Contas;
+  - Ocultar dos relatórios;
+  - transferências de mesma titularidade/internas.
 - Filtros acionáveis de qualidade da classificação:
   - `quality=missing_tag` lista gastos reais sem Tag, excluindo transferências e pagamentos de fatura;
   - `quality=missing_bucket` lista gastos reais sem Meta, excluindo transferências, pagamentos de fatura e categorias bloqueadas para pote;
   - badges indicam "Sem Tag acionável" ou "Sem Meta acionável" quando o filtro vem da Manutenção.
+- Filtro `internal_transfer=only|exclude` para revisar ou remover da visão as transferências internas detectadas por par conectado ou titularidade.
 
 ### Contas e cartões
 
@@ -209,6 +220,7 @@ Atualizado em: 2026-06-23
 - Decidir se Tags padrão amplas antigas (`Alimentação`, `Lazer`, etc.) continuam como opções manuais ou se serão migradas para Tags granulares.
 - Revisar a paleta automática de Tags depois de validar visualmente com dados reais.
 - Adicionar filtros por `tag_source` e `bucket_source` em Transações.
+- Melhorar o componente visual de multiseleção de Tags/Contas caso a lista cresça muito; a primeira versão usa multiselect nativo no drawer avançado.
 
 ### Renda e transferências
 

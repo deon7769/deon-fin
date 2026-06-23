@@ -204,6 +204,53 @@ def test_get_transactions_quality_filter_returns_actionable_missing_tag_rows(cli
     assert body["summary"] == {"income": 0.0, "expense": 42.5, "balance": -42.5}
 
 
+def test_get_transactions_filters_internal_transfers(client, tmp_db):
+    _seed_account(tmp_db, account_id="api-main")
+    _seed_account(tmp_db, account_id="api-reserve")
+    rows = [
+        Transaction(
+            account_id="api-main",
+            posted_at=date(2026, 6, 20),
+            amount=Decimal("-300.00"),
+            description="Pix enviado reserva",
+            raw_description="PIX ENVIADO RESERVA",
+            category="Transfer - PIX",
+            source="test",
+            external_id="api-internal-transfer-1",
+        ),
+        Transaction(
+            account_id="api-reserve",
+            posted_at=date(2026, 6, 20),
+            amount=Decimal("300.00"),
+            description="Pix recebido principal",
+            raw_description="PIX RECEBIDO PRINCIPAL",
+            category="Transfer - PIX",
+            source="test",
+            external_id="api-internal-transfer-2",
+        ),
+        Transaction(
+            account_id="api-main",
+            posted_at=date(2026, 6, 20),
+            amount=Decimal("-90.00"),
+            description="Mercado",
+            raw_description="MERCADO",
+            category="Groceries",
+            source="test",
+            external_id="api-internal-transfer-3",
+        ),
+    ]
+    tmp_db.insert_transactions(rows)
+    tmp_db._conn.execute("UPDATE transactions SET reference_month='2026-06'")
+    tmp_db._conn.commit()
+
+    response = client.get("/api/transactions?month=2026-06&internal_transfer=only")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert {item["id"] for item in body["items"]} == {rows[0].id, rows[1].id}
+    assert body["summary"] == {"income": 0.0, "expense": 0.0, "balance": 0.0}
+
+
 def test_patch_transaction_accepts_all_partial_fields(client, tmp_db):
     _seed_account(tmp_db)
     tx = _insert_tx(tmp_db, external_id="api-patch-1")

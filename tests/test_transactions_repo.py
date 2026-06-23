@@ -164,6 +164,69 @@ def test_filter_expense_excludes_neutral_transfers_and_card_payments(tmp_db):
     assert page["summary"] == {"income": 0.0, "expense": 120.0, "balance": -120.0}
 
 
+def test_list_transactions_filters_internal_transfer_pairs(tmp_db):
+    _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="repo-savings",
+            source="test",
+            institution="Banco Teste",
+            name="Conta Reserva",
+            type="CHECKING",
+        )
+    )
+    debit = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-500.00",
+        description="Pix enviado para reserva",
+        category="Transfer - PIX",
+        external_id="repo-internal-transfer-1",
+    )
+    credit = _insert(
+        tmp_db,
+        account_id="repo-savings",
+        amount="500.00",
+        description="Pix recebido da conta corrente",
+        category="Transfer - PIX",
+        external_id="repo-internal-transfer-2",
+    )
+    external_pix = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="200.00",
+        description="Pix recebido cliente",
+        category="Transfer - PIX",
+        external_id="repo-internal-transfer-3",
+    )
+    grocery = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-80.00",
+        description="Mercado",
+        category="Groceries",
+        external_id="repo-internal-transfer-4",
+    )
+
+    only_internal = transactions_repo.list_transactions(
+        tmp_db,
+        month="2026-06",
+        internal_transfer="only",
+        hidden="include",
+    )
+    assert {item["id"] for item in only_internal["items"]} == {debit.id, credit.id}
+    assert only_internal["summary"] == {"income": 0.0, "expense": 0.0, "balance": 0.0}
+
+    without_internal = transactions_repo.list_transactions(
+        tmp_db,
+        month="2026-06",
+        internal_transfer="exclude",
+        hidden="include",
+    )
+    assert {item["id"] for item in without_internal["items"]} == {external_pix.id, grocery.id}
+    assert without_internal["summary"] == {"income": 200.0, "expense": 80.0, "balance": 120.0}
+
+
 def test_list_transactions_filters_bucket_and_tag_with_none(tmp_db):
     _seed_accounts(tmp_db)
     buckets_repo.seed_buckets(tmp_db)

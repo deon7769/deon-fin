@@ -4,6 +4,7 @@ import {
   clampPageSize,
   hasTransactionFilters,
   idsFilterFromSearch,
+  internalTransferFilterFromSearch,
   parseTransactionAmountInput,
   semTagFilterFromSearch,
   transactionCategoryLabel,
@@ -118,6 +119,53 @@ describe("transaction helpers", () => {
     expect(transactionFilterBadges(filters)).toEqual(["Qualidade: Sem Tag acionável"]);
     expect(transactionFilterBadges({ quality: "missing_bucket" })).toEqual([
       "Qualidade: Sem Meta acionável",
+    ]);
+  });
+
+  it("serializes and labels advanced drawer filters from the prints", () => {
+    const filters = {
+      range: { from: "2026-06-12", to: "2026-06-12" },
+      accountIds: ["acc-1", "card-1"],
+      amountMin: 50,
+      amountMax: 500,
+      bucketIds: [null, 2],
+      tagIds: [3],
+      internalTransfer: "only" as const,
+      hidden: "include" as const,
+    };
+
+    expect(transactionQuery(filters)).toMatchObject({
+      from: "2026-06-12",
+      to: "2026-06-12",
+      account_ids: "acc-1,card-1",
+      min: 50,
+      max: 500,
+      bucket_ids: "none,2",
+      tag_ids: "3",
+      internal_transfer: "only",
+      hidden: "include",
+    });
+    expect(hasTransactionFilters(filters)).toBe(true);
+    expect(internalTransferFilterFromSearch("only")).toBe("only");
+    expect(internalTransferFilterFromSearch("bad")).toBeUndefined();
+    expect(
+      transactionFilterBadges(filters, {
+        accounts: [
+          { id: "acc-1", name: "Banco Inter" },
+          { id: "card-1", name: "BTG Banking" },
+        ],
+        buckets: [{ id: 2, name: "Custos Fixos" }],
+        tags: [{ id: 3, name: "Mercado" }],
+      }),
+    ).toEqual([
+      "Meta: Sem meta",
+      "Meta: Custos Fixos",
+      "Tag: Mercado",
+      "Conta: Banco Inter",
+      "Conta: BTG Banking",
+      "Valor: R$ 50 - R$ 500",
+      "Ocultas: Incluídas",
+      "Transferências internas: Somente internas",
     ]);
   });
 

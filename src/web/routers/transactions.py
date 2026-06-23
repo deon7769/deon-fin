@@ -97,6 +97,13 @@ def _parse_optional_ids(value: str | None, *, field: str) -> list[int | None] | 
     return parsed or None
 
 
+def _parse_string_ids(value: str | None) -> list[str] | None:
+    if value is None or value.strip() == "":
+        return None
+    parsed = [token.strip() for token in value.split(",") if token.strip()]
+    return parsed or None
+
+
 def _patch_kwargs(body: TransactionPatch) -> dict:
     fields = _fields_set(body)
     if not fields:
@@ -183,10 +190,12 @@ def get_transactions(
     min: float | None = Query(default=None),
     max: float | None = Query(default=None),
     account_id: str | None = None,
+    account_ids: str | None = None,
     bucket_ids: str | None = None,
     tag_ids: str | None = None,
     savings_goal_id: str | None = None,
     quality: Literal["missing_tag", "missing_bucket"] | None = None,
+    internal_transfer: Literal["only", "exclude"] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
     page: int = 1,
     page_size: int = 25,
@@ -205,10 +214,12 @@ def get_transactions(
         amount_min=min,
         amount_max=max,
         account_id=account_id,
+        account_ids=_parse_string_ids(account_ids),
         bucket_ids=_parse_optional_ids(bucket_ids, field="bucket_ids"),
         tag_ids=_parse_optional_ids(tag_ids, field="tag_ids"),
         savings_goal_ids=_parse_optional_ids(savings_goal_id, field="savings_goal_id"),
         quality=quality,
+        internal_transfer=internal_transfer,
         hidden=hidden,
         page=page,
         page_size=page_size,

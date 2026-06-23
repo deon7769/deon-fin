@@ -7,9 +7,12 @@ from typing import Any, Literal
 from ...agent import maintenance as mnt
 from ...agent.context import (
     CREDIT_TYPES,
+    INTERNAL_TRANSFER_MATCH_CATEGORIES,
+    PIX_TRANSFER_INCOME_CATEGORIES,
     account_owner_aliases,
     income_value,
     internal_transfer_credit_ids,
+    is_own_account_transfer_like,
     spending_value,
 )
 from ...agent.buckets import CATEGORY_BUCKET_MAP, match_key_for
@@ -43,6 +46,12 @@ _HIDDEN_VALUES = {"exclude", "include", "only"}
 _BLOCKED_CLASSIFICATION_CATEGORY_KEYS = {
     key for key, bucket_key in CATEGORY_BUCKET_MAP.items() if bucket_key is None
 }
+_INTERNAL_TRANSFER_CATEGORY_KEYS = {
+    value.strip().lower() for value in INTERNAL_TRANSFER_MATCH_CATEGORIES
+}
+_PIX_TRANSFER_INCOME_CATEGORY_KEYS = {
+    value.strip().lower() for value in PIX_TRANSFER_INCOME_CATEGORIES
+}
 
 SELECT_COLS = """
   SELECT t.id, t.account_id, t.posted_at, t.amount, t.description,
@@ -68,6 +77,17 @@ def _parse_posted_at(value: str) -> date:
 
 def _is_credit(account_type: str | None) -> bool:
     return (account_type or "").upper() in CREDIT_TYPES
+
+
+def _is_non_credit(account_type: str | None) -> bool:
+    return not _is_credit(account_type)
+
+
+def _row_date(row: Any) -> date | None:
+    try:
+        return date.fromisoformat(str(row["posted_at"])[:10])
+    except (TypeError, ValueError):
+        return None
 
 
 def _display_type(amount: float, account_type: str | None) -> Literal["income", "expense"]:
@@ -177,6 +197,92 @@ def _matches_quality_filter(
     raise ValueError("quality inválido")
 
 
+def _is_internal_transfer_debit_candidate(
+    row: Any,
+    owner_names: list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    amount = float(row["amount"] or 0.0)
+    if amount >= 0 or not _is_non_credit(row["account_type"]):
+        return False
+    category_key = str(row["category"] or "").strip().lower()
+    if category_key in _INTERNAL_TRANSFER_CATEGORY_KEYS:
+        return True
+    return is_own_account_transfer_like(
+        amount,
+        row["account_type"],
+        row["category"],
+        description=row["description"],
+        raw_description=row["raw_description"],
+        owner_names=owner_names,
+    )
+
+
+def _internal_transfer_row_ids(
+    rows: list[Any],
+    owner_names: list[str] | tuple[str, ...] | None = None,
+    *,
+    day_window: int = 2,
+) -> set[Any]:
+    credits: list[dict[str, Any]] = []
+    debits: list[dict[str, Any]] = []
+    own_transfer_debits: set[Any] = set()
+
+    for row in rows:
+        row_id = row["id"]
+        account_id = row["account_id"]
+        posted = _row_date(row)
+        if row_id is None or account_id is None or posted is None:
+            continue
+        amount = float(row["amount"] or 0.0)
+        if not _is_non_credit(row["account_type"]):
+            continue
+
+        category_key = str(row["category"] or "").strip().lower()
+        payload = {
+            "id": row_id,
+            "account_id": str(account_id),
+            "posted": posted,
+            "amount_abs": round(abs(amount), 2),
+        }
+        if amount > 0 and category_key in _PIX_TRANSFER_INCOME_CATEGORY_KEYS:
+            credits.append(payload)
+            continue
+        if amount < 0 and category_key in _INTERNAL_TRANSFER_CATEGORY_KEYS:
+            debits.append(payload)
+            continue
+        if _is_internal_transfer_debit_candidate(row, owner_names):
+            own_transfer_debits.add(row_id)
+
+    matched: set[Any] = set(own_transfer_debits)
+    for credit in credits:
+        for debit in debits:
+            if credit["account_id"] == debit["account_id"]:
+                continue
+            if abs(credit["amount_abs"] - debit["amount_abs"]) > 0.01:
+                continue
+            if abs((credit["posted"] - debit["posted"]).days) > day_window:
+                continue
+            matched.add(credit["id"])
+            matched.add(debit["id"])
+            break
+    return matched
+
+
+def _matches_internal_transfer_filter(
+    row: Any,
+    internal_transfer: Literal["only", "exclude"] | None,
+    internal_transfer_ids: set[Any],
+) -> bool:
+    if internal_transfer is None:
+        return True
+    is_internal = row["id"] in internal_transfer_ids
+    if internal_transfer == "only":
+        return is_internal
+    if internal_transfer == "exclude":
+        return not is_internal
+    raise ValueError("internal_transfer inválido")
+
+
 def _category_label(category: str | None, cat_map: dict[str, str] | None = None) -> str:
     name = category or "(sem categoria)"
     mapping = cat_map if cat_map is not None else mnt.load_overrides()["categorias_pt"]
@@ -272,10 +378,12 @@ def _build_where(
     amount_min: float | None = None,
     amount_max: float | None = None,
     account_id: str | None = None,
+    account_ids: list[str] | None = None,
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
     savings_goal_ids: list[int | None] | None = None,
     quality: Literal["missing_tag", "missing_bucket"] | None = None,
+    internal_transfer: Literal["only", "exclude"] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
 ) -> tuple[str, list[Any]]:
     clauses = ["1=1"]
@@ -315,6 +423,9 @@ def _build_where(
     if account_id:
         clauses.append("t.account_id = ?")
         params.append(account_id)
+    if account_ids:
+        clauses.append(f"t.account_id IN ({','.join('?' for _ in account_ids)})")
+        params.extend(account_ids)
 
     bucket_filter = _build_null_aware_filter("t.bucket_id", bucket_ids, params)
     if bucket_filter:
@@ -349,10 +460,12 @@ def _compute_summary(
     amount_min: float | None = None,
     amount_max: float | None = None,
     account_id: str | None = None,
+    account_ids: list[str] | None = None,
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
     savings_goal_ids: list[int | None] | None = None,
     quality: Literal["missing_tag", "missing_bucket"] | None = None,
+    internal_transfer: Literal["only", "exclude"] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
 ) -> dict[str, float]:
     where, params = _build_where(
@@ -364,10 +477,12 @@ def _compute_summary(
         amount_min=amount_min,
         amount_max=amount_max,
         account_id=account_id,
+        account_ids=account_ids,
         bucket_ids=bucket_ids,
         tag_ids=tag_ids,
         savings_goal_ids=savings_goal_ids,
         quality=quality,
+        internal_transfer=internal_transfer,
         hidden=hidden,
     )
     rows = db._conn.execute(
@@ -393,10 +508,13 @@ def _compute_summary(
     expense = 0.0
     internal_transfer_income_ids = internal_transfer_credit_ids(rows)
     owner_names = account_owner_aliases(db.list_accounts())
+    internal_transfer_ids = _internal_transfer_row_ids(rows, owner_names)
     for row in rows:
         if not _matches_type_filter(row, type, internal_transfer_income_ids, owner_names):
             continue
         if not _matches_quality_filter(row, quality, owner_names):
+            continue
+        if not _matches_internal_transfer_filter(row, internal_transfer, internal_transfer_ids):
             continue
         amount = float(row["amount"])
         income += income_value(
@@ -440,10 +558,12 @@ def list_transactions(
     amount_min: float | None = None,
     amount_max: float | None = None,
     account_id: str | None = None,
+    account_ids: list[str] | None = None,
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
     savings_goal_ids: list[int | None] | None = None,
     quality: Literal["missing_tag", "missing_bucket"] | None = None,
+    internal_transfer: Literal["only", "exclude"] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
     page: int = 1,
     page_size: int = 25,
@@ -461,10 +581,12 @@ def list_transactions(
         "amount_min": amount_min,
         "amount_max": amount_max,
         "account_id": account_id,
+        "account_ids": account_ids,
         "bucket_ids": bucket_ids,
         "tag_ids": tag_ids,
         "savings_goal_ids": savings_goal_ids,
         "quality": quality,
+        "internal_transfer": internal_transfer,
         "hidden": hidden,
     }
     sql_filters = {**filters, "type": None}
@@ -475,11 +597,13 @@ def list_transactions(
     ).fetchall()
     internal_transfer_income_ids = internal_transfer_credit_ids(all_rows)
     owner_names = account_owner_aliases(db.list_accounts())
+    internal_transfer_ids = _internal_transfer_row_ids(all_rows, owner_names)
     filtered_rows = [
         row
         for row in all_rows
         if _matches_type_filter(row, type, internal_transfer_income_ids, owner_names)
         and _matches_quality_filter(row, quality, owner_names)
+        and _matches_internal_transfer_filter(row, internal_transfer, internal_transfer_ids)
     ]
     rows = filtered_rows[offset : offset + page_size]
     cat_map = mnt.load_overrides()["categorias_pt"]

@@ -7,6 +7,7 @@ import {
   ArrowUpCircle,
   Eye,
   EyeOff,
+  Filter,
   Plus,
   RefreshCw,
   Search,
@@ -15,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
+import { TransactionAdvancedFilters } from "@/components/transacoes/TransactionAdvancedFilters";
 import { BucketSelect } from "@/components/ui/BucketSelect";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -24,6 +26,7 @@ import { SectionCard } from "@/components/ui/SectionCard";
 import { SavingsGoalSelect } from "@/components/ui/SavingsGoalSelect";
 import { TagSelect } from "@/components/ui/TagSelect";
 import { useBuckets } from "@/hooks/useBuckets";
+import { useAccounts } from "@/hooks/useAccounts";
 import { useSavingsGoals } from "@/hooks/useMetas";
 import { useSetBucket } from "@/hooks/useSetBucket";
 import { useSetTag } from "@/hooks/useSetTag";
@@ -44,9 +47,8 @@ import {
   transactionCategoryLabel,
   transactionDisplayValue,
   transactionFilterBadges,
-  type TransactionQualityFilter,
 } from "@/lib/transactions";
-import type { Tag, Transaction, TransactionHiddenFilter, TransactionType } from "@/lib/types";
+import type { Tag, Transaction, TransactionType } from "@/lib/types";
 
 const EMPTY_TRANSACTIONS: Transaction[] = [];
 
@@ -336,19 +338,18 @@ function NewTransactionPanel({
 
 export default function TransacoesPage() {
   const [newOpen, setNewOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const {
     filters,
     hasFilters,
     setSearch,
-    setType,
-    setHidden,
-    setSavingsGoal,
-    setQuality,
+    applyAdvancedFilters,
     setPage,
     setPageSize,
     clearFilters,
   } = useTransactionFilters();
   const transactionsQuery = useTransactions(filters);
+  const accountsQuery = useAccounts();
   const bucketsQuery = useBuckets();
   const savingsGoalsQuery = useSavingsGoals();
   const tagsQuery = useTags();
@@ -371,18 +372,32 @@ export default function TransacoesPage() {
     buckets: bucketsQuery.data ?? [],
     tags: tagsQuery.data ?? [],
     savingsGoals: savingsGoalsQuery.data?.goals ?? [],
+    accounts: [
+      ...(accountsQuery.data?.banks ?? []).map((account) => ({
+        id: account.id,
+        name: account.name ?? account.institution ?? account.id,
+      })),
+      ...(accountsQuery.data?.cards ?? []).map((account) => ({
+        id: account.id,
+        name: account.name ?? account.id,
+      })),
+    ],
   });
-  const savingsGoalFilter =
-    filters.savingsGoalIds?.length === 1 ? filters.savingsGoalIds[0] : undefined;
   const accountOptions = useMemo(() => {
     const byId = new Map<string, string>();
+    for (const account of accountsQuery.data?.banks ?? []) {
+      byId.set(account.id, account.name ?? account.institution ?? account.id);
+    }
+    for (const account of accountsQuery.data?.cards ?? []) {
+      byId.set(account.id, account.name ?? account.id);
+    }
     for (const tx of rows) {
       if (!byId.has(tx.account_id)) {
         byId.set(tx.account_id, tx.account_name ?? tx.account_id);
       }
     }
     return Array.from(byId, ([id, label]) => ({ id, label }));
-  }, [rows]);
+  }, [accountsQuery.data, rows]);
 
   const createInlineTag = useCallback(
     async (name: string) => createTag.mutateAsync({ name, color: null }),
@@ -634,8 +649,8 @@ export default function TransacoesPage() {
 
         <SectionCard>
           <div className="space-y-4">
-            <div className="grid gap-3 xl:grid-cols-[minmax(220px,1fr)_160px_180px_190px_210px_auto]">
-              <label className="flex h-10 min-w-0 items-center gap-2 rounded-md border border-border bg-bg px-3 text-muted">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+              <label className="flex h-10 min-w-0 items-center gap-2 rounded-md border border-border bg-bg px-3 text-muted lg:flex-1">
                 <Search size={16} aria-hidden />
                 <input
                   value={filters.q ?? ""}
@@ -644,77 +659,13 @@ export default function TransacoesPage() {
                   className="min-w-0 flex-1 bg-transparent text-sm text-text outline-none placeholder:text-muted"
                 />
               </label>
-              <select
-                value={filters.type ?? ""}
-                onChange={(event) =>
-                  setType(event.target.value ? (event.target.value as TransactionType) : null)
-                }
-                className="h-10 rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
-                aria-label="Tipo"
-              >
-                <option value="">Todos</option>
-                <option value="income">Receitas</option>
-                <option value="expense">Despesas</option>
-              </select>
-              <select
-                value={filters.hidden ?? "exclude"}
-                onChange={(event) => setHidden(event.target.value as TransactionHiddenFilter)}
-                className="h-10 rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
-                aria-label="Ocultas"
-              >
-                <option value="exclude">Sem ocultas</option>
-                <option value="include">Com ocultas</option>
-                <option value="only">Somente ocultas</option>
-              </select>
-              <select
-                value={
-                  savingsGoalFilter === undefined
-                    ? ""
-                    : savingsGoalFilter === null
-                      ? "none"
-                      : String(savingsGoalFilter)
-                }
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  setSavingsGoal(
-                    nextValue === "" ? undefined : nextValue === "none" ? null : Number(nextValue),
-                  );
-                }}
-                className="h-10 rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
-                aria-label="Meta de poupança"
-              >
-                <option value="">Todas metas poupança</option>
-                <option value="none">Sem meta poupança</option>
-                {(savingsGoalsQuery.data?.goals ?? []).map((goal) => (
-                  <option key={goal.id} value={goal.id}>
-                    {goal.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={filters.quality ?? ""}
-                onChange={(event) =>
-                  setQuality(
-                    event.target.value
-                      ? (event.target.value as TransactionQualityFilter)
-                      : null,
-                  )
-                }
-                className="h-10 rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
-                aria-label="Qualidade da classificação"
-              >
-                <option value="">Todas classificações</option>
-                <option value="missing_tag">Sem Tag acionável</option>
-                <option value="missing_bucket">Sem Meta acionável</option>
-              </select>
               <button
                 type="button"
-                disabled={!hasFilters}
-                onClick={clearFilters}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border px-3 text-sm font-medium text-muted transition hover:bg-surface2 hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => setAdvancedOpen(true)}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border px-3 text-sm font-semibold text-text transition hover:bg-surface2"
               >
-                <X size={15} aria-hidden />
-                <span>Limpar</span>
+                <Filter size={15} aria-hidden />
+                <span>Mais filtros</span>
               </button>
             </div>
 
@@ -730,7 +681,25 @@ export default function TransacoesPage() {
                 ))}
               </div>
             ) : null}
+          </div>
+        </SectionCard>
 
+        {advancedOpen ? (
+          <TransactionAdvancedFilters
+            open={advancedOpen}
+            filters={filters}
+            buckets={bucketsQuery.data ?? []}
+            tags={tagsQuery.data ?? []}
+            accounts={accountOptions.map((account) => ({ id: account.id, name: account.label }))}
+            savingsGoals={savingsGoalsQuery.data?.goals ?? []}
+            onApply={applyAdvancedFilters}
+            onClear={clearFilters}
+            onClose={() => setAdvancedOpen(false)}
+          />
+        ) : null}
+
+        <SectionCard>
+          <div className="space-y-4">
             {transactionsQuery.isError ? (
               <div className="rounded-md border border-negative/40 bg-negative/10 px-4 py-3 text-sm text-negative">
                 {errorMessage(transactionsQuery.error) ?? "Não foi possível carregar as transações."}

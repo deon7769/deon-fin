@@ -7,8 +7,11 @@ import {
   clampPageSize,
   hasTransactionFilters,
   idsFilterFromSearch,
+  internalTransferFilterFromSearch,
   qualityFilterFromSearch,
   semTagFilterFromSearch,
+  stringListFilterFromSearch,
+  type TransactionAdvancedFilterPatch,
   type TransactionFilters,
 } from "@/lib/transactions";
 import type { TransactionHiddenFilter, TransactionType } from "@/lib/types";
@@ -26,6 +29,26 @@ function parseHidden(value: string | null): TransactionHiddenFilter {
   return value === "include" || value === "only" ? value : "exclude";
 }
 
+function parseAmount(value: string | null): number | null {
+  if (value === null || value.trim() === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function idsParam(values?: Array<number | null>): string | null {
+  if (!values?.length) {
+    return null;
+  }
+  return values.map((value) => (value === null ? "none" : String(value))).join(",");
+}
+
+function stringListParam(values?: string[]): string | null {
+  const normalized = (values ?? []).map((value) => value.trim()).filter(Boolean);
+  return normalized.length ? normalized.join(",") : null;
+}
+
 export function useTransactionFilters() {
   const period = usePeriod();
   const router = useRouter();
@@ -39,12 +62,18 @@ export function useTransactionFilters() {
       q: searchParams.get("q") ?? "",
       type: parseType(searchParams.get("type")),
       hidden: parseHidden(searchParams.get("hidden")),
+      amountMin: parseAmount(searchParams.get("min")),
+      amountMax: parseAmount(searchParams.get("max")),
+      accountIds:
+        stringListFilterFromSearch(searchParams.get("account_ids")) ??
+        stringListFilterFromSearch(searchParams.get("account_id")),
       bucketIds: idsFilterFromSearch(searchParams.get("bucket_ids")),
       tagIds:
         semTagFilterFromSearch(searchParams.get("semTag")) ??
         idsFilterFromSearch(searchParams.get("tag_ids")),
       savingsGoalIds: idsFilterFromSearch(searchParams.get("savings_goal_id")),
       quality: qualityFilterFromSearch(searchParams.get("quality")),
+      internalTransfer: internalTransferFilterFromSearch(searchParams.get("internal_transfer")),
       page: parsePage(searchParams.get("page")),
       pageSize: clampPageSize(Number(searchParams.get("page_size") ?? 25)),
     }),
@@ -67,12 +96,58 @@ export function useTransactionFilters() {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
+  const applyAdvancedFilters = (patch: TransactionAdvancedFilterPatch) => {
+    const params = new URLSearchParams(searchParams.toString());
+    const setParam = (key: string, value: string | number | null | undefined) => {
+      if (value === null || value === undefined || value === "") {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    };
+
+    if ("date" in patch || "month" in patch) {
+      if (patch.date) {
+        params.set("from", patch.date);
+        params.set("to", patch.date);
+        params.delete("month");
+      } else {
+        params.delete("from");
+        params.delete("to");
+        setParam("month", patch.month);
+      }
+    }
+
+    setParam("type", patch.type);
+    setParam("hidden", patch.hidden && patch.hidden !== "exclude" ? patch.hidden : null);
+    setParam("min", patch.amountMin);
+    setParam("max", patch.amountMax);
+    setParam("account_ids", stringListParam(patch.accountIds));
+    params.delete("account_id");
+    setParam("bucket_ids", idsParam(patch.bucketIds));
+    setParam("tag_ids", idsParam(patch.tagIds));
+    setParam("savings_goal_id", idsParam(patch.savingsGoalIds));
+    setParam("quality", patch.quality);
+    setParam("internal_transfer", patch.internalTransfer);
+    params.delete("semTag");
+    params.delete("page");
+
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
+
   const clearFilters = () => {
     const params = new URLSearchParams(searchParams.toString());
     for (const key of [
       "q",
       "type",
       "hidden",
+      "from",
+      "to",
+      "min",
+      "max",
+      "account_id",
+      "account_ids",
       "page",
       "page_size",
       "semTag",
@@ -80,6 +155,7 @@ export function useTransactionFilters() {
       "tag_ids",
       "savings_goal_id",
       "quality",
+      "internal_transfer",
     ]) {
       params.delete(key);
     }
@@ -101,6 +177,7 @@ export function useTransactionFilters() {
       }),
     setQuality: (quality: NonNullable<TransactionFilters["quality"]> | null) =>
       replaceParams({ quality }),
+    applyAdvancedFilters,
     setPage: (page: number) => replaceParams({ page }, false),
     setPageSize: (pageSize: number) => replaceParams({ page_size: pageSize }),
     clearFilters,

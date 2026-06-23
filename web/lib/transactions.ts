@@ -1,3 +1,4 @@
+import { formatBRL } from "./format";
 import type { Transaction, TransactionHiddenFilter, TransactionType } from "./types";
 
 export type TransactionDateRange = {
@@ -6,6 +7,7 @@ export type TransactionDateRange = {
 };
 
 export type TransactionQualityFilter = "missing_tag" | "missing_bucket";
+export type TransactionInternalTransferFilter = "only" | "exclude";
 
 export type TransactionFilters = {
   month?: string | null;
@@ -16,12 +18,29 @@ export type TransactionFilters = {
   amountMin?: number | null;
   amountMax?: number | null;
   accountId?: string | null;
+  accountIds?: string[];
   bucketIds?: Array<number | null>;
   tagIds?: Array<number | null>;
   savingsGoalIds?: Array<number | null>;
   quality?: TransactionQualityFilter | null;
+  internalTransfer?: TransactionInternalTransferFilter | null;
   page?: number;
   pageSize?: number;
+};
+
+export type TransactionAdvancedFilterPatch = {
+  date?: string | null;
+  month?: string | null;
+  type?: TransactionType | null;
+  hidden?: TransactionHiddenFilter;
+  amountMin?: number | null;
+  amountMax?: number | null;
+  accountIds?: string[];
+  bucketIds?: Array<number | null>;
+  tagIds?: Array<number | null>;
+  savingsGoalIds?: Array<number | null>;
+  quality?: TransactionQualityFilter | null;
+  internalTransfer?: TransactionInternalTransferFilter | null;
 };
 
 export type TransactionQuery = Record<string, string | number | boolean>;
@@ -31,10 +50,16 @@ type FilterLookupItem = {
   name: string;
 };
 
+type AccountFilterLookupItem = {
+  id: string;
+  name: string;
+};
+
 type TransactionFilterBadgeContext = {
   buckets?: FilterLookupItem[];
   tags?: FilterLookupItem[];
   savingsGoals?: FilterLookupItem[];
+  accounts?: AccountFilterLookupItem[];
 };
 
 function idsParam(values?: Array<number | null>): string | undefined {
@@ -44,6 +69,15 @@ function idsParam(values?: Array<number | null>): string | undefined {
 
   const tokens = values.map((value) => (value === null ? "none" : String(value)));
   return tokens.length ? tokens.join(",") : undefined;
+}
+
+function stringListParam(values?: string[]): string | undefined {
+  const normalized = (values ?? []).map((value) => value.trim()).filter(Boolean);
+  return normalized.length ? normalized.join(",") : undefined;
+}
+
+function compactBRL(value: number): string {
+  return formatBRL(value).replace(/,00$/, "");
 }
 
 function positiveInt(value: number | undefined, fallback: number): number {
@@ -69,6 +103,23 @@ export function semTagFilterFromSearch(value: string | null): Array<number | nul
 
 export function qualityFilterFromSearch(value: string | null): TransactionQualityFilter | undefined {
   return value === "missing_tag" || value === "missing_bucket" ? value : undefined;
+}
+
+export function internalTransferFilterFromSearch(
+  value: string | null,
+): TransactionInternalTransferFilter | undefined {
+  return value === "only" || value === "exclude" ? value : undefined;
+}
+
+export function stringListFilterFromSearch(value: string | null): string[] | undefined {
+  if (!value?.trim()) {
+    return undefined;
+  }
+  const parsed = value
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean);
+  return parsed.length ? parsed : undefined;
 }
 
 export function idsFilterFromSearch(value: string | null): Array<number | null> | undefined {
@@ -117,7 +168,10 @@ export function transactionQuery(filters: TransactionFilters): TransactionQuery 
   if (filters.amountMax !== undefined && filters.amountMax !== null) {
     query.max = filters.amountMax;
   }
-  if (filters.accountId) {
+  const accountIds = stringListParam(filters.accountIds);
+  if (accountIds) {
+    query.account_ids = accountIds;
+  } else if (filters.accountId) {
     query.account_id = filters.accountId;
   }
 
@@ -136,6 +190,9 @@ export function transactionQuery(filters: TransactionFilters): TransactionQuery 
   if (filters.quality) {
     query.quality = filters.quality;
   }
+  if (filters.internalTransfer) {
+    query.internal_transfer = filters.internalTransfer;
+  }
 
   if (filters.hidden) {
     query.hidden = filters.hidden;
@@ -153,10 +210,12 @@ export function hasTransactionFilters(filters: TransactionFilters): boolean {
       filters.amountMin !== undefined ||
       filters.amountMax !== undefined ||
       filters.accountId ||
+      filters.accountIds?.length ||
       filters.bucketIds?.length ||
       filters.tagIds?.length ||
       filters.savingsGoalIds?.length ||
-      filters.quality,
+      filters.quality ||
+      filters.internalTransfer,
   );
 }
 
@@ -196,6 +255,13 @@ export function transactionFilterBadges(
       )}`,
     );
   }
+  for (const accountId of filters.accountIds ?? []) {
+    badges.push(
+      `Conta: ${
+        context.accounts?.find((item) => item.id === accountId)?.name ?? `Conta ${accountId}`
+      }`,
+    );
+  }
   if (filters.quality === "missing_tag") {
     badges.push("Qualidade: Sem Tag acionável");
   } else if (filters.quality === "missing_bucket") {
@@ -209,10 +275,20 @@ export function transactionFilterBadges(
   if (filters.type) {
     badges.push(`Tipo: ${filters.type === "income" ? "Receitas" : "Despesas"}`);
   }
+  if (filters.amountMin !== undefined || filters.amountMax !== undefined) {
+    const min = filters.amountMin !== undefined ? compactBRL(filters.amountMin ?? 0) : null;
+    const max = filters.amountMax !== undefined ? compactBRL(filters.amountMax ?? 0) : null;
+    badges.push(`Valor: ${min ?? "mín."} - ${max ?? "máx."}`);
+  }
   if (filters.hidden && filters.hidden !== "exclude") {
     badges.push(
       filters.hidden === "only" ? "Ocultas: Somente ocultas" : "Ocultas: Incluídas",
     );
+  }
+  if (filters.internalTransfer === "only") {
+    badges.push("Transferências internas: Somente internas");
+  } else if (filters.internalTransfer === "exclude") {
+    badges.push("Transferências internas: Sem internas");
   }
 
   return badges;
