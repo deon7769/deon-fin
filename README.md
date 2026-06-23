@@ -117,7 +117,7 @@ scripts/
 Ordem atual das próximas sprints:
 
 1. **Investimentos BTG/Pluggy:** aprofundar amostras reais de JSON, proventos, movimentações e reconciliação.
-2. **Manutenção/classificação:** reprocessar classificação pela UI, aplicar Tag/Meta em massa com prévia e revisar regras aprendidas.
+2. **Manutenção/classificação:** revisar regras aprendidas (`bucket_rules`/`tag_rules`) e separar itens ignorados por política nas filas.
 3. **Transações:** refinar multiselects, bulk actions e revisão visual depois dos filtros avançados, filtros acionáveis e origem `tag_source`/`bucket_source`.
 4. **Renda e transferências:** revisar PIX próprio/externo, Koopere, dividendos, estorno e cashback com testes de cálculo.
 5. **Consolidação técnica:** WAL/busy timeout no SQLite, fonte única de cálculo financeiro, decomposição de `app.py` e sunset gradual do legado.

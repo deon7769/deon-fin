@@ -22,7 +22,7 @@
 
 **Proximas sprints sugeridas:**
 
-- Reprocessar classificacao pela UI em Manutencao, com feedback de quantos registros mudaram.
-- Aplicacao em massa de Meta/Tag com previa antes de salvar.
+- Reprocessar classificacao pela UI em Manutencao foi entregue na sprint `2026-06-23-maintenance-classification-actions.md`.
+- Aplicacao em massa de Meta/Tag com previa antes de salvar foi entregue na sprint `2026-06-23-maintenance-classification-actions.md`.
 - Revisao e edicao de `bucket_rules` e `tag_rules`.
 - Multiselect customizado com busca para Tags, Contas e origem caso a lista real fique longa demais.

@@ -243,6 +243,45 @@ describe("maintenance helpers", () => {
     expect(html).toContain("quality=missing_bucket");
   });
 
+  it("renders classification action controls for reprocess and bulk preview", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        PrivacyProvider,
+        null,
+        createElement(ClassificationHealthPanel, {
+          data: sample,
+          month: "2026-06",
+          buckets: [{ id: 1, key: "conforto", name: "Conforto", color: "#06b6d4" }],
+          tags: [{ id: 2, name: "Mercado", color: "#22c55e" }],
+          onReprocess: async () => ({ changed: 0 }),
+          onPreviewBulk: async () => ({
+            kind: "tag" as const,
+            target_id: 2,
+            target_name: "Mercado",
+            total: 1,
+            total_abs: 70,
+            items: [],
+          }),
+          onApplyBulk: async () => ({
+            kind: "tag" as const,
+            target_id: 2,
+            target_name: "Mercado",
+            preview_total: 1,
+            updated: 1,
+            not_found: [],
+          }),
+        }),
+      ),
+    );
+
+    expect(html).toContain("Reprocessar classificação");
+    expect(html).toContain("Prévia de aplicação em massa");
+    expect(html).toContain("Tag para aplicar");
+    expect(html).toContain("Sem Meta");
+    expect(html).toContain("Gerar prévia");
+    expect(html).toContain("Aplicar em massa");
+  });
+
   it("renders wide editable sections as responsive field groups", () => {
     const Component = EditableMaintenanceTable as ComponentType<Record<string, unknown>>;
     const html = renderToStaticMarkup(

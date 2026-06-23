@@ -664,6 +664,40 @@ export type MaintenanceSystemTotalsPayload = {
   }>;
 };
 
+export type MaintenanceClassificationReprocessResponse = {
+  changed: number;
+  bucket: Record<string, number>;
+  tag: Record<string, number>;
+};
+
+export type MaintenanceClassificationBulkKind = "tag" | "bucket";
+
+export type MaintenanceClassificationBulkRequest = {
+  kind: MaintenanceClassificationBulkKind;
+  target_id: number;
+  month?: string | null;
+};
+
+export type MaintenanceClassificationBulkPreviewResponse = {
+  kind: MaintenanceClassificationBulkKind;
+  target_id: number;
+  target_name: string;
+  month?: string | null;
+  total: number;
+  total_abs: number;
+  items: MaintenanceClassificationIssue[];
+};
+
+export type MaintenanceClassificationBulkApplyResponse = {
+  kind: MaintenanceClassificationBulkKind;
+  target_id: number;
+  target_name: string;
+  month?: string | null;
+  preview_total: number;
+  updated: number;
+  not_found: string[];
+};
+
 export type ScenarioSimulationRequest = {
   preco: number;
   entrada: number;

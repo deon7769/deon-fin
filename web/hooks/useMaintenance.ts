@@ -5,6 +5,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { MaintenanceSavePayload } from "@/lib/maintenance";
 import type {
+  MaintenanceClassificationBulkApplyResponse,
+  MaintenanceClassificationBulkPreviewResponse,
+  MaintenanceClassificationBulkRequest,
+  MaintenanceClassificationReprocessResponse,
   MaintenanceResponse,
   MaintenanceSystemTotalsPayload,
   MaintenanceSystemTotalsResponse,
@@ -50,6 +54,51 @@ export function useSaveMaintenanceSystemTotals() {
       void queryClient.invalidateQueries({ queryKey: ["painel"] });
       void queryClient.invalidateQueries({ queryKey: ["budget"] });
       void queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    },
+  });
+}
+
+function invalidateClassificationData(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+  void queryClient.invalidateQueries({ queryKey: ["transactions"] });
+  void queryClient.invalidateQueries({ queryKey: ["tags"] });
+  void queryClient.invalidateQueries({ queryKey: ["painel"] });
+  void queryClient.invalidateQueries({ queryKey: ["budget"] });
+}
+
+export function useReprocessMaintenanceClassification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      api.post<MaintenanceClassificationReprocessResponse>("/maintenance/classification/reprocess"),
+    onSuccess: () => {
+      invalidateClassificationData(queryClient);
+    },
+  });
+}
+
+export function usePreviewMaintenanceClassificationBulk() {
+  return useMutation({
+    mutationFn: (payload: MaintenanceClassificationBulkRequest) =>
+      api.post<MaintenanceClassificationBulkPreviewResponse>(
+        "/maintenance/classification/bulk-preview",
+        payload,
+      ),
+  });
+}
+
+export function useApplyMaintenanceClassificationBulk() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: MaintenanceClassificationBulkRequest) =>
+      api.post<MaintenanceClassificationBulkApplyResponse>(
+        "/maintenance/classification/bulk-apply",
+        payload,
+      ),
+    onSuccess: () => {
+      invalidateClassificationData(queryClient);
     },
   });
 }

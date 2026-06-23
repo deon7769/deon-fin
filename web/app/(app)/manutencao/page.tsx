@@ -27,12 +27,17 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useBuckets } from "@/hooks/useBuckets";
 import {
+  useApplyMaintenanceClassificationBulk,
   useMaintenance,
   useMaintenanceSystemTotals,
+  usePreviewMaintenanceClassificationBulk,
+  useReprocessMaintenanceClassification,
   useSaveMaintenance,
   useSaveMaintenanceSystemTotals,
 } from "@/hooks/useMaintenance";
+import { useTags } from "@/hooks/useTags";
 import { usePeriod } from "@/providers/PeriodProvider";
 import {
   buildMaintenanceSavePayload,
@@ -199,6 +204,11 @@ export default function ManutencaoPage() {
   const saveMaintenance = useSaveMaintenance();
   const systemTotals = useMaintenanceSystemTotals();
   const saveSystemTotals = useSaveMaintenanceSystemTotals();
+  const buckets = useBuckets();
+  const tags = useTags();
+  const reprocessClassification = useReprocessMaintenanceClassification();
+  const previewClassificationBulk = usePreviewMaintenanceClassificationBulk();
+  const applyClassificationBulk = useApplyMaintenanceClassificationBulk();
   const [editorOverride, setEditorOverride] = useState<{
     dataUpdatedAt: number;
     value: MaintenanceEditorState;
@@ -364,7 +374,22 @@ export default function ManutencaoPage() {
               }}
             />
 
-            <ClassificationHealthPanel data={data} month={month} />
+            <ClassificationHealthPanel
+              data={data}
+              month={month}
+              buckets={buckets.data ?? []}
+              tags={tags.data ?? []}
+              reprocessing={reprocessClassification.isPending}
+              previewing={previewClassificationBulk.isPending}
+              applying={applyClassificationBulk.isPending}
+              onReprocess={() => reprocessClassification.mutateAsync()}
+              onPreviewBulk={(payload) => previewClassificationBulk.mutateAsync(payload)}
+              onApplyBulk={async (payload) => {
+                const result = await applyClassificationBulk.mutateAsync(payload);
+                await maintenance.refetch();
+                return result;
+              }}
+            />
 
             <div className="grid gap-5 xl:grid-cols-2">
               <SectionCard

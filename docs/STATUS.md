@@ -194,9 +194,7 @@ Atualizado em: 2026-06-23
 
 ### Classificação e Manutenção
 
-- Adicionar ações restantes no painel de saúde para:
-  - aplicar Tag/Meta em massa com revisão;
-  - reprocessar classificação a partir da UI.
+- Painel de saúde já permite reprocessar classificação e aplicar Tag/Meta em massa com prévia; próximos ajustes são revisar regras aprendidas e melhorar auditoria do que foi alterado.
 - Melhorar o fluxo "aplicar/sugerir para similares" no frontend:
   - deixar claro quantos registros foram afetados;
   - atualizar a lista sem recarregar a página inteira;
@@ -284,24 +282,24 @@ Atualizado em: 2026-06-23
 - Planejar migração futura de SQLite para PostgreSQL quando multiusuário/escala exigir.
 - Revisar retenção e rotação de backups.
 - Adicionar jobs/rotinas observáveis para sync e reclassificação.
-- Criar endpoint/admin seguro para reprocessar classificação sem precisar de SSH.
+- Endpoint/admin para reprocessar classificação pela UI já existe; próximo passo é registrar histórico e observabilidade dessas execuções.
 
 ## Próximas sprints recomendadas
 
 1. **F4 follow-ups de Investimentos**
    - Revisar detalhamento dos JSONs BTG/Pluggy para proventos e movimentações.
 
-2. **Manutenção - ações de classificação**
-   - Ação "reprocessar classificação".
-   - Aplicação em massa de Tag/Meta com prévia.
+2. **Regras aprendidas**
+   - Tela ou seção em Manutenção para revisar `tag_rules` e `bucket_rules`.
+   - Remoção/edição segura de regras ruins.
 
 3. **Transações - polish operacional**
    - Melhorar multiselects de Tags/Contas/origens se a lista real ficar longa.
    - Destaques visuais para itens acionáveis vindos da Manutenção.
 
-4. **Regras aprendidas**
-   - Tela ou seção em Manutenção para revisar `tag_rules` e `bucket_rules`.
-   - Remoção/edição segura de regras ruins.
+4. **Manutenção - auditoria de classificação**
+   - Separar itens ignorados por política.
+   - Registrar histórico das aplicações em massa.
 
 5. **Renda e transferências**
    - Suite de testes com casos reais de PIX próprio, PIX externo, Koopere, dividendos, estorno e cashback.
