@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from src.storage import Account, Database, Transaction
 from src.web.app import create_app, get_db, get_pluggy
-from src.web.repositories import buckets_repo, tags_repo
+from src.web.repositories import buckets_repo, portfolio_repo, tags_repo
 
 
 @pytest.fixture
@@ -760,3 +760,33 @@ def test_dashboard_period_kpis_use_filtered_income_not_fixed_profile(
     assert d["kpis"]["saldo_medio"] == 900.0
     assert d["budget_5030"]["renda"] == 1000.0
     assert d["executivo"]["renda"] == 1000.0
+
+
+def test_dashboard_uses_portfolio_value_for_invested_kpi_and_period_aportes_for_budget(
+    client,
+    tmp_db,
+):
+    posted = date.today() - timedelta(days=10)
+    tmp_db.upsert_account(Account(id="bank1", source="test", name="Bank", type="BANK"))
+    tmp_db.insert_transactions([
+        Transaction(
+            account_id="bank1",
+            posted_at=posted,
+            amount=Decimal("-300.00"),
+            description="Aplicacao RDB",
+            source="test",
+            category="Investments",
+        ),
+    ])
+    portfolio_repo.create_manual_asset(
+        tmp_db,
+        asset_class="rf",
+        name="Tesouro Selic",
+        manual_value=10000,
+    )
+
+    d = client.get("/api/dashboard?meses=12").json()
+
+    assert d["kpis"]["investido_total"] == 10000.0
+    assert d["budget_5030"]["investido_mensal"] == 300.0
+    assert d["budget_5030"]["blocos"]["financeiro"]["valor_mensal"] == 300.0

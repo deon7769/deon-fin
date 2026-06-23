@@ -94,6 +94,10 @@ def classify(category: str) -> str:
     return BUDGET_MAP.get((category or "").lower().strip(), DESEJOS)
 
 
+def _period_invested_total(ctx: dict[str, Any]) -> float:
+    return float(ctx.get("aportes_periodo_total", ctx.get("investido_total", 0.0)))
+
+
 def summarize_5030(ctx: dict[str, Any], income: float | None) -> dict[str, Any]:
     """Calcula os blocos 50/30/20 em valores MENSAIS e % da renda.
 
@@ -109,7 +113,7 @@ def summarize_5030(ctx: dict[str, Any], income: float | None) -> dict[str, Any]:
         blocos[bloco] += float(item.get("media_mensal", 0.0))
 
     # Investimento médio mensal entra no bloco financeiro/poupança.
-    investido_mensal = float(ctx.get("investido_total", 0.0)) / meses
+    investido_mensal = _period_invested_total(ctx) / meses
     blocos[FINANCEIRO] += investido_mensal
 
     renda = income if income and income > 0 else float(ctx.get("media_renda_mensal", 0.0))
@@ -169,7 +173,7 @@ def summarize_executivo(
             fixas += v
         elif t == VARIAVEL:
             variaveis += v
-    investido_mensal = float(ctx.get("investido_total", 0.0)) / meses
+    investido_mensal = _period_invested_total(ctx) / meses
     renda = income if income and income > 0 else float(ctx.get("media_renda_mensal", 0.0))
     saldo_operacional = renda - fixas - variaveis
     saldo_patrimonial = saldo_operacional - investido_mensal - provisoes_mensal

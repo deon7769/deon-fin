@@ -15,6 +15,7 @@ from src.agent.analyst import (
 from src.agent.anonymize import anonymize
 from src.agent.context import build_financial_context
 from src.storage import Account, Transaction
+from src.web.repositories import portfolio_repo
 
 
 def test_reasoning_model_detection():
@@ -161,8 +162,28 @@ def test_context_separa_gasto_renda_e_futuro(tmp_db):
     assert mes["investido"] == 300.0
     assert ctx["pagamentos_cartao_total"] == 1000.0
     assert ctx["investido_total"] == 300.0
+    assert ctx["aportes_periodo_total"] == 300.0
     assert ctx["compromissos_futuros"]["total"] == 400.0
     assert ctx["renda_mensal_informada"] == 10000
+
+
+def test_context_uses_portfolio_total_without_duplicating_investment_transactions(tmp_db):
+    _seed(tmp_db)
+    portfolio_repo.create_manual_asset(
+        tmp_db,
+        asset_class="rf",
+        name="Tesouro Selic",
+        manual_value=10000,
+    )
+
+    ctx = build_financial_context(
+        tmp_db, monthly_income=10000, goals=["reserva"], today=date(2026, 6, 9)
+    ).to_dict()
+
+    assert ctx["fluxo_mensal"]["2026-05"]["investido"] == 300.0
+    assert ctx["aportes_periodo_total"] == 300.0
+    assert ctx["carteira_investimentos_total"] == 10000.0
+    assert ctx["investido_total"] == 10000.0
 
 
 def test_context_db_vazio_nao_quebra(tmp_db):

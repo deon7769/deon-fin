@@ -416,6 +416,8 @@ class FinancialContext:
     financial_cost: dict[str, Any]
     card_payments_total: float
     invested_total: float
+    period_invested_total: float
+    portfolio_invested_total: float
     future_commitments: dict[str, Any]
     notes: list[str] = field(default_factory=list)
     family_profile: dict[str, Any] | None = None
@@ -435,6 +437,8 @@ class FinancialContext:
             "custo_financeiro": self.financial_cost,
             "pagamentos_cartao_total": round(self.card_payments_total, 2),
             "investido_total": round(self.invested_total, 2),
+            "aportes_periodo_total": round(self.period_invested_total, 2),
+            "carteira_investimentos_total": round(self.portfolio_invested_total, 2),
             "compromissos_futuros": self.future_commitments,
             "observacoes": self.notes,
         }
@@ -496,6 +500,17 @@ def _cutoff_iso(today: date, period_months: int) -> str:
     return date(cy, cm + 1, 1).isoformat()
 
 
+def _portfolio_current_value(db: Database) -> float:
+    row = db._conn.execute(
+        """
+        SELECT COALESCE(SUM(COALESCE(current_value, 0)), 0) AS total
+          FROM portfolio_assets
+         WHERE status IS NULL OR status='ACTIVE'
+        """
+    ).fetchone()
+    return round(float(row["total"] or 0.0), 2) if row else 0.0
+
+
 def build_financial_context(
     db: Database,
     *,
@@ -525,7 +540,7 @@ def build_financial_context(
     spending: dict[str, dict[str, float]] = defaultdict(lambda: {"total": 0.0, "count": 0})
     merchant_groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     cost_by_cat: dict[str, float] = defaultdict(float)
-    cost_total = card_payments_total = invested_total = 0.0
+    cost_total = card_payments_total = period_invested_total = 0.0
     future_total = 0.0
     future_by_cat: dict[str, float] = defaultdict(float)
     future_by_month: dict[str, float] = defaultdict(float)
@@ -572,7 +587,7 @@ def build_financial_context(
             realized_months[mk]["renda"] += income_val
 
         if category in INVESTMENT_CATEGORIES and amount < 0:
-            invested_total += -amount
+            period_invested_total += -amount
             realized_months[mk]["investido"] += -amount
 
         if category in CARD_PAYMENT_CATEGORIES and not is_credit and amount < 0:
@@ -635,6 +650,13 @@ def build_financial_context(
             f"Há R$ {future_total:,.2f} em compromissos futuros (faturas/parcelas "
             "de cartão a vencer), separados do gasto realizado."
         )
+    portfolio_invested_total = _portfolio_current_value(db)
+    invested_total = portfolio_invested_total if portfolio_invested_total > 0 else period_invested_total
+    if portfolio_invested_total > 0:
+        notes.append(
+            "Investido total usa o valor atual da carteira de investimentos; "
+            "aportes do período ficam separados para o fluxo mensal."
+        )
     notes.append(
         "Gasto = regime de competência (compras de cartão + débitos), excluindo "
         "transferências internas, aportes e pagamento de fatura."
@@ -659,6 +681,8 @@ def build_financial_context(
         },
         card_payments_total=card_payments_total,
         invested_total=invested_total,
+        period_invested_total=period_invested_total,
+        portfolio_invested_total=portfolio_invested_total,
         future_commitments={
             "total": round(future_total, 2),
             "por_categoria": {k: round(v, 2) for k, v in

@@ -43,9 +43,9 @@ Itens de polish a **conferir** contra os specs (podem já estar ok; checar e, se
    (overview §6 / F4.1 §5) — confirmar UI + comportamento do sync.
 5. **Mapa — dataset:** conferir cobertura de países em `country_ratings.py` (US, BR, DE, IN, RU + principais) e o
    GeoJSON/tiles; selo de risco e abas Índices/Empresas/ETFs (F4.5).
-6. **`investido_total` aditivo sem duplicar:** segue como próxima sprint técnica. O dashboard legado ainda calcula
-   `investido_total` por transações de investimento; para usar `portfolio_assets.current_value` sem duplicar aportes,
-   implementar fonte única de cálculo (alinhado ao F5.2).
+6. ✅ **`investido_total` aditivo sem duplicar:** o contexto/dashboard legado agora usa
+   `portfolio_assets.current_value` como `investido_total` quando há carteira detalhada; os aportes detectados em
+   transações ficam separados em `aportes_periodo_total` e continuam alimentando o 50/30/20 como fluxo mensal.
 7. ✅ **Tema azul:** confirmado que o acento azul do módulo está aplicado em todas as abas (Ativos/Metas/Aportar/
    Perguntas/Mapa) e botões.
 

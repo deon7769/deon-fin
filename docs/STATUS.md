@@ -152,6 +152,10 @@ Atualizado em: 2026-06-23
   - RF cadastrada por `manual_value` entra no PL e nas Metas;
   - o fluxo Aportar sugere valor em R$ (`sugest_un == sugest_rs`);
   - a confirmação soma o valor em `manual_value/current_value`.
+- KPI `investido_total` sem duplicar:
+  - quando há carteira detalhada, usa `portfolio_assets.current_value`;
+  - aportes detectados no extrato ficam em `aportes_periodo_total`;
+  - orçamento 50/30/20 continua usando os aportes do período como fluxo mensal.
 
 ## Documentos principais
 
@@ -265,8 +269,8 @@ Atualizado em: 2026-06-23
 ## Próximas sprints recomendadas
 
 1. **F4 follow-ups de Investimentos**
-   - Implementar `investido_total` a partir da carteira detalhada sem duplicar aportes por transações.
    - Conferir dataset/UX do Mapa em produção com países principais.
+   - Revisar detalhamento dos JSONs BTG/Pluggy para proventos e movimentações.
 
 2. **Manutenção - ações de classificação**
    - Botões para abrir filas no contexto de Transações.

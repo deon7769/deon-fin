@@ -65,6 +65,20 @@ def test_summarize_5030_calcula_blocos_e_pct():
     assert b["essencial"]["meta_pct"] == 50
 
 
+def test_summarize_5030_uses_period_aportes_when_portfolio_total_is_available():
+    ctx = {
+        "meses_cobertos": 1,
+        "investido_total": 10000.0,
+        "aportes_periodo_total": 1000.0,
+        "media_renda_mensal": 0.0,
+        "gasto_por_categoria": [],
+    }
+
+    out = summarize_5030(ctx, income=5000)
+
+    assert out["blocos"]["financeiro"]["valor_mensal"] == 1000.0
+
+
 def test_summarize_5030_sem_renda_usa_media_detectada():
     ctx = {
         "meses_cobertos": 1,
