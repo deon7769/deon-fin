@@ -160,7 +160,7 @@ def _owner_tokens(value: str | None) -> tuple[str, ...]:
 
 
 def _owner_alias_tokens(value: str | None) -> tuple[str, ...]:
-    tokens = _owner_tokens(value)
+    tokens = tuple(token for token in _owner_tokens(value) if not token.isdigit())
     if len(tokens) < 2:
         return ()
     if any(token in _OWNER_ALIAS_BLOCKED_TOKENS for token in tokens):

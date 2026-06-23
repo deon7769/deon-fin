@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from src.agent.context import build_financial_context, income_value, spending_value
+from src.agent.context import account_owner_aliases, build_financial_context, income_value, spending_value
 from src.storage import Account, Transaction
 
 
@@ -64,6 +64,15 @@ def test_own_account_transfer_description_does_not_count_as_spending_when_catego
         )
         == 200.0
     )
+
+
+def test_account_owner_aliases_ignore_numeric_account_names():
+    aliases = account_owner_aliases([
+        {"name": "077 0001 31238064 0", "institution": "Banco Teste"},
+        {"name": "DAVI OLIVEIRA NETO", "institution": "DAVI OLIVEIRA NETO"},
+    ])
+
+    assert aliases == ("davi oliveira neto",)
 
 
 @pytest.mark.parametrize("category", [
