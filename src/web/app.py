@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from starlette.requests import Request
 
 from ..agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
-from ..agent.buckets import apply_buckets_to_database
+from ..agent.buckets import CATEGORY_BUCKET_MAP, apply_buckets_to_database
 from ..agent.budget import summarize_5030, summarize_executivo, summarize_wishlist
 from ..agent.context import income_value, internal_transfer_credit_ids, spending_value
 from ..agent.tags import apply_tags_to_database
@@ -318,6 +318,76 @@ def _category_translation_audit(db: Database, cat_map: dict[str, str]) -> dict[s
         "total_categories": len(rows),
         "translated": translated,
         "missing": missing[:25],
+    }
+
+
+_CLASSIFICATION_SOURCES = ("manual", "rule", "auto")
+_BLOCKED_CLASSIFICATION_CATEGORY_KEYS = {
+    key for key, bucket_key in CATEGORY_BUCKET_MAP.items() if bucket_key is None
+}
+
+
+def _classification_source_counts(rows: list[Any], column: str) -> dict[str, int]:
+    counts = {source: 0 for source in _CLASSIFICATION_SOURCES}
+    counts["none"] = 0
+    for row in rows:
+        source = str(row[column] or "").strip().lower()
+        if source in counts and row[column.replace("_source", "_id")] is not None:
+            counts[source] += 1
+        else:
+            counts["none"] += 1
+    return counts
+
+
+def _classification_issue_row(row: Any, cat_map: dict[str, str]) -> dict[str, Any]:
+    category = row["category"]
+    return {
+        "id": row["id"],
+        "date": str(row["posted_at"])[:10],
+        "description": row["description"],
+        "account_name": row["account_name"] or row["institution"] or row["account_id"],
+        "category": category,
+        "category_label": mnt.translate_category(category or "(sem categoria)", cat_map),
+        "amount_abs": round(abs(float(row["amount"] or 0.0)), 2),
+    }
+
+
+def _classification_health(db: Database, cat_map: dict[str, str]) -> dict[str, Any]:
+    rows = db._conn.execute(
+        """
+        SELECT t.id, t.posted_at, t.description, t.category, t.amount,
+               t.tag_id, t.tag_source, t.bucket_id, t.bucket_source,
+               t.account_id, a.name AS account_name, a.institution
+          FROM transactions t
+          LEFT JOIN accounts a ON a.id = t.account_id
+         ORDER BY abs(t.amount) DESC, t.posted_at DESC, t.id DESC
+        """
+    ).fetchall()
+
+    total = len(rows)
+    tagged = sum(1 for row in rows if row["tag_id"] is not None)
+    bucketed = sum(1 for row in rows if row["bucket_id"] is not None)
+
+    actionable_rows = [
+        row
+        for row in rows
+        if (str(row["category"] or "").strip().lower() not in _BLOCKED_CLASSIFICATION_CATEGORY_KEYS)
+    ]
+    missing_tag = [row for row in actionable_rows if row["tag_id"] is None]
+    missing_bucket = [row for row in actionable_rows if row["bucket_id"] is None]
+
+    return {
+        "total_transactions": total,
+        "tagged": tagged,
+        "untagged": total - tagged,
+        "bucketed": bucketed,
+        "unbucketed": total - bucketed,
+        "tag_sources": _classification_source_counts(rows, "tag_source"),
+        "bucket_sources": _classification_source_counts(rows, "bucket_source"),
+        "missing_tag_review_count": len(missing_tag),
+        "missing_bucket_review_count": len(missing_bucket),
+        "missing_tag": [_classification_issue_row(row, cat_map) for row in missing_tag[:10]],
+        "missing_bucket": [_classification_issue_row(row, cat_map) for row in missing_bucket[:10]],
     }
 
 
@@ -770,6 +840,7 @@ def create_app() -> FastAPI:
             "family_profile": mnt.load_family_profile() or {},
             "overrides": overrides,
             "category_audit": _category_translation_audit(db, overrides.get("categorias_pt") or {}),
+            "classification_health": _classification_health(db, overrides.get("categorias_pt") or {}),
         }
 
     @app.post("/api/maintenance")

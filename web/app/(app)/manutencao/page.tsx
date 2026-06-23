@@ -15,6 +15,7 @@ import {
   type EditableColumn,
 } from "@/components/manutencao/EditableMaintenanceTable";
 import { CategoryMapPreview } from "@/components/manutencao/CategoryMapPreview";
+import { ClassificationHealthPanel } from "@/components/manutencao/ClassificationHealthPanel";
 import { HealthChecklist } from "@/components/manutencao/HealthChecklist";
 import { MaintenanceSectionTable } from "@/components/manutencao/MaintenanceSectionTable";
 import { MissingCategoryTranslations } from "@/components/manutencao/MissingCategoryTranslations";
@@ -360,6 +361,8 @@ export default function ManutencaoPage() {
                 await saveSystemTotals.mutateAsync(payload);
               }}
             />
+
+            <ClassificationHealthPanel data={data} />
 
             <div className="grid gap-5 xl:grid-cols-2">
               <SectionCard

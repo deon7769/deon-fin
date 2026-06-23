@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from src.storage import Account, Database, Transaction
 from src.web.app import create_app, get_db, get_pluggy
+from src.web.repositories import buckets_repo, tags_repo
 
 
 @pytest.fixture
@@ -339,6 +340,19 @@ def test_maintenance_endpoint_returns_profile_and_overrides(client, monkeypatch)
             "translated": 0,
             "missing": [],
         },
+        "classification_health": {
+            "total_transactions": 0,
+            "tagged": 0,
+            "untagged": 0,
+            "bucketed": 0,
+            "unbucketed": 0,
+            "tag_sources": {"manual": 0, "rule": 0, "auto": 0, "none": 0},
+            "bucket_sources": {"manual": 0, "rule": 0, "auto": 0, "none": 0},
+            "missing_tag_review_count": 0,
+            "missing_bucket_review_count": 0,
+            "missing_tag": [],
+            "missing_bucket": [],
+        },
     }
 
 
@@ -375,6 +389,97 @@ def test_maintenance_endpoint_reports_missing_category_translations(client, tmp_
         "total_categories": 2,
         "translated": 1,
         "missing": [{"category": "Pet Shops", "tx_count": 1, "total_abs": 35.0}],
+    }
+
+
+def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monkeypatch):
+    tmp_db.upsert_account(Account(id="bank-health", source="test", name="Bank", type="BANK"))
+    buckets_repo.seed_buckets(tmp_db)
+    conforto = next(bucket for bucket in buckets_repo.list_buckets(tmp_db) if bucket["key"] == "conforto")
+    delivery = tags_repo.create_tag(
+        tmp_db,
+        name="Delivery",
+        color="#f5b301",
+        bucket_id=conforto["id"],
+    )
+    classified = Transaction(
+        account_id="bank-health",
+        posted_at=date(2026, 6, 1),
+        amount=Decimal("-20.00"),
+        description="Delivery ok",
+        source="test",
+        category="Food Delivery",
+        external_id="health-classified",
+    )
+    needs_review = Transaction(
+        account_id="bank-health",
+        posted_at=date(2026, 6, 2),
+        amount=Decimal("-35.00"),
+        description="Pet sem tag",
+        source="test",
+        category="Pet Shops",
+        external_id="health-pet",
+    )
+    intentional_transfer = Transaction(
+        account_id="bank-health",
+        posted_at=date(2026, 6, 3),
+        amount=Decimal("100.00"),
+        description="PIX proprio",
+        source="test",
+        category="Transfer - PIX",
+        external_id="health-transfer",
+    )
+    tmp_db.insert_transactions([classified, needs_review, intentional_transfer])
+    tmp_db._conn.execute(
+        """
+        UPDATE transactions
+           SET tag_id=?, tag_source='manual', bucket_id=?, bucket_source='manual'
+         WHERE id=?
+        """,
+        (delivery["id"], conforto["id"], classified.id),
+    )
+    tmp_db._conn.commit()
+    monkeypatch.setattr("src.web.app.mnt.load_family_profile", lambda: {})
+    monkeypatch.setattr(
+        "src.web.app.mnt.load_overrides",
+        lambda: {"categorias_pt": {"food delivery": "Delivery"}, "recorrencias": []},
+    )
+
+    response = client.get("/api/maintenance")
+
+    assert response.status_code == 200
+    assert response.json()["classification_health"] == {
+        "total_transactions": 3,
+        "tagged": 1,
+        "untagged": 2,
+        "bucketed": 1,
+        "unbucketed": 2,
+        "tag_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 2},
+        "bucket_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 2},
+        "missing_tag_review_count": 1,
+        "missing_bucket_review_count": 1,
+        "missing_tag": [
+            {
+                "id": needs_review.id,
+                "date": "2026-06-02",
+                "description": "Pet sem tag",
+                "account_name": "Bank",
+                "category": "Pet Shops",
+                "category_label": "Pet Shops",
+                "amount_abs": 35.0,
+            }
+        ],
+        "missing_bucket": [
+            {
+                "id": needs_review.id,
+                "date": "2026-06-02",
+                "description": "Pet sem tag",
+                "account_name": "Bank",
+                "category": "Pet Shops",
+                "category_label": "Pet Shops",
+                "amount_abs": 35.0,
+            }
+        ],
     }
 
 

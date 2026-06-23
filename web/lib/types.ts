@@ -579,10 +579,35 @@ export type MaintenanceCategoryAudit = {
   missing: Array<{ category: string; tx_count: number; total_abs: number }>;
 };
 
+export type MaintenanceClassificationIssue = {
+  id: string;
+  date: string;
+  description: string;
+  account_name?: string | null;
+  category?: string | null;
+  category_label?: string | null;
+  amount_abs: number;
+};
+
+export type MaintenanceClassificationHealth = {
+  total_transactions: number;
+  tagged: number;
+  untagged: number;
+  bucketed: number;
+  unbucketed: number;
+  tag_sources: Record<"manual" | "rule" | "auto" | "none", number>;
+  bucket_sources: Record<"manual" | "rule" | "auto" | "none", number>;
+  missing_tag_review_count: number;
+  missing_bucket_review_count: number;
+  missing_tag: MaintenanceClassificationIssue[];
+  missing_bucket: MaintenanceClassificationIssue[];
+};
+
 export type MaintenanceResponse = {
   family_profile: MaintenanceFamilyProfile;
   overrides: MaintenanceOverrides;
   category_audit?: MaintenanceCategoryAudit;
+  classification_health?: MaintenanceClassificationHealth;
 };
 
 export type MaintenanceSystemAccountSetting = {

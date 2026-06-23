@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import { ClassificationHealthPanel } from "@/components/manutencao/ClassificationHealthPanel";
 import { EditableMaintenanceTable } from "@/components/manutencao/EditableMaintenanceTable";
+import { PrivacyProvider } from "@/providers/PrivacyProvider";
 import {
   buildMaintenanceSavePayload,
   buildMaintenanceHealth,
   buildMaintenanceSections,
+  classificationCoverage,
+  classificationIssueRows,
   maintenanceToEditorState,
   maintenanceSummary,
   missingCategoryTranslations,
@@ -43,6 +47,39 @@ const sample: MaintenanceResponse = {
     total_categories: 3,
     translated: 2,
     missing: [{ category: "Pet Shops", tx_count: 2, total_abs: 70 }],
+  },
+  classification_health: {
+    total_transactions: 10,
+    tagged: 7,
+    untagged: 3,
+    bucketed: 8,
+    unbucketed: 2,
+    tag_sources: { manual: 2, rule: 1, auto: 4, none: 3 },
+    bucket_sources: { manual: 3, rule: 1, auto: 4, none: 2 },
+    missing_tag_review_count: 1,
+    missing_bucket_review_count: 1,
+    missing_tag: [
+      {
+        id: "tx-missing-tag",
+        date: "2026-06-02",
+        description: "Pet shop",
+        account_name: "Bank",
+        category: "Pet Shops",
+        category_label: "Pet Shops",
+        amount_abs: 70,
+      },
+    ],
+    missing_bucket: [
+      {
+        id: "tx-missing-bucket",
+        date: "2026-06-03",
+        description: "Sem meta",
+        account_name: "Card",
+        category: "Services",
+        category_label: "Serviços",
+        amount_abs: 120,
+      },
+    ],
   },
 };
 
@@ -144,6 +181,61 @@ describe("maintenance helpers", () => {
       { category: "Pet Shops", txCount: 2, totalAbs: 70 },
     ]);
     expect(missingCategoryTranslations({ family_profile: {}, overrides: {} })).toEqual([]);
+  });
+
+  it("computes classification coverage from maintenance health", () => {
+    expect(classificationCoverage(sample)).toEqual({
+      tagPct: 70,
+      bucketPct: 80,
+      tagLabel: "7 de 10",
+      bucketLabel: "8 de 10",
+      missingTagReviewCount: 1,
+      missingBucketReviewCount: 1,
+    });
+    expect(classificationCoverage({ family_profile: {}, overrides: {} })).toEqual({
+      tagPct: 0,
+      bucketPct: 0,
+      tagLabel: "0 de 0",
+      bucketLabel: "0 de 0",
+      missingTagReviewCount: 0,
+      missingBucketReviewCount: 0,
+    });
+  });
+
+  it("maps classification issue queues to renderable rows", () => {
+    expect(classificationIssueRows(sample, "missing_tag")).toEqual([
+      {
+        id: "tx-missing-tag",
+        date: "2026-06-02",
+        description: "Pet shop",
+        accountName: "Bank",
+        categoryLabel: "Pet Shops",
+        amountAbs: 70,
+      },
+    ]);
+    expect(classificationIssueRows(sample, "missing_bucket")[0]).toMatchObject({
+      id: "tx-missing-bucket",
+      accountName: "Card",
+      categoryLabel: "Serviços",
+      amountAbs: 120,
+    });
+  });
+
+  it("renders classification health panel with coverage and issue queues", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        PrivacyProvider,
+        null,
+        createElement(ClassificationHealthPanel, { data: sample }),
+      ),
+    );
+
+    expect(html).toContain("Cobertura de Tags");
+    expect(html).toContain("7 de 10");
+    expect(html).toContain("Cobertura de Metas");
+    expect(html).toContain("8 de 10");
+    expect(html).toContain("Pet shop");
+    expect(html).toContain("Sem meta");
   });
 
   it("renders wide editable sections as responsive field groups", () => {

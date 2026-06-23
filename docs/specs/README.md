@@ -112,6 +112,12 @@ Registradas em 2026-06-21 para encaixar nas próximas sprints:
    mapa de categorias para potes. O comando `python -m src.cli categorize` reaplica categoria, Meta, Tag e competência
    em dados já existentes. Detalhe em `docs/superpowers/specs/2026-06-23-category-translated-tags-design.md`.
 
+8. **Saúde da classificação em Manutenção:** entregue em 2026-06-23. `/api/maintenance` expõe `classification_health`
+   com cobertura de Tag/Meta, origem manual/regra/auto e filas acionáveis de lançamentos sem Tag ou sem Meta,
+   excluindo transferências/pagamentos que foram intencionalmente deixados fora da classificação. A tela
+   `/manutencao` mostra o novo painel no layout Next. Plano em
+   `docs/superpowers/plans/2026-06-23-maintenance-classification-health.md`.
+
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.
 

@@ -37,6 +37,26 @@ export type MissingCategoryTranslationRow = {
   totalAbs: number;
 };
 
+export type ClassificationCoverage = {
+  tagPct: number;
+  bucketPct: number;
+  tagLabel: string;
+  bucketLabel: string;
+  missingTagReviewCount: number;
+  missingBucketReviewCount: number;
+};
+
+export type ClassificationIssueKind = "missing_tag" | "missing_bucket";
+
+export type ClassificationIssueRow = {
+  id: string;
+  date: string;
+  description: string;
+  accountName: string;
+  categoryLabel: string;
+  amountAbs: number;
+};
+
 export type MaintenanceEditorState = {
   receitas: Array<{ membro?: string; valor?: number }>;
   caixa: Array<{ local?: string; valor?: number; aporte_mensal_recorrente?: number }>;
@@ -258,6 +278,43 @@ export function missingCategoryTranslations(
     category: row.category,
     txCount: row.tx_count,
     totalAbs: row.total_abs,
+  }));
+}
+
+function percent(part: number, total: number): number {
+  if (!total) {
+    return 0;
+  }
+  return Math.round((part / total) * 100);
+}
+
+export function classificationCoverage(data: MaintenanceResponse): ClassificationCoverage {
+  const health = data.classification_health;
+  const total = health?.total_transactions ?? 0;
+  const tagged = health?.tagged ?? 0;
+  const bucketed = health?.bucketed ?? 0;
+
+  return {
+    tagPct: percent(tagged, total),
+    bucketPct: percent(bucketed, total),
+    tagLabel: `${tagged} de ${total}`,
+    bucketLabel: `${bucketed} de ${total}`,
+    missingTagReviewCount: health?.missing_tag_review_count ?? 0,
+    missingBucketReviewCount: health?.missing_bucket_review_count ?? 0,
+  };
+}
+
+export function classificationIssueRows(
+  data: MaintenanceResponse,
+  kind: ClassificationIssueKind,
+): ClassificationIssueRow[] {
+  return (data.classification_health?.[kind] ?? []).map((row) => ({
+    id: row.id,
+    date: row.date,
+    description: row.description,
+    accountName: row.account_name?.trim() || "Sem conta",
+    categoryLabel: row.category_label?.trim() || row.category?.trim() || "Sem categoria",
+    amountAbs: row.amount_abs,
   }));
 }
 
