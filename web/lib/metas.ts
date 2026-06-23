@@ -19,6 +19,12 @@ export type SumBadgeState = {
   label: string;
 };
 
+export type BucketAllocationStatus = {
+  state: "valid" | "under" | "over";
+  message: string;
+  canSave: boolean;
+};
+
 export function plannedKindLabel(kind: "percent" | "amount"): string {
   return kind === "percent" ? "Percentual" : "Valor fixo";
 }
@@ -33,6 +39,33 @@ export function sumBadgeState(input: Pick<BucketPlanResponse, "sum_percent"> & {
   return {
     tone: input.warning ? "warning" : "ok",
     label: `${formatPercentNumber(input.sum_percent)}% planejado`,
+  };
+}
+
+export function sumBucketAllocationDraft(draft: Record<string | number, number>): number {
+  const total = Object.values(draft).reduce((sum, value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? sum + parsed : sum;
+  }, 0);
+  return Math.round(total * 100) / 100;
+}
+
+export function bucketAllocationStatus(total: number): BucketAllocationStatus {
+  const rounded = Math.round(Number(total) * 100) / 100;
+  if (Math.abs(rounded - 100) < 0.001) {
+    return { state: "valid", message: "100% alocado", canSave: true };
+  }
+  if (rounded < 100) {
+    return {
+      state: "under",
+      message: `Faltam ${formatPercentNumber(100 - rounded)}% para 100%`,
+      canSave: false,
+    };
+  }
+  return {
+    state: "over",
+    message: `Excedeu ${formatPercentNumber(rounded - 100)}% do total`,
+    canSave: false,
   };
 }
 

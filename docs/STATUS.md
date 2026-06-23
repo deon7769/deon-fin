@@ -37,6 +37,10 @@ Atualizado em: 2026-06-23
   - Simulações.
   - Simulador redirecionado para Simulações.
   - Investimentos e subrotas.
+- Metas passou a usar editor visual de alocação por sliders:
+  - visão em anel com total alocado;
+  - sliders por pote com valor estimado em R$;
+  - salvamento em lote bloqueado até fechar 100%.
 
 ### Domínio financeiro
 

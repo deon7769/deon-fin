@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { AlertCircle, Plus, Target, Wallet } from "lucide-react";
-import { BucketPlanRow } from "@/components/metas/BucketPlanRow";
+import { BucketAllocationPanel } from "@/components/metas/BucketAllocationPanel";
 import { SavingsGoalCard } from "@/components/metas/SavingsGoalCard";
 import { SavingsGoalModal } from "@/components/metas/SavingsGoalModal";
-import { SumBadge } from "@/components/metas/SumBadge";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -17,14 +16,14 @@ import {
   useBucketPlan,
   useCreateGoal,
   useDeleteGoal,
-  useReorderBuckets,
   useSavingsGoals,
   useUpdateBucket,
   useUpdateGoal,
   type SavingsGoalInput,
 } from "@/hooks/useMetas";
 import { formatBRL } from "@/lib/format";
-import type { BucketPlanItem, SavingsGoal } from "@/lib/types";
+import type { BucketPlanPatch } from "@/lib/metas";
+import type { SavingsGoal } from "@/lib/types";
 
 function RetryState({
   title,
@@ -89,52 +88,20 @@ function IncomeEmptyState() {
   );
 }
 
-function moveBucket(items: BucketPlanItem[], index: number, direction: -1 | 1): BucketPlanItem[] {
-  const target = index + direction;
-  if (target < 0 || target >= items.length) {
-    return items;
-  }
-  const next = [...items];
-  const [item] = next.splice(index, 1);
-  next.splice(target, 0, item);
-  return next;
-}
-
 export default function MetasPage() {
-  const [bucketOrder, setBucketOrder] = useState<number[]>([]);
   const [modalGoal, setModalGoal] = useState<SavingsGoal | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [allocationError, setAllocationError] = useState<string | null>(null);
 
   const bucketPlan = useBucketPlan();
   const savings = useSavingsGoals();
   const updateBucket = useUpdateBucket();
-  const reorderBuckets = useReorderBuckets();
   const createGoal = useCreateGoal();
   const updateGoal = useUpdateGoal();
   const deleteGoal = useDeleteGoal();
   const plan = bucketPlan.data;
   const goals = savings.data;
-  const buckets = useMemo(() => {
-    const source = plan?.buckets ?? [];
-    if (!bucketOrder.length || bucketOrder.length !== source.length) {
-      return source;
-    }
-    const byId = new Map(source.map((bucket) => [bucket.id, bucket]));
-    const ordered = bucketOrder
-      .map((id) => byId.get(id))
-      .filter((bucket): bucket is BucketPlanItem => Boolean(bucket));
-    return ordered.length === source.length ? ordered : source;
-  }, [bucketOrder, plan?.buckets]);
-
-  const moveAndPersist = (index: number, direction: -1 | 1) => {
-    const next = moveBucket(buckets, index, direction);
-    if (next === buckets) {
-      return;
-    }
-    setBucketOrder(next.map((bucket) => bucket.id));
-    reorderBuckets.mutate(next.map((bucket) => bucket.id));
-  };
 
   const openCreateModal = () => {
     setModalGoal(null);
@@ -172,6 +139,17 @@ export default function MetasPage() {
     const confirmed = window.confirm(`Excluir ${goal.name}?`);
     if (confirmed) {
       deleteGoal.mutate(goal.id);
+    }
+  };
+
+  const saveBucketAllocations = async (
+    updates: Array<{ id: number; input: BucketPlanPatch }>,
+  ) => {
+    try {
+      setAllocationError(null);
+      await Promise.all(updates.map((update) => updateBucket.mutateAsync(update)));
+    } catch (error) {
+      setAllocationError(error instanceof Error ? error.message : "Erro ao salvar metas");
     }
   };
 
@@ -216,34 +194,13 @@ export default function MetasPage() {
               />
             </div>
 
-            <SectionCard
-              title="Distribuição da renda"
-              subtitle={`Total planejado: ${formatBRL(plan.sum_amount)}`}
-              actions={<SumBadge plan={plan} />}
-            >
-              <div className="hidden border-b border-border pb-2 text-xs font-medium uppercase tracking-normal text-muted xl:grid xl:grid-cols-[minmax(160px,1.1fr)_150px_130px_90px_minmax(170px,1fr)_120px]">
-                <span>Meta</span>
-                <span>Modo</span>
-                <span>Planejado</span>
-                <span>Cor</span>
-                <span>Realizado</span>
-                <span className="text-right">Ações</span>
-              </div>
-              {buckets.map((bucket, index) => (
-                <BucketPlanRow
-                  key={`${bucket.id}:${bucket.name}:${bucket.color}:${bucket.planned_kind}:${bucket.planned_value}`}
-                  bucket={bucket}
-                  first={index === 0}
-                  last={index === buckets.length - 1}
-                  saving={updateBucket.isPending}
-                  moving={reorderBuckets.isPending}
-                  onMove={(direction) => moveAndPersist(index, direction)}
-                  onSave={(bucketId, input) =>
-                    updateBucket.mutateAsync({ id: bucketId, input }).then(() => undefined)
-                  }
-                />
-              ))}
-            </SectionCard>
+            <BucketAllocationPanel
+              buckets={plan.buckets}
+              income={plan.income}
+              saving={updateBucket.isPending}
+              error={allocationError}
+              onSave={saveBucketAllocations}
+            />
           </>
         )}
 

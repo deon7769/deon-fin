@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  bucketAllocationStatus,
   goalViabilityLabel,
   plannedKindLabel,
+  sumBucketAllocationDraft,
   sumBadgeState,
   toBucketPlanPatch,
 } from "@/lib/metas";
@@ -60,5 +62,24 @@ describe("metas helpers", () => {
         planned_value: "250.45",
       }).planned_value,
     ).toBe(250.45);
+  });
+
+  it("sums bucket allocation drafts and describes total status", () => {
+    expect(sumBucketAllocationDraft({ 1: 25, 2: 30, 3: 45 })).toBe(100);
+    expect(bucketAllocationStatus(100)).toEqual({
+      state: "valid",
+      message: "100% alocado",
+      canSave: true,
+    });
+    expect(bucketAllocationStatus(92)).toEqual({
+      state: "under",
+      message: "Faltam 8% para 100%",
+      canSave: false,
+    });
+    expect(bucketAllocationStatus(111)).toEqual({
+      state: "over",
+      message: "Excedeu 11% do total",
+      canSave: false,
+    });
   });
 });
