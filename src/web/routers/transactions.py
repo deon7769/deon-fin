@@ -13,6 +13,7 @@ from ..repositories import transactions_repo
 
 router = APIRouter(prefix="/api", tags=["transactions"])
 _YEAR_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
+_CLASSIFICATION_SOURCE_VALUES = {"manual", "rule", "auto", "none"}
 
 
 class TransactionPatch(BaseModel):
@@ -101,6 +102,21 @@ def _parse_string_ids(value: str | None) -> list[str] | None:
     if value is None or value.strip() == "":
         return None
     parsed = [token.strip() for token in value.split(",") if token.strip()]
+    return parsed or None
+
+
+def _parse_classification_sources(value: str | None, *, field: str) -> list[str] | None:
+    if value is None or value.strip() == "":
+        return None
+
+    parsed: list[str] = []
+    for token in value.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if token not in _CLASSIFICATION_SOURCE_VALUES:
+            raise HTTPException(status_code=422, detail=f"{field} inválido")
+        parsed.append(token)
     return parsed or None
 
 
@@ -193,6 +209,8 @@ def get_transactions(
     account_ids: str | None = None,
     bucket_ids: str | None = None,
     tag_ids: str | None = None,
+    bucket_source: str | None = None,
+    tag_source: str | None = None,
     savings_goal_id: str | None = None,
     quality: Literal["missing_tag", "missing_bucket"] | None = None,
     internal_transfer: Literal["only", "exclude"] | None = None,
@@ -217,6 +235,8 @@ def get_transactions(
         account_ids=_parse_string_ids(account_ids),
         bucket_ids=_parse_optional_ids(bucket_ids, field="bucket_ids"),
         tag_ids=_parse_optional_ids(tag_ids, field="tag_ids"),
+        bucket_sources=_parse_classification_sources(bucket_source, field="bucket_source"),
+        tag_sources=_parse_classification_sources(tag_source, field="tag_source"),
         savings_goal_ids=_parse_optional_ids(savings_goal_id, field="savings_goal_id"),
         quality=quality,
         internal_transfer=internal_transfer,

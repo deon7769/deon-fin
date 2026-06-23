@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   clampPageSize,
+  classificationSourceFilterFromSearch,
   hasTransactionFilters,
   idsFilterFromSearch,
   internalTransferFilterFromSearch,
@@ -119,6 +120,32 @@ describe("transaction helpers", () => {
     expect(transactionFilterBadges(filters)).toEqual(["Qualidade: Sem Tag acionável"]);
     expect(transactionFilterBadges({ quality: "missing_bucket" })).toEqual([
       "Qualidade: Sem Meta acionável",
+    ]);
+  });
+
+  it("serializes and labels classification source filters", () => {
+    const filters = {
+      month: "2026-06",
+      bucketSources: ["manual", "none"] as const,
+      tagSources: ["auto"] as const,
+    };
+
+    expect(transactionQuery(filters)).toMatchObject({
+      month: "2026-06",
+      bucket_source: "manual,none",
+      tag_source: "auto",
+    });
+    expect(hasTransactionFilters(filters)).toBe(true);
+    expect(classificationSourceFilterFromSearch("manual,none,bad, auto")).toEqual([
+      "manual",
+      "none",
+      "auto",
+    ]);
+    expect(classificationSourceFilterFromSearch(null)).toBeUndefined();
+    expect(transactionFilterBadges(filters)).toEqual([
+      "Origem Meta: Manual",
+      "Origem Meta: Sem origem",
+      "Origem Tag: Automática",
     ]);
   });
 

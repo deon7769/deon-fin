@@ -257,6 +257,80 @@ def test_list_transactions_filters_bucket_and_tag_with_none(tmp_db):
     assert [item["id"] for item in no_tag["items"]] == [plain.id]
 
 
+def test_list_transactions_filters_bucket_and_tag_sources(tmp_db):
+    _seed_accounts(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    tags_repo.seed_tags(tmp_db)
+    bucket = buckets_repo.list_buckets(tmp_db)[0]
+    tag = tags_repo.list_tags(tmp_db)[0]
+    manual_auto = _insert(
+        tmp_db,
+        amount="-30.00",
+        description="Manual meta auto tag",
+        external_id="repo-source-filter-1",
+    )
+    rule_manual = _insert(
+        tmp_db,
+        amount="-40.00",
+        description="Rule meta manual tag",
+        external_id="repo-source-filter-2",
+    )
+    no_source = _insert(
+        tmp_db,
+        amount="-50.00",
+        description="Sem origem",
+        external_id="repo-source-filter-3",
+    )
+    tmp_db._conn.execute(
+        """
+        UPDATE transactions
+           SET bucket_id=?, bucket_source='manual', tag_id=?, tag_source='auto'
+         WHERE id=?
+        """,
+        (bucket["id"], tag["id"], manual_auto.id),
+    )
+    tmp_db._conn.execute(
+        """
+        UPDATE transactions
+           SET bucket_id=?, bucket_source='rule', tag_id=?, tag_source='manual'
+         WHERE id=?
+        """,
+        (bucket["id"], tag["id"], rule_manual.id),
+    )
+    tmp_db._conn.commit()
+
+    by_bucket_source = transactions_repo.list_transactions(
+        tmp_db,
+        bucket_sources=["manual"],
+        hidden="include",
+    )
+    assert [item["id"] for item in by_bucket_source["items"]] == [manual_auto.id]
+    assert by_bucket_source["summary"]["expense"] == 30.0
+
+    by_tag_source = transactions_repo.list_transactions(
+        tmp_db,
+        tag_sources=["manual"],
+        hidden="include",
+    )
+    assert [item["id"] for item in by_tag_source["items"]] == [rule_manual.id]
+
+    by_missing_sources = transactions_repo.list_transactions(
+        tmp_db,
+        bucket_sources=["none"],
+        tag_sources=["none"],
+        hidden="include",
+    )
+    assert [item["id"] for item in by_missing_sources["items"]] == [no_source.id]
+
+    by_both_sources = transactions_repo.list_transactions(
+        tmp_db,
+        bucket_sources=["manual"],
+        tag_sources=["auto"],
+        hidden="include",
+    )
+    assert [item["id"] for item in by_both_sources["items"]] == [manual_auto.id]
+
+
 def test_list_transactions_quality_filters_only_actionable_classification_rows(tmp_db):
     _seed_accounts(tmp_db)
     buckets_repo.seed_buckets(tmp_db)

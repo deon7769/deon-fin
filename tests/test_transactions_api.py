@@ -101,6 +101,10 @@ def test_get_transactions_shape_and_bad_params(client, tmp_db):
     assert invalid_bucket.status_code == 422
     assert invalid_bucket.json()["error"]["code"] == "validation_error"
 
+    invalid_source = client.get("/api/transactions?bucket_source=legacy")
+    assert invalid_source.status_code == 422
+    assert invalid_source.json()["error"]["code"] == "validation_error"
+
 
 def test_get_transactions_translates_pluggy_category_labels(client, tmp_db):
     _seed_account(tmp_db)
@@ -202,6 +206,45 @@ def test_get_transactions_quality_filter_returns_actionable_missing_tag_rows(cli
     assert body["total"] == 1
     assert body["items"][0]["id"] == untagged.id
     assert body["summary"] == {"income": 0.0, "expense": 42.5, "balance": -42.5}
+
+
+def test_get_transactions_filters_classification_sources(client, tmp_db):
+    _seed_account(tmp_db)
+    target = _insert_tx(tmp_db, external_id="api-source-filter-1")
+    other = _insert_tx(tmp_db, external_id="api-source-filter-2")
+    no_source = _insert_tx(tmp_db, external_id="api-source-filter-3")
+    bucket_id = client.get("/api/buckets").json()["items"][0]["id"]
+    tag_id = client.get("/api/tags").json()["items"][0]["id"]
+    tmp_db._conn.execute(
+        """
+        UPDATE transactions
+           SET bucket_id=?, bucket_source='manual', tag_id=?, tag_source='auto'
+         WHERE id=?
+        """,
+        (bucket_id, tag_id, target.id),
+    )
+    tmp_db._conn.execute(
+        """
+        UPDATE transactions
+           SET bucket_id=?, bucket_source='rule', tag_id=?, tag_source='manual'
+         WHERE id=?
+        """,
+        (bucket_id, tag_id, other.id),
+    )
+    tmp_db._conn.commit()
+
+    response = client.get(
+        "/api/transactions?month=2026-06&bucket_source=manual&tag_source=auto"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body["items"]] == [target.id]
+    assert body["summary"] == {"income": 0.0, "expense": 42.5, "balance": -42.5}
+
+    missing = client.get("/api/transactions?month=2026-06&bucket_source=none&tag_source=none")
+    assert missing.status_code == 200
+    assert [item["id"] for item in missing.json()["items"]] == [no_source.id]
 
 
 def test_get_transactions_filters_internal_transfers(client, tmp_db):

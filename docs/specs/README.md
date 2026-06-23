@@ -59,7 +59,7 @@ specs assumem.
 1. **F4 follow-ups** — verificar/finalizar os 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100% das
    metas de alocação, RF por valor informado, badge manual na UI, dataset do Mapa, `investido_total` sem duplicar, tema azul).
 2. **Manutenção/Classificação** — filtros acionáveis "sem Tag"/"sem Meta" e filtros avançados de Transações já
-   entraram; próximos: reprocessar pela UI, aplicação em massa com prévia e filtros por `tag_source`/`bucket_source`.
+   entraram; filtros por `tag_source`/`bucket_source` também entraram; próximos: reprocessar pela UI e aplicação em massa com prévia.
 3. **F5 — Hardening** na ordem: **F5.1** (WAL/busy_timeout) → **F5.2** (fonte única de cálculo) → **F5.3**
    (decompor `app.py`) → **F5.4** (lifespan) → **F5.5** (sunset do legado, quando houver paridade).
 4. **F2.8 polish** — melhorar heurística de candidatas, preview de conciliação e direção de resgate/subtração.

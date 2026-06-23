@@ -33,6 +33,8 @@ describe("TransactionAdvancedFilters", () => {
     expect(html).toContain("Contas");
     expect(html).toContain("Ocultar dos Relatórios");
     expect(html).toContain("Transf. de Mesma Titularidade");
+    expect(html).toContain("Origem da Meta");
+    expect(html).toContain("Origem da Tag");
     expect(html).toContain("Aplicar Filtros");
   });
 });

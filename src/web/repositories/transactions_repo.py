@@ -43,6 +43,7 @@ class AccountNotFoundError(ValueError):
 
 _UNSET = object()
 _HIDDEN_VALUES = {"exclude", "include", "only"}
+_CLASSIFICATION_SOURCE_VALUES = {"manual", "rule", "auto", "none"}
 _BLOCKED_CLASSIFICATION_CATEGORY_KEYS = {
     key for key, bucket_key in CATEGORY_BUCKET_MAP.items() if bucket_key is None
 }
@@ -368,6 +369,35 @@ def _build_null_aware_filter(
     return "(" + " OR ".join(parts) + ")"
 
 
+def _build_source_filter(
+    column: str,
+    values: list[str] | None,
+    params: list[Any],
+) -> str | None:
+    if not values:
+        return None
+
+    concrete_values: list[str] = []
+    include_empty = False
+    for value in values:
+        if value not in _CLASSIFICATION_SOURCE_VALUES:
+            raise ValueError("origem de classificação inválida")
+        if value == "none":
+            include_empty = True
+        else:
+            concrete_values.append(value)
+
+    parts: list[str] = []
+    if concrete_values:
+        parts.append(f"{column} IN ({','.join('?' for _ in concrete_values)})")
+        params.extend(concrete_values)
+    if include_empty:
+        parts.append(f"({column} IS NULL OR TRIM({column}) = '')")
+    if not parts:
+        return None
+    return "(" + " OR ".join(parts) + ")"
+
+
 def _build_where(
     *,
     month: str | None = None,
@@ -381,6 +411,8 @@ def _build_where(
     account_ids: list[str] | None = None,
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
+    bucket_sources: list[str] | None = None,
+    tag_sources: list[str] | None = None,
     savings_goal_ids: list[int | None] | None = None,
     quality: Literal["missing_tag", "missing_bucket"] | None = None,
     internal_transfer: Literal["only", "exclude"] | None = None,
@@ -435,6 +467,14 @@ def _build_where(
     if tag_filter:
         clauses.append(tag_filter)
 
+    bucket_source_filter = _build_source_filter("t.bucket_source", bucket_sources, params)
+    if bucket_source_filter:
+        clauses.append(bucket_source_filter)
+
+    tag_source_filter = _build_source_filter("t.tag_source", tag_sources, params)
+    if tag_source_filter:
+        clauses.append(tag_source_filter)
+
     savings_goal_filter = _build_null_aware_filter("t.savings_goal_id", savings_goal_ids, params)
     if savings_goal_filter:
         clauses.append(savings_goal_filter)
@@ -463,6 +503,8 @@ def _compute_summary(
     account_ids: list[str] | None = None,
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
+    bucket_sources: list[str] | None = None,
+    tag_sources: list[str] | None = None,
     savings_goal_ids: list[int | None] | None = None,
     quality: Literal["missing_tag", "missing_bucket"] | None = None,
     internal_transfer: Literal["only", "exclude"] | None = None,
@@ -480,6 +522,8 @@ def _compute_summary(
         account_ids=account_ids,
         bucket_ids=bucket_ids,
         tag_ids=tag_ids,
+        bucket_sources=bucket_sources,
+        tag_sources=tag_sources,
         savings_goal_ids=savings_goal_ids,
         quality=quality,
         internal_transfer=internal_transfer,
@@ -561,6 +605,8 @@ def list_transactions(
     account_ids: list[str] | None = None,
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
+    bucket_sources: list[str] | None = None,
+    tag_sources: list[str] | None = None,
     savings_goal_ids: list[int | None] | None = None,
     quality: Literal["missing_tag", "missing_bucket"] | None = None,
     internal_transfer: Literal["only", "exclude"] | None = None,
@@ -584,6 +630,8 @@ def list_transactions(
         "account_ids": account_ids,
         "bucket_ids": bucket_ids,
         "tag_ids": tag_ids,
+        "bucket_sources": bucket_sources,
+        "tag_sources": tag_sources,
         "savings_goal_ids": savings_goal_ids,
         "quality": quality,
         "internal_transfer": internal_transfer,

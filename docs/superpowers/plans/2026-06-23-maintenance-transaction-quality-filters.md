@@ -22,5 +22,5 @@
 
 - Reprocessar classificacao pela UI.
 - Aplicar Tag/Meta em massa com pre-visualizacao.
-- Filtrar Transacoes por `tag_source` e `bucket_source`.
+- Filtrar Transacoes por `tag_source` e `bucket_source` foi entregue na sprint `2026-06-23-transacoes-filtros-origem-classificacao.md`.
 - Mostrar grupo separado de itens ignorados por politica.

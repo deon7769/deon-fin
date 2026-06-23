@@ -5,6 +5,7 @@ import { Filter, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type {
   TransactionAdvancedFilterPatch,
+  TransactionClassificationSourceFilter,
   TransactionFilters,
   TransactionInternalTransferFilter,
   TransactionQualityFilter,
@@ -30,6 +31,8 @@ type DraftState = {
   hidden: TransactionHiddenFilter;
   bucketIds: Array<number | null>;
   tagIds: Array<number | null>;
+  bucketSources: TransactionClassificationSourceFilter[];
+  tagSources: TransactionClassificationSourceFilter[];
   accountIds: string[];
   savingsGoalIds: Array<number | null>;
   quality: TransactionQualityFilter | "";
@@ -60,6 +63,8 @@ function draftFromFilters(filters: TransactionFilters): DraftState {
     hidden: filters.hidden ?? "exclude",
     bucketIds: filters.bucketIds ?? [],
     tagIds: filters.tagIds ?? [],
+    bucketSources: [...(filters.bucketSources ?? [])],
+    tagSources: [...(filters.tagSources ?? [])],
     accountIds: filters.accountIds ?? (filters.accountId ? [filters.accountId] : []),
     savingsGoalIds: filters.savingsGoalIds ?? [],
     quality: filters.quality ?? "",
@@ -90,6 +95,13 @@ function parseNullableIds(values: string[]): Array<number | null> {
 
 function nullableIdValues(values: Array<number | null>): string[] {
   return values.map((value) => (value === null ? "none" : String(value)));
+}
+
+function classificationSourceValues(values: string[]): TransactionClassificationSourceFilter[] {
+  return values.filter(
+    (value): value is TransactionClassificationSourceFilter =>
+      value === "manual" || value === "rule" || value === "auto" || value === "none",
+  );
 }
 
 function toggleNullableId(values: Array<number | null>, next: number | null): Array<number | null> {
@@ -208,6 +220,8 @@ export function TransactionAdvancedFilters({
       accountIds: draft.accountIds,
       bucketIds: draft.bucketIds,
       tagIds: draft.tagIds,
+      bucketSources: draft.bucketSources,
+      tagSources: draft.tagSources,
       savingsGoalIds: draft.savingsGoalIds,
       quality: draft.quality || null,
       internalTransfer: draft.internalTransfer || null,
@@ -384,6 +398,56 @@ export function TransactionAdvancedFilters({
                   {tag.name}
                 </option>
               ))}
+            </select>
+          </FieldGroup>
+
+          <FieldGroup
+            title="Origem da Meta"
+            onClear={() => setDraft((value) => ({ ...value, bucketSources: [] }))}
+          >
+            <select
+              multiple
+              value={draft.bucketSources}
+              onChange={(event) =>
+                setDraft((value) => ({
+                  ...value,
+                  bucketSources: classificationSourceValues(
+                    selectedValues(event.currentTarget.selectedOptions),
+                  ),
+                }))
+              }
+              className="min-h-24 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none"
+              aria-label="Selecione as origens da meta"
+            >
+              <option value="manual">Manual</option>
+              <option value="rule">Regra</option>
+              <option value="auto">Automática</option>
+              <option value="none">Sem origem</option>
+            </select>
+          </FieldGroup>
+
+          <FieldGroup
+            title="Origem da Tag"
+            onClear={() => setDraft((value) => ({ ...value, tagSources: [] }))}
+          >
+            <select
+              multiple
+              value={draft.tagSources}
+              onChange={(event) =>
+                setDraft((value) => ({
+                  ...value,
+                  tagSources: classificationSourceValues(
+                    selectedValues(event.currentTarget.selectedOptions),
+                  ),
+                }))
+              }
+              className="min-h-24 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none"
+              aria-label="Selecione as origens da tag"
+            >
+              <option value="manual">Manual</option>
+              <option value="rule">Regra</option>
+              <option value="auto">Automática</option>
+              <option value="none">Sem origem</option>
             </select>
           </FieldGroup>
 

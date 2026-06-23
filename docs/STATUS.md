@@ -219,7 +219,7 @@ Atualizado em: 2026-06-23
 - Preservar resumos por categoria nas telas atuais, mas evoluir gradualmente para também mostrar resumos por Tag e por Meta.
 - Decidir se Tags padrão amplas antigas (`Alimentação`, `Lazer`, etc.) continuam como opções manuais ou se serão migradas para Tags granulares.
 - Revisar a paleta automática de Tags depois de validar visualmente com dados reais.
-- Adicionar filtros por `tag_source` e `bucket_source` em Transações.
+- Filtros por `tag_source` e `bucket_source` em Transações entregues no drawer avançado; usar na revisão de classificações manuais, automáticas, por regra e sem origem.
 - Melhorar o componente visual de multiseleção de Tags/Contas caso a lista cresça muito; a primeira versão usa multiselect nativo no drawer avançado.
 
 ### Renda e transferências
@@ -295,8 +295,8 @@ Atualizado em: 2026-06-23
    - Ação "reprocessar classificação".
    - Aplicação em massa de Tag/Meta com prévia.
 
-3. **Transações - filtros de qualidade**
-   - Filtros por origem `tag_source` e `bucket_source`.
+3. **Transações - polish operacional**
+   - Melhorar multiselects de Tags/Contas/origens se a lista real ficar longa.
    - Destaques visuais para itens acionáveis vindos da Manutenção.
 
 4. **Regras aprendidas**

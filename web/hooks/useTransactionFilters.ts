@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { usePeriod } from "@/providers/PeriodProvider";
 import {
   clampPageSize,
+  classificationSourceFilterFromSearch,
   hasTransactionFilters,
   idsFilterFromSearch,
   internalTransferFilterFromSearch,
@@ -44,7 +45,7 @@ function idsParam(values?: Array<number | null>): string | null {
   return values.map((value) => (value === null ? "none" : String(value))).join(",");
 }
 
-function stringListParam(values?: string[]): string | null {
+function stringListParam(values?: readonly string[]): string | null {
   const normalized = (values ?? []).map((value) => value.trim()).filter(Boolean);
   return normalized.length ? normalized.join(",") : null;
 }
@@ -71,6 +72,8 @@ export function useTransactionFilters() {
       tagIds:
         semTagFilterFromSearch(searchParams.get("semTag")) ??
         idsFilterFromSearch(searchParams.get("tag_ids")),
+      bucketSources: classificationSourceFilterFromSearch(searchParams.get("bucket_source")),
+      tagSources: classificationSourceFilterFromSearch(searchParams.get("tag_source")),
       savingsGoalIds: idsFilterFromSearch(searchParams.get("savings_goal_id")),
       quality: qualityFilterFromSearch(searchParams.get("quality")),
       internalTransfer: internalTransferFilterFromSearch(searchParams.get("internal_transfer")),
@@ -126,6 +129,8 @@ export function useTransactionFilters() {
     params.delete("account_id");
     setParam("bucket_ids", idsParam(patch.bucketIds));
     setParam("tag_ids", idsParam(patch.tagIds));
+    setParam("bucket_source", stringListParam(patch.bucketSources));
+    setParam("tag_source", stringListParam(patch.tagSources));
     setParam("savings_goal_id", idsParam(patch.savingsGoalIds));
     setParam("quality", patch.quality);
     setParam("internal_transfer", patch.internalTransfer);
@@ -153,6 +158,8 @@ export function useTransactionFilters() {
       "semTag",
       "bucket_ids",
       "tag_ids",
+      "bucket_source",
+      "tag_source",
       "savings_goal_id",
       "quality",
       "internal_transfer",

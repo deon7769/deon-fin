@@ -8,6 +8,7 @@ export type TransactionDateRange = {
 
 export type TransactionQualityFilter = "missing_tag" | "missing_bucket";
 export type TransactionInternalTransferFilter = "only" | "exclude";
+export type TransactionClassificationSourceFilter = "manual" | "rule" | "auto" | "none";
 
 export type TransactionFilters = {
   month?: string | null;
@@ -21,6 +22,8 @@ export type TransactionFilters = {
   accountIds?: string[];
   bucketIds?: Array<number | null>;
   tagIds?: Array<number | null>;
+  bucketSources?: readonly TransactionClassificationSourceFilter[];
+  tagSources?: readonly TransactionClassificationSourceFilter[];
   savingsGoalIds?: Array<number | null>;
   quality?: TransactionQualityFilter | null;
   internalTransfer?: TransactionInternalTransferFilter | null;
@@ -38,6 +41,8 @@ export type TransactionAdvancedFilterPatch = {
   accountIds?: string[];
   bucketIds?: Array<number | null>;
   tagIds?: Array<number | null>;
+  bucketSources?: readonly TransactionClassificationSourceFilter[];
+  tagSources?: readonly TransactionClassificationSourceFilter[];
   savingsGoalIds?: Array<number | null>;
   quality?: TransactionQualityFilter | null;
   internalTransfer?: TransactionInternalTransferFilter | null;
@@ -62,6 +67,13 @@ type TransactionFilterBadgeContext = {
   accounts?: AccountFilterLookupItem[];
 };
 
+const CLASSIFICATION_SOURCE_LABELS: Record<TransactionClassificationSourceFilter, string> = {
+  manual: "Manual",
+  rule: "Regra",
+  auto: "Automática",
+  none: "Sem origem",
+};
+
 function idsParam(values?: Array<number | null>): string | undefined {
   if (!values?.length) {
     return undefined;
@@ -71,7 +83,7 @@ function idsParam(values?: Array<number | null>): string | undefined {
   return tokens.length ? tokens.join(",") : undefined;
 }
 
-function stringListParam(values?: string[]): string | undefined {
+function stringListParam(values?: readonly string[]): string | undefined {
   const normalized = (values ?? []).map((value) => value.trim()).filter(Boolean);
   return normalized.length ? normalized.join(",") : undefined;
 }
@@ -119,6 +131,22 @@ export function stringListFilterFromSearch(value: string | null): string[] | und
     .split(",")
     .map((token) => token.trim())
     .filter(Boolean);
+  return parsed.length ? parsed : undefined;
+}
+
+export function classificationSourceFilterFromSearch(
+  value: string | null,
+): TransactionClassificationSourceFilter[] | undefined {
+  if (!value?.trim()) {
+    return undefined;
+  }
+
+  const parsed = value
+    .split(",")
+    .map((token) => token.trim())
+    .filter((token): token is TransactionClassificationSourceFilter =>
+      token === "manual" || token === "rule" || token === "auto" || token === "none",
+    );
   return parsed.length ? parsed : undefined;
 }
 
@@ -183,6 +211,14 @@ export function transactionQuery(filters: TransactionFilters): TransactionQuery 
   if (tagIds) {
     query.tag_ids = tagIds;
   }
+  const bucketSources = stringListParam(filters.bucketSources);
+  if (bucketSources) {
+    query.bucket_source = bucketSources;
+  }
+  const tagSources = stringListParam(filters.tagSources);
+  if (tagSources) {
+    query.tag_source = tagSources;
+  }
   const savingsGoalIds = idsParam(filters.savingsGoalIds);
   if (savingsGoalIds) {
     query.savings_goal_id = savingsGoalIds;
@@ -213,6 +249,8 @@ export function hasTransactionFilters(filters: TransactionFilters): boolean {
       filters.accountIds?.length ||
       filters.bucketIds?.length ||
       filters.tagIds?.length ||
+      filters.bucketSources?.length ||
+      filters.tagSources?.length ||
       filters.savingsGoalIds?.length ||
       filters.quality ||
       filters.internalTransfer,
@@ -244,6 +282,12 @@ export function transactionFilterBadges(
   }
   for (const tagId of filters.tagIds ?? []) {
     badges.push(`Tag: ${lookupFilterName(tagId, context.tags, "Sem tag", "Tag")}`);
+  }
+  for (const source of filters.bucketSources ?? []) {
+    badges.push(`Origem Meta: ${CLASSIFICATION_SOURCE_LABELS[source]}`);
+  }
+  for (const source of filters.tagSources ?? []) {
+    badges.push(`Origem Tag: ${CLASSIFICATION_SOURCE_LABELS[source]}`);
   }
   for (const savingsGoalId of filters.savingsGoalIds ?? []) {
     badges.push(
