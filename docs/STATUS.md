@@ -148,6 +148,10 @@ Atualizado em: 2026-06-23
 - Fluxo Aportar.
 - Mapa de risco soberano por país.
 - Correção específica para `AUVP11` como ETF.
+- Aporte em Renda Fixa sem preço unitário:
+  - RF cadastrada por `manual_value` entra no PL e nas Metas;
+  - o fluxo Aportar sugere valor em R$ (`sugest_un == sugest_rs`);
+  - a confirmação soma o valor em `manual_value/current_value`.
 
 ## Documentos principais
 
@@ -261,8 +265,8 @@ Atualizado em: 2026-06-23
 ## Próximas sprints recomendadas
 
 1. **F4 follow-ups de Investimentos**
-   - Conferir os 7 itens de polish de `docs/specs/F4-STATUS-aderencia.md`.
-   - Validar metas de alocação, RF por valor informado, badge manual, dataset do Mapa e tema azul.
+   - Implementar `investido_total` a partir da carteira detalhada sem duplicar aportes por transações.
+   - Conferir dataset/UX do Mapa em produção com países principais.
 
 2. **Manutenção - ações de classificação**
    - Botões para abrir filas no contexto de Transações.

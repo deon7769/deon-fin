@@ -7,6 +7,7 @@ import type {
   InvestmentAporteConfirmInput,
   InvestmentAporteCalculateInput,
   InvestmentAporteResponse,
+  InvestmentAporteSuggestion,
   InvestmentCountryDetail,
   InvestmentQuestion,
   InvestmentQuestionInput,
@@ -113,6 +114,16 @@ export function buildQuestionPayload(values: InvestmentQuestionFormValues): Inve
 
 export function buildAportePayload(value: string): InvestmentAporteCalculateInput {
   return { aporte: toRequiredNumber(value, 0) };
+}
+
+export function investmentSuggestionAporteValue(
+  suggestion: InvestmentAporteSuggestion,
+  quantity: number,
+): number {
+  if (Number(suggestion.preco) > 0) {
+    return toMoneyNumber(quantity * Number(suggestion.preco));
+  }
+  return toMoneyNumber(quantity);
 }
 
 export function aporteComprasFromSuggestions(result: InvestmentAporteResponse): InvestmentAporteConfirmInput {

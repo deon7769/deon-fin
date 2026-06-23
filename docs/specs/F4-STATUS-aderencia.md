@@ -29,22 +29,24 @@ preço de cota/afordabilidade ✅; `manually_adjusted` + fontes de preço ✅; `
   `F2.8-metas-conciliacao-transacoes.md`. **Próxima feature a executar.**
 - **F5 — Hardening/consolidação** (WAL, app.py, etc.). Doc: `F5-hardening-consolidacao.md`.
 
-## 3. Follow-ups menores do F4 (verificar/finalizar — não bloqueiam)
+## 3. Follow-ups menores do F4 (status atualizado em 2026-06-23)
 Itens de polish a **conferir** contra os specs (podem já estar ok; checar e, se faltar, implementar):
-1. **Metas (F4.2) — trava 100% + overflow:** confirmar que `PUT /investments/targets` **rejeita soma ≠ 100**
+1. ✅ **Metas (F4.2) — trava 100% + overflow:** confirmado que `PUT /investments/targets` **rejeita soma ≠ 100**
    (422 `targets_sum`) e que o front mostra **"Total: X%"** + **"O valor ultrapassou {X−100}% do valor das metas"**
    (>100%) / "Faltam {100−X}%" (<100%), com `Salvar` desabilitado fora de 100% (overview §8 / F4.2 §4).
-2. **Renda Fixa:** confirmar cadastro por **valor informado** (`manual_value`) e atualização opcional via
-   **Marcação a Mercado (F3.6)**; RF entra no PL/Metas mas fica fora da sugestão por unidade (F4 §3/§16-5).
-3. **Aporte — classes sem score (rf/cripto):** confirmar o comportamento (distribuir o alvo da classe sem
-   ponderar por nota / RF sem unidade) — F4.4 §4 edge.
-4. **Badge "✏️ manual" na lista** (front) e regra "Pluggy sobrescreve no próximo sync" no `upsert_pluggy_asset`
+2. ✅ **Renda Fixa:** cadastro por **valor informado** (`manual_value`) já existia; em 2026-06-23 o fluxo
+   **Aportar** passou a sugerir RF sem preço por valor em R$ (`sugest_un == sugest_rs`) e confirmar esse valor
+   atualiza `manual_value/current_value`.
+3. ✅ **Aporte — classes sem score (rf/cripto/etf):** confirmado/ajustado: classes sem score recebem peso neutro
+   quando têm meta; RF sem unidade distribui por valor; cripto/ETF continuam dependendo de preço/cota.
+4. ✅ **Badge "manual" na lista** (front) e regra "Pluggy sobrescreve no próximo sync" no `upsert_pluggy_asset`
    (overview §6 / F4.1 §5) — confirmar UI + comportamento do sync.
 5. **Mapa — dataset:** conferir cobertura de países em `country_ratings.py` (US, BR, DE, IN, RU + principais) e o
    GeoJSON/tiles; selo de risco e abas Índices/Empresas/ETFs (F4.5).
-6. **`investido_total` aditivo sem duplicar:** confirmar que `m0019` (system total settings) realmente soma a
-   carteira ao dashboard **sem** recontar o que já entra via transações (decisão §7b).
-7. **Tema azul:** confirmar que o acento azul do módulo está aplicado em todas as abas (Ativos/Metas/Aportar/
+6. **`investido_total` aditivo sem duplicar:** segue como próxima sprint técnica. O dashboard legado ainda calcula
+   `investido_total` por transações de investimento; para usar `portfolio_assets.current_value` sem duplicar aportes,
+   implementar fonte única de cálculo (alinhado ao F5.2).
+7. ✅ **Tema azul:** confirmado que o acento azul do módulo está aplicado em todas as abas (Ativos/Metas/Aportar/
    Perguntas/Mapa) e botões.
 
 > Recomendação: rodar a suíte (`pytest -q`, `npm test`/`typecheck`/`lint`/`build`) e fazer um *smoke* de cada

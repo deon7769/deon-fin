@@ -4,7 +4,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { InvestmentAportePanel } from "@/components/investimentos/InvestmentAportePanel";
-import { aporteComprasFromSuggestions, buildAportePayload } from "@/lib/investments";
+import {
+  aporteComprasFromSuggestions,
+  buildAportePayload,
+  investmentSuggestionAporteValue,
+} from "@/lib/investments";
 import { PrivacyProvider } from "@/providers/PrivacyProvider";
 import type { InvestmentAporteResponse, InvestmentTargetsResponse } from "@/lib/types";
 
@@ -69,6 +73,19 @@ describe("investment aporte helpers", () => {
         { asset_id: 2, quantidade: 2.22224 },
       ],
     });
+  });
+
+  it("uses suggested currency value as aporte value when a suggestion has no unit price", () => {
+    const fixedIncomeSuggestion = {
+      ...result.sugestoes[0],
+      asset_class: "rf",
+      ticker: "Tesouro Selic",
+      preco: 0,
+      sugest_rs: 500,
+      sugest_un: 500,
+    };
+
+    expect(investmentSuggestionAporteValue(fixedIncomeSuggestion, 500)).toBe(500);
   });
 });
 

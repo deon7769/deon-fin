@@ -239,3 +239,38 @@ def test_aporte_menor_que_menor_cota_vira_troco():
     assert result["sugestoes"][0]["sugest_rs"] == 0.0
     assert result["sugestoes"][0]["sugest_un"] == 0.0
     assert result["troco"] == 50.0
+
+
+def test_renda_fixa_sem_preco_recebe_sugestao_por_valor():
+    calcular_aporte = _calcular_aporte()
+    ativos = [
+        {
+            "id": 1,
+            "asset_class": "rf",
+            "ticker": "Tesouro Selic",
+            "nota": None,
+            "valor_atual": 1000,
+            "preco": 0,
+            "fracionavel": True,
+        }
+    ]
+
+    result = calcular_aporte(500, ativos, {"rf": 100})
+
+    assert result["patrimonio"] == 1000.0
+    assert result["pl_alvo"] == 1500.0
+    assert result["troco"] == 0.0
+    assert result["sugestoes"] == [
+        {
+            "id": 1,
+            "tipo": "rf",
+            "asset_class": "rf",
+            "ticker": "Tesouro Selic",
+            "valor_atual": 1000.0,
+            "preco": 0.0,
+            "nota": None,
+            "sugest_rs": 500.0,
+            "sugest_un": 500.0,
+            "total_apos_aporte_pct": 100.0,
+        }
+    ]

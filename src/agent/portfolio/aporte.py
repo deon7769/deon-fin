@@ -122,7 +122,7 @@ def calcular_aporte(
             sugest_rs = _money(ideal.get(index, 0.0))
             preco = _preco(ativo)
             if _is_fixed_income(asset_class) and preco <= 0:
-                sugestoes_por_index[index] = {"sugest_rs": 0.0, "sugest_un": 0.0}
+                sugestoes_por_index[index] = {"sugest_rs": sugest_rs, "sugest_un": sugest_rs}
                 continue
             sugest_un = round(sugest_rs / preco, 6) if preco > 0 else 0.0
             sugestoes_por_index[index] = {"sugest_rs": sugest_rs, "sugest_un": sugest_un}
@@ -175,8 +175,6 @@ def calcular_aporte(
         preco = _preco(ativo)
         valor_atual = _valor_atual(ativo)
         sugest_un = suggestion["sugest_un"]
-        if _is_fixed_income(_asset_class(ativo)) and preco <= 0:
-            continue
         total_apos_aporte_pct = (
             _money((valor_atual + sugest_rs) / pl_alvo * 100) if pl_alvo > 0 else 0.0
         )

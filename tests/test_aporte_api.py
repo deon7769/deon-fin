@@ -132,7 +132,7 @@ def test_calcular_aporte_uses_assets_targets_and_scores(client, tmp_db):
     assert sugestoes["INT10"]["sugest_rs"] == pytest.approx(555.56, abs=0.01)
 
 
-def test_calcular_aporte_does_not_allocate_fixed_income_without_unit_price(client, tmp_db):
+def test_calcular_aporte_allocates_fixed_income_by_manual_value_without_unit_price(client, tmp_db):
     _save_targets(tmp_db, rf=100)
     portfolio_repo.create_manual_asset(
         tmp_db,
@@ -147,8 +147,21 @@ def test_calcular_aporte_does_not_allocate_fixed_income_without_unit_price(clien
     body = response.json()
     assert body["patrimonio"] == 1000.0
     assert body["pl_alvo"] == 1500.0
-    assert body["sugestoes"] == []
-    assert body["troco"] == 500.0
+    assert body["troco"] == 0.0
+    assert body["sugestoes"] == [
+        {
+            "id": body["sugestoes"][0]["id"],
+            "tipo": "rf",
+            "asset_class": "rf",
+            "ticker": "Tesouro Selic",
+            "valor_atual": 1000.0,
+            "preco": 0.0,
+            "nota": None,
+            "sugest_rs": 500.0,
+            "sugest_un": 500.0,
+            "total_apos_aporte_pct": 100.0,
+        }
+    ]
 
 
 def test_confirmar_aporte_adds_quantity_updates_value_and_saves_ultimo_aporte(
@@ -183,3 +196,28 @@ def test_confirmar_aporte_adds_quantity_updates_value_and_saves_ultimo_aporte(
     assert profile["ultimo_aporte"] == 200.0
     tx_count = tmp_db._conn.execute("SELECT COUNT(*) FROM portfolio_transactions").fetchone()[0]
     assert tx_count == 0
+
+
+def test_confirmar_aporte_fixed_income_uses_quantity_as_currency_value(client, tmp_db):
+    asset = portfolio_repo.create_manual_asset(
+        tmp_db,
+        asset_class="rf",
+        name="Tesouro Selic",
+        manual_value=1000,
+    )
+
+    response = client.post(
+        "/api/investments/aporte/confirmar",
+        json={
+            "aporte": 500,
+            "compras": [{"asset_id": asset["id"], "quantidade": 500}],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    refreshed = next(item for item in body["assets"] if item["id"] == asset["id"])
+    assert refreshed["manual_value"] == 1500.0
+    assert refreshed["current_value"] == 1500.0
+    assert refreshed["quantity"] == 500.0
+    assert refreshed["manually_adjusted"] is True

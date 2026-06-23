@@ -11,6 +11,7 @@ import {
   aporteComprasFromSuggestions,
   buildAportePayload,
   INVESTMENT_CLASSES,
+  investmentSuggestionAporteValue,
 } from "@/lib/investments";
 import type {
   InvestmentAporteConfirmInput,
@@ -70,7 +71,8 @@ function ConfirmModal({
 }) {
   const [quantity, setQuantity] = useState(displayNumber(suggestion.sugest_un));
   const quantidade = parseNumber(quantity);
-  const aporte = Number((quantidade * suggestion.preco).toFixed(2));
+  const aporte = investmentSuggestionAporteValue(suggestion, quantidade);
+  const quantityLabel = suggestion.preco > 0 ? "Quantidade a ser aportada" : "Valor a aportar";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -100,7 +102,7 @@ function ConfirmModal({
             <p className="text-lg font-semibold text-text">{suggestion.ticker ?? suggestion.asset_class}</p>
           </div>
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-text">Quantidade a ser aportada</span>
+            <span className="text-sm font-medium text-text">{quantityLabel}</span>
             <input
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
