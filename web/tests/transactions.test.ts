@@ -92,6 +92,21 @@ describe("transaction helpers", () => {
     ]);
   });
 
+  it("serializes and labels savings goal filters", () => {
+    const filters = { month: "2026-06", savingsGoalIds: [7, null] };
+
+    expect(transactionQuery(filters)).toMatchObject({
+      month: "2026-06",
+      savings_goal_id: "7,none",
+    });
+    expect(hasTransactionFilters(filters)).toBe(true);
+    expect(
+      transactionFilterBadges(filters, {
+        savingsGoals: [{ id: 7, name: "Viagem" }],
+      }),
+    ).toEqual(["Meta poupança: Viagem", "Meta poupança: Sem meta"]);
+  });
+
   it("prefers transaction display_value over aggregate signed_value", () => {
     expect(transactionDisplayValue({ amount: -300, signed_value: 0, display_value: -300 })).toBe(-300);
     expect(transactionDisplayValue({ amount: -300, signed_value: 0 })).toBe(0);

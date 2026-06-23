@@ -21,8 +21,10 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { SavingsGoalSelect } from "@/components/ui/SavingsGoalSelect";
 import { TagSelect } from "@/components/ui/TagSelect";
 import { useBuckets } from "@/hooks/useBuckets";
+import { useSavingsGoals } from "@/hooks/useMetas";
 import { useSetBucket } from "@/hooks/useSetBucket";
 import { useSetTag } from "@/hooks/useSetTag";
 import { useCreateTag } from "@/hooks/useTagMutations";
@@ -333,10 +335,20 @@ function NewTransactionPanel({
 
 export default function TransacoesPage() {
   const [newOpen, setNewOpen] = useState(false);
-  const { filters, hasFilters, setSearch, setType, setHidden, setPage, setPageSize, clearFilters } =
-    useTransactionFilters();
+  const {
+    filters,
+    hasFilters,
+    setSearch,
+    setType,
+    setHidden,
+    setSavingsGoal,
+    setPage,
+    setPageSize,
+    clearFilters,
+  } = useTransactionFilters();
   const transactionsQuery = useTransactions(filters);
   const bucketsQuery = useBuckets();
+  const savingsGoalsQuery = useSavingsGoals();
   const tagsQuery = useTags();
   const setBucket = useSetBucket();
   const setTag = useSetTag();
@@ -356,7 +368,10 @@ export default function TransacoesPage() {
   const activeFilterBadges = transactionFilterBadges(filters, {
     buckets: bucketsQuery.data ?? [],
     tags: tagsQuery.data ?? [],
+    savingsGoals: savingsGoalsQuery.data?.goals ?? [],
   });
+  const savingsGoalFilter =
+    filters.savingsGoalIds?.length === 1 ? filters.savingsGoalIds[0] : undefined;
   const accountOptions = useMemo(() => {
     const byId = new Map<string, string>();
     for (const tx of rows) {
@@ -475,6 +490,22 @@ export default function TransacoesPage() {
         },
       },
       {
+        key: "savings_goal",
+        header: "Meta poupança",
+        className: "min-w-[210px] px-3 py-3 align-top",
+        cell: (tx) => (
+          <SavingsGoalSelect
+            value={tx.savings_goal_id ?? null}
+            options={savingsGoalsQuery.data?.goals ?? []}
+            loading={savingsGoalsQuery.isLoading}
+            disabled={updateTx.isPending}
+            onChange={(savings_goal_id) =>
+              updateTx.mutate({ id: tx.id, input: { savings_goal_id } })
+            }
+          />
+        ),
+      },
+      {
         key: "hidden",
         header: "Ocultar",
         className: "w-24 px-3 py-3 text-center align-top",
@@ -523,6 +554,8 @@ export default function TransacoesPage() {
       createTag.isPending,
       createInlineTag,
       deleteTx,
+      savingsGoalsQuery.data,
+      savingsGoalsQuery.isLoading,
       setBucket,
       setTag,
       tagsQuery.data,
@@ -599,7 +632,7 @@ export default function TransacoesPage() {
 
         <SectionCard>
           <div className="space-y-4">
-            <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_180px_auto]">
+            <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_180px_190px_auto]">
               <label className="flex h-10 min-w-0 items-center gap-2 rounded-md border border-border bg-bg px-3 text-muted">
                 <Search size={16} aria-hidden />
                 <input
@@ -630,6 +663,31 @@ export default function TransacoesPage() {
                 <option value="exclude">Sem ocultas</option>
                 <option value="include">Com ocultas</option>
                 <option value="only">Somente ocultas</option>
+              </select>
+              <select
+                value={
+                  savingsGoalFilter === undefined
+                    ? ""
+                    : savingsGoalFilter === null
+                      ? "none"
+                      : String(savingsGoalFilter)
+                }
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  setSavingsGoal(
+                    nextValue === "" ? undefined : nextValue === "none" ? null : Number(nextValue),
+                  );
+                }}
+                className="h-10 rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
+                aria-label="Meta de poupança"
+              >
+                <option value="">Todas metas poupança</option>
+                <option value="none">Sem meta poupança</option>
+                {(savingsGoalsQuery.data?.goals ?? []).map((goal) => (
+                  <option key={goal.id} value={goal.id}>
+                    {goal.name}
+                  </option>
+                ))}
               </select>
               <button
                 type="button"

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from src.storage import Account, Transaction
 from src.web.app import create_app, get_db, get_pluggy
+from src.web.repositories import savings_repo
 
 
 @pytest.fixture
@@ -215,6 +216,39 @@ def test_patch_transaction_accepts_all_partial_fields(client, tmp_db):
         "Conferir depois",
         "2026-07",
     )
+
+
+def test_patch_and_filter_transaction_savings_goal(client, tmp_db):
+    _seed_account(tmp_db)
+    tx = _insert_tx(tmp_db, external_id="api-savings-goal-1")
+    other = _insert_tx(tmp_db, external_id="api-savings-goal-2")
+    goal = savings_repo.create_goal(
+        tmp_db,
+        name="Viagem",
+        target_amount=3000,
+        term_months=6,
+    )
+
+    tagged = client.patch(
+        f"/api/transactions/{tx.id}",
+        json={"savings_goal_id": goal["id"]},
+    )
+
+    assert tagged.status_code == 200
+    assert tagged.json()["savings_goal_id"] == goal["id"]
+    assert tagged.json()["savings_goal_name"] == "Viagem"
+    filtered = client.get(f"/api/transactions?savings_goal_id={goal['id']}")
+    assert filtered.status_code == 200
+    assert [item["id"] for item in filtered.json()["items"]] == [tx.id]
+
+    cleared = client.patch(f"/api/transactions/{tx.id}", json={"savings_goal_id": None})
+    assert cleared.status_code == 200
+    assert cleared.json()["savings_goal_id"] is None
+    assert client.get(f"/api/transactions?savings_goal_id={goal['id']}").json()["items"] == []
+
+    invalid = client.patch(f"/api/transactions/{other.id}", json={"savings_goal_id": 9999})
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "validation_error"
 
 
 def test_patch_transaction_validates_empty_body_fk_and_reference_month(client, tmp_db):

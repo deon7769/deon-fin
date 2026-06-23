@@ -556,6 +556,16 @@ def m0020_tag_bucket_source_rules(conn: sqlite3.Connection) -> None:
     )
 
 
+def m0021_savings_goal_transaction_links(conn: sqlite3.Connection) -> None:
+    _add_column(conn, "transactions", "savings_goal_id", "INTEGER")
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_tx_savings_goal
+            ON transactions(savings_goal_id)
+        """
+    )
+
+
 MIGRATIONS: list[tuple[int, str, Migration]] = [
     (1, "tx_bucket_columns", m0001_tx_bucket_columns),
     (2, "tx_tag_column", m0002_tx_tag_column),
@@ -577,6 +587,7 @@ MIGRATIONS: list[tuple[int, str, Migration]] = [
     (18, "investment_etf_asset_class", m0018_investment_etf_asset_class),
     (19, "system_total_settings", m0019_system_total_settings),
     (20, "tag_bucket_source_rules", m0020_tag_bucket_source_rules),
+    (21, "savings_goal_transaction_links", m0021_savings_goal_transaction_links),
 ]
 
 

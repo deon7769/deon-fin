@@ -10,6 +10,7 @@ export type TransactionPatchInput = {
   reference_month?: string | null;
   bucket_id?: number | null;
   tag_id?: number | null;
+  savings_goal_id?: number | null;
 };
 
 export type CreateTransactionInput = {
@@ -45,6 +46,9 @@ export function useUpdateTransaction() {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       queryClient.invalidateQueries({ queryKey: ["painel"] });
       queryClient.invalidateQueries({ queryKey: ["budget"] });
+      queryClient.invalidateQueries({ queryKey: ["savings"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsGoalTransactions"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsGoalCandidates"] });
     },
   });
 }
@@ -60,6 +64,9 @@ export function useCreateTransaction() {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       queryClient.invalidateQueries({ queryKey: ["painel"] });
       queryClient.invalidateQueries({ queryKey: ["budget"] });
+      queryClient.invalidateQueries({ queryKey: ["savings"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsGoalTransactions"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsGoalCandidates"] });
     },
   });
 }
@@ -74,6 +81,9 @@ export function useDeleteTransaction() {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       queryClient.invalidateQueries({ queryKey: ["painel"] });
       queryClient.invalidateQueries({ queryKey: ["budget"] });
+      queryClient.invalidateQueries({ queryKey: ["savings"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsGoalTransactions"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsGoalCandidates"] });
     },
   });
 }
@@ -92,6 +102,9 @@ export function useBulkUpdateTransactions() {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       queryClient.invalidateQueries({ queryKey: ["painel"] });
       queryClient.invalidateQueries({ queryKey: ["budget"] });
+      queryClient.invalidateQueries({ queryKey: ["savings"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsGoalTransactions"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsGoalCandidates"] });
     },
   });
 }

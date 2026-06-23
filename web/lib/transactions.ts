@@ -16,6 +16,7 @@ export type TransactionFilters = {
   accountId?: string | null;
   bucketIds?: Array<number | null>;
   tagIds?: Array<number | null>;
+  savingsGoalIds?: Array<number | null>;
   page?: number;
   pageSize?: number;
 };
@@ -30,6 +31,7 @@ type FilterLookupItem = {
 type TransactionFilterBadgeContext = {
   buckets?: FilterLookupItem[];
   tags?: FilterLookupItem[];
+  savingsGoals?: FilterLookupItem[];
 };
 
 function idsParam(values?: Array<number | null>): string | undefined {
@@ -120,6 +122,10 @@ export function transactionQuery(filters: TransactionFilters): TransactionQuery 
   if (tagIds) {
     query.tag_ids = tagIds;
   }
+  const savingsGoalIds = idsParam(filters.savingsGoalIds);
+  if (savingsGoalIds) {
+    query.savings_goal_id = savingsGoalIds;
+  }
 
   if (filters.hidden) {
     query.hidden = filters.hidden;
@@ -138,7 +144,8 @@ export function hasTransactionFilters(filters: TransactionFilters): boolean {
       filters.amountMax !== undefined ||
       filters.accountId ||
       filters.bucketIds?.length ||
-      filters.tagIds?.length,
+      filters.tagIds?.length ||
+      filters.savingsGoalIds?.length,
   );
 }
 
@@ -167,6 +174,16 @@ export function transactionFilterBadges(
   }
   for (const tagId of filters.tagIds ?? []) {
     badges.push(`Tag: ${lookupFilterName(tagId, context.tags, "Sem tag", "Tag")}`);
+  }
+  for (const savingsGoalId of filters.savingsGoalIds ?? []) {
+    badges.push(
+      `Meta poupança: ${lookupFilterName(
+        savingsGoalId,
+        context.savingsGoals,
+        "Sem meta",
+        "Meta poupança",
+      )}`,
+    );
   }
 
   const q = filters.q?.trim();

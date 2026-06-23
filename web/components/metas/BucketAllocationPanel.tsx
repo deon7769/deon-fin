@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { RotateCcw, Save } from "lucide-react";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { SectionCard } from "@/components/ui/SectionCard";
@@ -75,7 +75,6 @@ export function BucketAllocationPanel({
   error = null,
   onSave,
 }: BucketAllocationPanelProps) {
-  const [draft, setDraft] = useState<Record<number, number>>(() => initialDraft(buckets, income));
   const draftKey = useMemo(
     () =>
       `${income}:${buckets
@@ -84,13 +83,29 @@ export function BucketAllocationPanel({
     [buckets, income],
   );
 
+  return (
+    <BucketAllocationPanelDraft
+      key={draftKey}
+      buckets={buckets}
+      income={income}
+      saving={saving}
+      error={error}
+      onSave={onSave}
+    />
+  );
+}
+
+function BucketAllocationPanelDraft({
+  buckets,
+  income,
+  saving = false,
+  error = null,
+  onSave,
+}: BucketAllocationPanelProps) {
+  const [draft, setDraft] = useState<Record<number, number>>(() => initialDraft(buckets, income));
   const total = useMemo(() => sumBucketAllocationDraft(draft), [draft]);
   const status = bucketAllocationStatus(total);
   const background = donutBackground(buckets, draft);
-
-  useEffect(() => {
-    setDraft(initialDraft(buckets, income));
-  }, [draftKey, buckets, income]);
 
   const setTarget = (bucketId: number, value: number) => {
     const parsed = Number.isFinite(value) ? value : 0;

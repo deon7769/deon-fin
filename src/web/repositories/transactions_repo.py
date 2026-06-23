@@ -15,7 +15,7 @@ from ...agent.context import (
 from ...agent.buckets import match_key_for
 from ...storage import Database, Transaction
 from ...storage.reference_month import reference_month
-from . import buckets_repo, profile_repo, tags_repo
+from . import buckets_repo, profile_repo, savings_repo, tags_repo
 
 
 class TransactionNotFoundError(ValueError):
@@ -27,6 +27,10 @@ class BucketNotFoundError(ValueError):
 
 
 class TagNotFoundError(ValueError):
+    pass
+
+
+class SavingsGoalNotFoundError(ValueError):
     pass
 
 
@@ -42,14 +46,16 @@ SELECT_COLS = """
          t.raw_description, t.category, t.category_source, t.source,
          t.external_id, t.metadata_json, t.created_at,
          t.bucket_id, t.bucket_source, t.tag_id, t.tag_source, t.reference_month,
-         COALESCE(t.hidden, 0) AS hidden, t.note,
+         t.savings_goal_id, COALESCE(t.hidden, 0) AS hidden, t.note,
          a.name AS account_name, a.type AS account_type,
          b.name AS bucket_name, b.color AS bucket_color,
-         tg.name AS tag_name, tg.color AS tag_color
+         tg.name AS tag_name, tg.color AS tag_color,
+         sg.name AS savings_goal_name
     FROM transactions t
     LEFT JOIN accounts a ON a.id = t.account_id
     LEFT JOIN budget_buckets b ON b.id = t.bucket_id
     LEFT JOIN tags tg ON tg.id = t.tag_id
+    LEFT JOIN savings_goals sg ON sg.id = t.savings_goal_id
 """
 
 
@@ -175,6 +181,8 @@ def _serialize_item(
         "tag_id": row["tag_id"],
         "tag_source": row["tag_source"],
         "tag": tag,
+        "savings_goal_id": row["savings_goal_id"],
+        "savings_goal_name": row["savings_goal_name"],
         "reference_month": row["reference_month"],
         "hidden": bool(row["hidden"]),
         "note": row["note"],
@@ -223,6 +231,7 @@ def _build_where(
     account_id: str | None = None,
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
+    savings_goal_ids: list[int | None] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
 ) -> tuple[str, list[Any]]:
     clauses = ["1=1"]
@@ -271,6 +280,10 @@ def _build_where(
     if tag_filter:
         clauses.append(tag_filter)
 
+    savings_goal_filter = _build_null_aware_filter("t.savings_goal_id", savings_goal_ids, params)
+    if savings_goal_filter:
+        clauses.append(savings_goal_filter)
+
     if hidden == "exclude":
         clauses.append("COALESCE(t.hidden, 0) = 0")
     elif hidden == "only":
@@ -294,6 +307,7 @@ def _compute_summary(
     account_id: str | None = None,
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
+    savings_goal_ids: list[int | None] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
 ) -> dict[str, float]:
     where, params = _build_where(
@@ -307,6 +321,7 @@ def _compute_summary(
         account_id=account_id,
         bucket_ids=bucket_ids,
         tag_ids=tag_ids,
+        savings_goal_ids=savings_goal_ids,
         hidden=hidden,
     )
     rows = db._conn.execute(
@@ -377,6 +392,7 @@ def list_transactions(
     account_id: str | None = None,
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
+    savings_goal_ids: list[int | None] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
     page: int = 1,
     page_size: int = 25,
@@ -396,6 +412,7 @@ def list_transactions(
         "account_id": account_id,
         "bucket_ids": bucket_ids,
         "tag_ids": tag_ids,
+        "savings_goal_ids": savings_goal_ids,
         "hidden": hidden,
     }
     sql_filters = {**filters, "type": None}
@@ -514,6 +531,7 @@ def update_transaction(
     *,
     bucket_id: int | None | object = _UNSET,
     tag_id: int | None | object = _UNSET,
+    savings_goal_id: int | None | object = _UNSET,
     hidden: bool | object = _UNSET,
     note: str | None | object = _UNSET,
     reference_month: str | object = _UNSET,
@@ -525,6 +543,12 @@ def update_transaction(
         raise BucketNotFoundError(f"bucket_id inválido: {bucket_id}")
     if tag_id is not _UNSET and tag_id is not None and not tags_repo.tag_exists(db, int(tag_id)):
         raise TagNotFoundError(f"tag_id inválido: {tag_id}")
+    if (
+        savings_goal_id is not _UNSET
+        and savings_goal_id is not None
+        and savings_repo.get_goal(db, int(savings_goal_id)) is None
+    ):
+        raise SavingsGoalNotFoundError(f"savings_goal_id inválido: {savings_goal_id}")
 
     assignments: list[str] = []
     params: list[Any] = []
@@ -535,6 +559,9 @@ def update_transaction(
     if tag_id is not _UNSET:
         assignments.extend(["tag_id=?", "tag_source='manual'"])
         params.append(tag_id)
+    if savings_goal_id is not _UNSET:
+        assignments.append("savings_goal_id=?")
+        params.append(savings_goal_id)
     if hidden is not _UNSET:
         assignments.append("hidden=?")
         params.append(1 if hidden else 0)

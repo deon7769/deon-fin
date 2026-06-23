@@ -56,11 +56,11 @@ specs assumem.
 
 ## Próximas execuções (ordem lógica)
 
-1. **F2.8 — Conciliação** transações ↔ metas de poupança (feature nova; `transactions.savings_goal_id`).
-2. **F4 follow-ups** — verificar/finalizar os 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100% das
+1. **F4 follow-ups** — verificar/finalizar os 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100% das
    metas de alocação, RF por valor informado, badge manual na UI, dataset do Mapa, `investido_total` sem duplicar, tema azul).
-3. **F5 — Hardening** na ordem: **F5.1** (WAL/busy_timeout) → **F5.2** (fonte única de cálculo) → **F5.3**
+2. **F5 — Hardening** na ordem: **F5.1** (WAL/busy_timeout) → **F5.2** (fonte única de cálculo) → **F5.3**
    (decompor `app.py`) → **F5.4** (lifespan) → **F5.5** (sunset do legado, quando houver paridade).
+3. **F2.8 polish** — melhorar heurística de candidatas, preview de conciliação e direção de resgate/subtração.
 
 ## Status em 2026-06-21
 
@@ -84,7 +84,7 @@ specs assumem.
 | F3.4 | ✅ entregue | Editor de Manutenção no Next com tabelas editáveis e save em `/api/maintenance`. |
 | F3.6 | ✅ entregue | Hub "Simulações" com 7 calculadoras, formulários guiados, redirect `/simulador`→`/simulacoes` e endpoints `/api/sim/*` com avisos de defaults CDI/IPCA. |
 | F4.1–F4.5 | ✅ entregue | Módulo Investimentos: Ativos+brapi, Metas de alocação, Perguntas/nota, Aportar (Método Burro), Mapa. Aderência confirmada em `F4-STATUS-aderencia.md`. |
-| F2.8 | 📋 spec | Conciliação transações ↔ metas de poupança (`savings_goal_id`) — **a implementar**. |
+| F2.8 | ✅ entregue | Conciliação transações ↔ metas de poupança (`savings_goal_id`): Guardado derivado, endpoints, modal em Metas e edição/filtro em Transações. |
 | F4 follow-ups | 📋 verificar | 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100%, RF, badge UI, dataset Mapa, tema azul…). |
 | F5 | 📋 backlog | Hardening: WAL, fonte única de cálculo, decompor app.py, lifespan, sunset legado. |
 
@@ -148,6 +148,7 @@ Specs de feature **acrescentam migrations a essa lista** (nunca destrutivas, gua
 - F1.1 / F1.2: **seeds** dos 6 potes e das 7 tags.
 - F2.5: `accounts.sort_order`, `accounts.pluggy_item_id` + backfill de `account_balances` a partir de `accounts.metadata_json`.
 - F2.6: `savings_goals` (metas de poupança — **confirmado**) + import inicial de `family_profile["metas"]`.
+- F2.8: `transactions.savings_goal_id` + índice `idx_tx_savings_goal` para conciliação de transações com metas de poupança.
 
 ## Decisões/reconciliações descobertas na análise do código (registro)
 

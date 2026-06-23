@@ -18,6 +18,7 @@ _YEAR_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 class TransactionPatch(BaseModel):
     bucket_id: int | None = None
     tag_id: int | None = None
+    savings_goal_id: int | None = None
     hidden: bool | None = None
     note: str | None = None
     reference_month: str | None = None
@@ -108,6 +109,8 @@ def _patch_kwargs(body: TransactionPatch) -> dict:
         kwargs["bucket_id"] = body.bucket_id
     if "tag_id" in fields:
         kwargs["tag_id"] = body.tag_id
+    if "savings_goal_id" in fields:
+        kwargs["savings_goal_id"] = body.savings_goal_id
     if "hidden" in fields:
         kwargs["hidden"] = bool(body.hidden)
     if "note" in fields:
@@ -122,7 +125,11 @@ def _update_or_raise(db: Database, transaction_id: str, **kwargs) -> dict:
         return transactions_repo.update_transaction(db, transaction_id, **kwargs)
     except transactions_repo.TransactionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="transação não encontrada") from exc
-    except (transactions_repo.BucketNotFoundError, transactions_repo.TagNotFoundError) as exc:
+    except (
+        transactions_repo.BucketNotFoundError,
+        transactions_repo.TagNotFoundError,
+        transactions_repo.SavingsGoalNotFoundError,
+    ) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
@@ -178,6 +185,7 @@ def get_transactions(
     account_id: str | None = None,
     bucket_ids: str | None = None,
     tag_ids: str | None = None,
+    savings_goal_id: str | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
     page: int = 1,
     page_size: int = 25,
@@ -198,6 +206,7 @@ def get_transactions(
         account_id=account_id,
         bucket_ids=_parse_optional_ids(bucket_ids, field="bucket_ids"),
         tag_ids=_parse_optional_ids(tag_ids, field="tag_ids"),
+        savings_goal_ids=_parse_optional_ids(savings_goal_id, field="savings_goal_id"),
         hidden=hidden,
         page=page,
         page_size=page_size,
@@ -236,7 +245,11 @@ def create_transaction(
         )
     except transactions_repo.AccountNotFoundError as exc:
         raise HTTPException(status_code=422, detail="conta inválida") from exc
-    except (transactions_repo.BucketNotFoundError, transactions_repo.TagNotFoundError) as exc:
+    except (
+        transactions_repo.BucketNotFoundError,
+        transactions_repo.TagNotFoundError,
+        transactions_repo.SavingsGoalNotFoundError,
+    ) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     response.status_code = 200 if result["duplicate"] else 201

@@ -6,6 +6,7 @@ import { AlertCircle, Plus, Target, Wallet } from "lucide-react";
 import { BucketAllocationPanel } from "@/components/metas/BucketAllocationPanel";
 import { SavingsGoalCard } from "@/components/metas/SavingsGoalCard";
 import { SavingsGoalModal } from "@/components/metas/SavingsGoalModal";
+import { SavingsGoalReconciliationModal } from "@/components/metas/SavingsGoalReconciliationModal";
 import { Header } from "@/components/layout/Header";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KpiCard } from "@/components/ui/KpiCard";
@@ -91,6 +92,7 @@ function IncomeEmptyState() {
 export default function MetasPage() {
   const [modalGoal, setModalGoal] = useState<SavingsGoal | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [reconcileGoal, setReconcileGoal] = useState<SavingsGoal | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [allocationError, setAllocationError] = useState<string | null>(null);
 
@@ -244,6 +246,7 @@ export default function MetasPage() {
                     deleting={deleteGoal.isPending && deleteGoal.variables === goal.id}
                     onEdit={() => openEditModal(goal)}
                     onDelete={() => removeGoal(goal)}
+                    onReconcile={() => setReconcileGoal(goal)}
                   />
                 ))}
               </div>
@@ -261,6 +264,11 @@ export default function MetasPage() {
         error={modalError}
         onClose={closeModal}
         onSubmit={saveGoal}
+      />
+      <SavingsGoalReconciliationModal
+        open={reconcileGoal !== null}
+        goal={reconcileGoal}
+        onClose={() => setReconcileGoal(null)}
       />
     </>
   );

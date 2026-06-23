@@ -72,6 +72,8 @@ export type Transaction = {
   tag_id?: number | null;
   tag_source?: string | null;
   tag?: Pick<Tag, "id" | "name" | "color"> | null;
+  savings_goal_id?: number | null;
+  savings_goal_name?: string | null;
   reference_month?: string | null;
   hidden: boolean;
   note?: string | null;
@@ -191,6 +193,10 @@ export type SavingsGoal = {
   target_amount: number;
   term_months: number;
   saved_amount: number;
+  saved_manual?: number;
+  saved_from_tx?: number;
+  saved_total?: number;
+  linked_count?: number;
   priority: number;
   monthly_required: number;
   progress_pct: number;
@@ -577,6 +583,17 @@ export type MaintenanceCategoryAudit = {
   total_categories: number;
   translated: number;
   missing: Array<{ category: string; tx_count: number; total_abs: number }>;
+};
+
+export type SavingsGoalTransactionsResponse = {
+  goal_id: number;
+  items: Transaction[];
+  saved_from_tx: number;
+  linked_count: number;
+};
+
+export type SavingsGoalCandidatesResponse = TransactionPage & {
+  goal_id: number;
 };
 
 export type MaintenanceClassificationIssue = {

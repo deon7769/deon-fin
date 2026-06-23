@@ -41,6 +41,12 @@ Atualizado em: 2026-06-23
   - visão em anel com total alocado;
   - sliders por pote com valor estimado em R$;
   - salvamento em lote bloqueado até fechar 100%.
+- Metas de poupança agora conciliam transações reais:
+  - `transactions.savings_goal_id` vincula uma transação a no máximo uma meta;
+  - Guardado efetivo usa `saved_total = saved_manual + saved_from_tx`;
+  - transações ocultas não contam no total vinculado;
+  - `/metas` tem modal de conciliação com vinculadas/candidatas e ações em lote;
+  - `/transacoes` tem coluna inline e filtro por Meta poupança.
 
 ### Domínio financeiro
 
@@ -151,6 +157,7 @@ Atualizado em: 2026-06-23
 - Classificação assistida Tag/Meta: `docs/superpowers/specs/2026-06-22-assisted-tag-meta-classification-design.md`.
 - Tags granulares por de/para: `docs/superpowers/specs/2026-06-23-category-translated-tags-design.md`.
 - Saúde da classificação: `docs/superpowers/plans/2026-06-23-maintenance-classification-health.md`.
+- Conciliação de metas de poupança: `docs/specs/F2.8-metas-conciliacao-transacoes.md`.
 
 ## Pendências conhecidas
 
@@ -215,6 +222,14 @@ Atualizado em: 2026-06-23
 - Melhorar edição inline de Meta/Tag nos itens de fatura.
 - Verificar traduções e Tags em todos os agrupamentos de fatura.
 
+### Metas de poupança
+
+- Melhorar sugestão de candidatas para conciliação:
+  - priorizar transações de aporte, transferência externa e pote "Metas";
+  - manter opção para mostrar todas as não vinculadas do período.
+- Adicionar preview mais completo do total antes de salvar vínculos no modal.
+- Modelar direção de resgate/subtração; a v1 soma `abs(amount)` das transações vinculadas.
+
 ### Investimentos
 
 - Aprofundar leitura dos JSONs de investimentos do BTG/Pluggy.
@@ -245,16 +260,20 @@ Atualizado em: 2026-06-23
 
 ## Próximas sprints recomendadas
 
-1. **Manutenção - ações de classificação**
+1. **F4 follow-ups de Investimentos**
+   - Conferir os 7 itens de polish de `docs/specs/F4-STATUS-aderencia.md`.
+   - Validar metas de alocação, RF por valor informado, badge manual, dataset do Mapa e tema azul.
+
+2. **Manutenção - ações de classificação**
    - Botões para abrir filas no contexto de Transações.
    - Ação "reprocessar classificação".
    - Aplicação em massa de Tag/Meta com prévia.
 
-2. **Transações - filtros de qualidade**
+3. **Transações - filtros de qualidade**
    - Filtros `sem Tag`, `sem Meta`, `tag_source`, `bucket_source`.
    - Destaques para itens acionáveis vindos da Manutenção.
 
-3. **Regras aprendidas**
+4. **Regras aprendidas**
    - Tela ou seção em Manutenção para revisar `tag_rules` e `bucket_rules`.
    - Remoção/edição segura de regras ruins.
 

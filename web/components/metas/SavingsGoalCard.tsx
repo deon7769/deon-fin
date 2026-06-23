@@ -1,10 +1,10 @@
 "use client";
 
-import { Edit3, Trash2 } from "lucide-react";
+import { Edit3, Link2, Trash2 } from "lucide-react";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { cn } from "@/lib/cn";
-import { formatBudgetPercent } from "@/lib/format";
+import { formatBRL, formatBudgetPercent } from "@/lib/format";
 import { goalViabilityLabel } from "@/lib/metas";
 import type { SavingsGoal } from "@/lib/types";
 
@@ -13,11 +13,21 @@ type SavingsGoalCardProps = {
   deleting?: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onReconcile?: () => void;
 };
 
-export function SavingsGoalCard({ goal, deleting = false, onEdit, onDelete }: SavingsGoalCardProps) {
+export function SavingsGoalCard({
+  goal,
+  deleting = false,
+  onEdit,
+  onDelete,
+  onReconcile,
+}: SavingsGoalCardProps) {
   const label = goalViabilityLabel(goal);
   const finished = goal.monthly_required <= 0;
+  const savedTotal = goal.saved_total ?? goal.saved_amount;
+  const savedFromTx = goal.saved_from_tx ?? 0;
+  const linkedCount = goal.linked_count ?? 0;
 
   return (
     <article className="rounded-card border border-border bg-bg p-4">
@@ -46,8 +56,13 @@ export function SavingsGoalCard({ goal, deleting = false, onEdit, onDelete }: Sa
           <div>
             <p className="text-xs text-muted">Guardado</p>
             <p className="mt-1 font-semibold text-text">
-              <MoneyText value={goal.saved_amount} />
+              <MoneyText value={savedTotal} />
             </p>
+            {savedFromTx > 0 ? (
+              <p className="mt-1 text-[11px] text-muted">
+                manual + {formatBRL(savedFromTx)} em lançamentos
+              </p>
+            ) : null}
           </div>
           <div>
             <p className="text-xs text-muted">Alvo</p>
@@ -68,7 +83,23 @@ export function SavingsGoalCard({ goal, deleting = false, onEdit, onDelete }: Sa
         </div>
       </div>
 
-      <div className="mt-4 flex justify-end gap-2">
+      <div className="mt-4 flex items-center justify-between gap-2">
+        <span className="rounded-md border border-border px-2 py-1 text-xs text-muted">
+          {linkedCount} {linkedCount === 1 ? "lançamento" : "lançamentos"}
+        </span>
+        <div className="flex justify-end gap-2">
+          {onReconcile ? (
+            <button
+              type="button"
+              onClick={onReconcile}
+              aria-label={`Conciliar ${goal.name}`}
+              title="Conciliar"
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium text-muted transition hover:bg-surface2 hover:text-text"
+            >
+              <Link2 size={15} aria-hidden />
+              Conciliar
+            </button>
+          ) : null}
         <button
           type="button"
           onClick={onEdit}
@@ -88,6 +119,7 @@ export function SavingsGoalCard({ goal, deleting = false, onEdit, onDelete }: Sa
         >
           <Trash2 size={15} aria-hidden />
         </button>
+        </div>
       </div>
     </article>
   );

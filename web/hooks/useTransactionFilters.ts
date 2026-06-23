@@ -42,6 +42,7 @@ export function useTransactionFilters() {
       tagIds:
         semTagFilterFromSearch(searchParams.get("semTag")) ??
         idsFilterFromSearch(searchParams.get("tag_ids")),
+      savingsGoalIds: idsFilterFromSearch(searchParams.get("savings_goal_id")),
       page: parsePage(searchParams.get("page")),
       pageSize: clampPageSize(Number(searchParams.get("page_size") ?? 25)),
     }),
@@ -75,6 +76,7 @@ export function useTransactionFilters() {
       "semTag",
       "bucket_ids",
       "tag_ids",
+      "savings_goal_id",
     ]) {
       params.delete(key);
     }
@@ -89,6 +91,11 @@ export function useTransactionFilters() {
     setType: (type: TransactionType | null) => replaceParams({ type }),
     setHidden: (hidden: TransactionHiddenFilter) =>
       replaceParams({ hidden: hidden === "exclude" ? null : hidden }),
+    setSavingsGoal: (savingsGoalId: number | null | undefined) =>
+      replaceParams({
+        savings_goal_id:
+          savingsGoalId === undefined ? null : savingsGoalId === null ? "none" : savingsGoalId,
+      }),
     setPage: (page: number) => replaceParams({ page }, false),
     setPageSize: (pageSize: number) => replaceParams({ page_size: pageSize }),
     clearFilters,

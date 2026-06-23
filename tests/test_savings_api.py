@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
 from src.agent.budget import summarize_wishlist
+from src.storage import Account, Transaction
 from src.web.app import create_app, get_db, get_pluggy
 from src.web.repositories import budget_repo, profile_repo
 
@@ -82,6 +85,38 @@ def _set_income(db, value: float = 1000.0) -> None:
     )
 
 
+def _seed_account(db) -> None:
+    db.upsert_account(
+        Account(id="savings-api-bank", source="test", name="Conta", type="CHECKING")
+    )
+
+
+def _insert_tx(
+    db,
+    external_id: str,
+    *,
+    amount: str = "-100.00",
+    description: str = "Aporte meta",
+    hidden: bool = False,
+) -> Transaction:
+    tx = Transaction(
+        account_id="savings-api-bank",
+        posted_at=date(2026, 6, 12),
+        amount=Decimal(amount),
+        description=description,
+        raw_description=description,
+        source="test",
+        external_id=external_id,
+    )
+    db.insert_transactions([tx])
+    db._conn.execute(
+        "UPDATE transactions SET reference_month='2026-06', hidden=? WHERE id=?",
+        (1 if hidden else 0, tx.id),
+    )
+    db._conn.commit()
+    return tx
+
+
 def test_savings_goals_seed_from_family_profile_and_return_summary(client, tmp_db):
     _set_income(tmp_db, 1000.0)
 
@@ -145,8 +180,72 @@ def test_savings_goal_crud_recalculates_summary(client, tmp_db):
 
     deleted = client.delete(f"/api/savings-goals/{goal_id}")
     assert deleted.status_code == 200
-    assert deleted.json() == {"deleted_id": goal_id}
+    assert deleted.json() == {"deleted_id": goal_id, "unlinked": 0}
     assert client.get("/api/savings-goals?month=2026-06").json()["goals"] == []
+
+
+def test_savings_goal_link_unlink_transactions_and_candidates(client, tmp_db):
+    _set_income(tmp_db, 1000.0)
+    _seed_account(tmp_db)
+    goal_id = client.post(
+        "/api/savings-goals",
+        json={
+            "name": "Viagem",
+            "target_amount": 1000,
+            "term_months": 4,
+            "saved_amount": 100,
+            "priority": 1,
+        },
+    ).json()["id"]
+    linked = _insert_tx(tmp_db, "savings-api-link-1", amount="-250.00")
+    hidden = _insert_tx(tmp_db, "savings-api-link-2", amount="-999.00", hidden=True)
+    candidate = _insert_tx(
+        tmp_db,
+        "savings-api-candidate-1",
+        amount="-150.00",
+        description="Aporte candidato",
+    )
+
+    link_response = client.post(
+        f"/api/savings-goals/{goal_id}/link",
+        json={"transaction_ids": [linked.id, hidden.id]},
+    )
+
+    assert link_response.status_code == 200
+    assert link_response.json() == {
+        "goal_id": goal_id,
+        "linked": 2,
+        "transaction_ids": [linked.id, hidden.id],
+    }
+    refreshed = client.get("/api/savings-goals?month=2026-06").json()["goals"][0]
+    assert refreshed["saved_manual"] == 100.0
+    assert refreshed["saved_from_tx"] == 250.0
+    assert refreshed["saved_total"] == 350.0
+    assert refreshed["linked_count"] == 2
+
+    linked_response = client.get(f"/api/savings-goals/{goal_id}/transactions")
+    assert linked_response.status_code == 200
+    assert linked_response.json()["saved_from_tx"] == 250.0
+    assert {item["id"] for item in linked_response.json()["items"]} == {linked.id, hidden.id}
+
+    candidates = client.get(f"/api/savings-goals/{goal_id}/candidates?month=2026-06")
+    assert candidates.status_code == 200
+    assert [item["id"] for item in candidates.json()["items"]] == [candidate.id]
+
+    unlink_response = client.post(
+        f"/api/savings-goals/{goal_id}/unlink",
+        json={"transaction_ids": [hidden.id]},
+    )
+
+    assert unlink_response.status_code == 200
+    assert unlink_response.json() == {
+        "goal_id": goal_id,
+        "unlinked": 1,
+        "transaction_ids": [hidden.id],
+    }
+    assert client.get("/api/savings-goals?month=2026-06").json()["goals"][0][
+        "linked_count"
+    ] == 1
 
 
 @pytest.mark.parametrize(

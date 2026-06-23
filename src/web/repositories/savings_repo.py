@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from datetime import date
+from typing import Any, Literal
 
 from ...agent import maintenance as mnt
 from ...agent.budget import summarize_wishlist
@@ -60,12 +61,19 @@ def _priority(value: Any) -> int:
 
 
 def _row_to_public(row: Any) -> dict[str, Any]:
+    saved_manual = _money(row["saved_amount"])
+    saved_from_tx = _money(row["saved_from_tx"] if "saved_from_tx" in row.keys() else 0.0)
+    saved_total = _money(saved_manual + saved_from_tx)
     return {
         "id": int(row["id"]),
         "name": row["name"],
         "target_amount": _money(row["target_amount"]),
         "term_months": int(row["term_months"]),
-        "saved_amount": _money(row["saved_amount"]),
+        "saved_amount": saved_manual,
+        "saved_manual": saved_manual,
+        "saved_from_tx": saved_from_tx,
+        "saved_total": saved_total,
+        "linked_count": int(row["linked_count"] if "linked_count" in row.keys() else 0),
         "priority": int(row["priority"]),
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
@@ -73,23 +81,41 @@ def _row_to_public(row: Any) -> dict[str, Any]:
 
 
 def _row_to_wishlist(row: Any) -> dict[str, Any]:
+    saved_manual = _money(row["saved_amount"])
+    saved_from_tx = _money(row["saved_from_tx"] if "saved_from_tx" in row.keys() else 0.0)
     return {
         "nome": row["name"],
         "valor_alvo": row["target_amount"],
         "prazo_meses": row["term_months"],
-        "guardado": row["saved_amount"],
+        "guardado": _money(saved_manual + saved_from_tx),
         "prioridade": row["priority"],
     }
 
 
+def _select_goal_rows_sql(where: str = "") -> str:
+    return f"""
+        SELECT g.id, g.name, g.target_amount, g.term_months, g.saved_amount, g.priority,
+               g.created_at, g.updated_at,
+               COALESCE(SUM(
+                   CASE
+                       WHEN tx.id IS NOT NULL AND COALESCE(tx.hidden, 0) = 0
+                       THEN ABS(tx.amount)
+                       ELSE 0
+                   END
+               ), 0) AS saved_from_tx,
+               COUNT(tx.id) AS linked_count
+          FROM savings_goals g
+          LEFT JOIN transactions tx ON tx.savings_goal_id = g.id
+         {where}
+         GROUP BY g.id, g.name, g.target_amount, g.term_months, g.saved_amount,
+                  g.priority, g.created_at, g.updated_at
+    """
+
+
 def _ordered_rows(db: Database) -> list[Any]:
     return db._conn.execute(
-        """
-        SELECT id, name, target_amount, term_months, saved_amount, priority,
-               created_at, updated_at
-          FROM savings_goals
-         ORDER BY priority ASC, target_amount DESC, id ASC
-        """
+        _select_goal_rows_sql()
+        + " ORDER BY g.priority ASC, g.target_amount DESC, g.id ASC"
     ).fetchall()
 
 
@@ -213,12 +239,7 @@ def create_goal(
 
 def get_goal(db: Database, goal_id: int) -> dict[str, Any] | None:
     row = db._conn.execute(
-        """
-        SELECT id, name, target_amount, term_months, saved_amount, priority,
-               created_at, updated_at
-          FROM savings_goals
-         WHERE id=?
-        """,
+        _select_goal_rows_sql("WHERE g.id=?"),
         (goal_id,),
     ).fetchone()
     return _row_to_public(row) if row else None
@@ -260,7 +281,130 @@ def update_goal(db: Database, goal_id: int, **updates: Any) -> dict[str, Any] | 
 def delete_goal(db: Database, goal_id: int) -> dict[str, int] | None:
     with db._cursor() as cur:  # type: ignore[attr-defined]
         _mark_import_checked(db)
+        cur.execute(
+            "UPDATE transactions SET savings_goal_id=NULL WHERE savings_goal_id=?",
+            (goal_id,),
+        )
+        unlinked = max(cur.rowcount, 0)
         cur.execute("DELETE FROM savings_goals WHERE id=?", (goal_id,))
         if cur.rowcount <= 0:
             return None
-    return {"deleted_id": goal_id}
+    return {"deleted_id": goal_id, "unlinked": unlinked}
+
+
+def _transaction_ids_exist(db: Database, transaction_ids: list[str]) -> set[str]:
+    if not transaction_ids:
+        return set()
+    rows = db._conn.execute(
+        f"""
+        SELECT id
+          FROM transactions
+         WHERE id IN ({','.join('?' for _ in transaction_ids)})
+        """,
+        transaction_ids,
+    ).fetchall()
+    return {str(row["id"]) for row in rows}
+
+
+def _validate_transaction_ids(db: Database, transaction_ids: list[str]) -> list[str]:
+    unique_ids = list(dict.fromkeys(str(tx_id) for tx_id in transaction_ids if str(tx_id)))
+    if not unique_ids:
+        raise ValueError("transaction_ids obrigatórios")
+    existing = _transaction_ids_exist(db, unique_ids)
+    missing = [tx_id for tx_id in unique_ids if tx_id not in existing]
+    if missing:
+        raise ValueError(f"transação inválida: {missing[0]}")
+    return unique_ids
+
+
+def link_transactions(db: Database, goal_id: int, transaction_ids: list[str]) -> dict[str, Any]:
+    if get_goal(db, goal_id) is None:
+        raise ValueError("meta não encontrada")
+    ids = _validate_transaction_ids(db, transaction_ids)
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute(
+            f"""
+            UPDATE transactions
+               SET savings_goal_id=?
+             WHERE id IN ({','.join('?' for _ in ids)})
+            """,
+            (goal_id, *ids),
+        )
+        linked = max(cur.rowcount, 0)
+    return {"goal_id": goal_id, "linked": linked, "transaction_ids": ids}
+
+
+def unlink_transactions(db: Database, goal_id: int, transaction_ids: list[str]) -> dict[str, Any]:
+    if get_goal(db, goal_id) is None:
+        raise ValueError("meta não encontrada")
+    ids = _validate_transaction_ids(db, transaction_ids)
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute(
+            f"""
+            UPDATE transactions
+               SET savings_goal_id=NULL
+             WHERE savings_goal_id=?
+               AND id IN ({','.join('?' for _ in ids)})
+            """,
+            (goal_id, *ids),
+        )
+        unlinked = max(cur.rowcount, 0)
+    return {"goal_id": goal_id, "unlinked": unlinked, "transaction_ids": ids}
+
+
+def goal_transactions(db: Database, goal_id: int) -> dict[str, Any]:
+    goal = get_goal(db, goal_id)
+    if goal is None:
+        raise ValueError("meta não encontrada")
+
+    from . import transactions_repo
+
+    page = transactions_repo.list_transactions(
+        db,
+        savings_goal_ids=[goal_id],
+        hidden="include",
+        page=1,
+        page_size=100,
+    )
+    return {
+        "goal_id": goal_id,
+        "items": page["items"],
+        "saved_from_tx": goal["saved_from_tx"],
+        "linked_count": goal["linked_count"],
+    }
+
+
+def goal_candidates(
+    db: Database,
+    goal_id: int,
+    *,
+    month: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    q: str | None = None,
+    type: Literal["income", "expense"] | None = None,
+    account_id: str | None = None,
+    bucket_ids: list[int | None] | None = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> dict[str, Any]:
+    if get_goal(db, goal_id) is None:
+        raise ValueError("meta não encontrada")
+
+    from . import transactions_repo
+
+    result = transactions_repo.list_transactions(
+        db,
+        month=month,
+        date_from=date_from,
+        date_to=date_to,
+        q=q,
+        type=type,
+        account_id=account_id,
+        bucket_ids=bucket_ids,
+        savings_goal_ids=[None],
+        hidden="exclude",
+        page=page,
+        page_size=page_size,
+    )
+    return {"goal_id": goal_id, **result}

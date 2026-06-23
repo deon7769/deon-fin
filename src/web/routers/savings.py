@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import re
+from datetime import date
 from typing import Any
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -10,6 +13,7 @@ from ..dependencies import get_db
 from ..repositories import budget_repo, savings_repo
 
 router = APIRouter(prefix="/api", tags=["savings"])
+_YEAR_MONTH_RE = re.compile(r"^\d{4}-\d{2}$")
 
 
 class SavingsGoalCreate(BaseModel):
@@ -28,6 +32,10 @@ class SavingsGoalPatch(BaseModel):
     priority: int | None = None
 
 
+class SavingsGoalTransactionIds(BaseModel):
+    transaction_ids: list[str]
+
+
 def _fields_set(model: BaseModel) -> set[str]:
     fields = getattr(model, "model_fields_set", None)
     if fields is None:
@@ -42,8 +50,53 @@ def _resolve_month_or_422(db: Database, month: str | None) -> str:
     return resolved
 
 
+def _validate_year_month(value: str | None, *, field: str = "month") -> str | None:
+    if value is None:
+        return None
+    if not _YEAR_MONTH_RE.match(value):
+        raise HTTPException(status_code=422, detail=f"{field} inválido")
+    month = int(value[5:7])
+    if month < 1 or month > 12:
+        raise HTTPException(status_code=422, detail=f"{field} inválido")
+    return value
+
+
+def _parse_date(value: str | None, *, field: str) -> date | None:
+    if value is None:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"{field} inválido") from exc
+
+
+def _parse_optional_ids(value: str | None, *, field: str) -> list[int | None] | None:
+    if value is None or value.strip() == "":
+        return None
+
+    parsed: list[int | None] = []
+    for token in value.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if token == "none":
+            parsed.append(None)
+            continue
+        try:
+            parsed.append(int(token))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=f"{field} inválido") from exc
+    return parsed or None
+
+
 def _repo_error(exc: ValueError) -> HTTPException:
     return HTTPException(status_code=422, detail=str(exc))
+
+
+def _goal_error(exc: ValueError) -> HTTPException:
+    if str(exc) == "meta não encontrada":
+        return HTTPException(status_code=404, detail=str(exc))
+    return _repo_error(exc)
 
 
 @router.get("/savings-goals")
@@ -70,6 +123,73 @@ def create_savings_goal(
         )
     except ValueError as exc:
         raise _repo_error(exc) from exc
+
+
+@router.get("/savings-goals/{goal_id}/transactions")
+def get_savings_goal_transactions(
+    goal_id: int,
+    db: Database = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        return savings_repo.goal_transactions(db, goal_id)
+    except ValueError as exc:
+        raise _goal_error(exc) from exc
+
+
+@router.get("/savings-goals/{goal_id}/candidates")
+def get_savings_goal_candidates(
+    goal_id: int,
+    month: str | None = Query(default=None),
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = None,
+    q: str | None = None,
+    type: Literal["income", "expense"] | None = None,
+    account_id: str | None = None,
+    bucket_ids: str | None = None,
+    page: int = 1,
+    page_size: int = 25,
+    db: Database = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        return savings_repo.goal_candidates(
+            db,
+            goal_id,
+            month=_validate_year_month(month),
+            date_from=_parse_date(from_, field="from"),
+            date_to=_parse_date(to, field="to"),
+            q=q,
+            type=type,
+            account_id=account_id,
+            bucket_ids=_parse_optional_ids(bucket_ids, field="bucket_ids"),
+            page=page,
+            page_size=page_size,
+        )
+    except ValueError as exc:
+        raise _goal_error(exc) from exc
+
+
+@router.post("/savings-goals/{goal_id}/link")
+def link_savings_goal_transactions(
+    goal_id: int,
+    body: SavingsGoalTransactionIds,
+    db: Database = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        return savings_repo.link_transactions(db, goal_id, body.transaction_ids)
+    except ValueError as exc:
+        raise _goal_error(exc) from exc
+
+
+@router.post("/savings-goals/{goal_id}/unlink")
+def unlink_savings_goal_transactions(
+    goal_id: int,
+    body: SavingsGoalTransactionIds,
+    db: Database = Depends(get_db),
+) -> dict[str, Any]:
+    try:
+        return savings_repo.unlink_transactions(db, goal_id, body.transaction_ids)
+    except ValueError as exc:
+        raise _goal_error(exc) from exc
 
 
 @router.patch("/savings-goals/{goal_id}")

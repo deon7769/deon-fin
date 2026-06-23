@@ -3,7 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { BucketPlanPatch } from "@/lib/metas";
-import type { Bucket, BucketPlanResponse, SavingsGoal, SavingsGoalsResponse } from "@/lib/types";
+import type {
+  Bucket,
+  BucketPlanResponse,
+  SavingsGoal,
+  SavingsGoalCandidatesResponse,
+  SavingsGoalTransactionsResponse,
+  SavingsGoalsResponse,
+} from "@/lib/types";
 import { usePeriod } from "@/providers/PeriodProvider";
 
 export type SavingsGoalInput = {
@@ -19,6 +26,9 @@ function invalidateMetasSurfaces(queryClient: ReturnType<typeof useQueryClient>)
   queryClient.invalidateQueries({ queryKey: ["buckets"] });
   queryClient.invalidateQueries({ queryKey: ["budget"] });
   queryClient.invalidateQueries({ queryKey: ["savings"] });
+  queryClient.invalidateQueries({ queryKey: ["transactions"] });
+  queryClient.invalidateQueries({ queryKey: ["savingsGoalTransactions"] });
+  queryClient.invalidateQueries({ queryKey: ["savingsGoalCandidates"] });
 }
 
 export function useBucketPlan() {
@@ -83,7 +93,57 @@ export function useDeleteGoal() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: number) => api.del<{ deleted_id: number }>(`/savings-goals/${id}`),
+    mutationFn: (id: number) => api.del<{ deleted_id: number; unlinked: number }>(`/savings-goals/${id}`),
+    onSuccess: () => invalidateMetasSurfaces(queryClient),
+  });
+}
+
+export function useGoalTransactions(goalId: number | null) {
+  return useQuery({
+    queryKey: ["savingsGoalTransactions", goalId],
+    queryFn: ({ signal }) =>
+      api.get<SavingsGoalTransactionsResponse>(`/savings-goals/${goalId}/transactions`, undefined, signal),
+    enabled: goalId !== null,
+  });
+}
+
+export function useGoalCandidates(goalId: number | null) {
+  const { month } = usePeriod();
+
+  return useQuery({
+    queryKey: ["savingsGoalCandidates", goalId, month],
+    queryFn: ({ signal }) =>
+      api.get<SavingsGoalCandidatesResponse>(
+        `/savings-goals/${goalId}/candidates`,
+        { month, page_size: 50 },
+        signal,
+      ),
+    enabled: goalId !== null,
+  });
+}
+
+export function useLinkGoalTransactions() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (vars: { goalId: number; transactionIds: string[] }) =>
+      api.post<{ goal_id: number; linked: number; transaction_ids: string[] }>(
+        `/savings-goals/${vars.goalId}/link`,
+        { transaction_ids: vars.transactionIds },
+      ),
+    onSuccess: () => invalidateMetasSurfaces(queryClient),
+  });
+}
+
+export function useUnlinkGoalTransactions() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (vars: { goalId: number; transactionIds: string[] }) =>
+      api.post<{ goal_id: number; unlinked: number; transaction_ids: string[] }>(
+        `/savings-goals/${vars.goalId}/unlink`,
+        { transaction_ids: vars.transactionIds },
+      ),
     onSuccess: () => invalidateMetasSurfaces(queryClient),
   });
 }
