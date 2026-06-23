@@ -15,11 +15,12 @@ apenas liquida o cartão e seria contado em dobro).
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date
 from statistics import mean, pstdev
-from typing import Any
+from typing import Any, Iterable
 
 from ..storage import Database
 from .anonymize import anonymize
@@ -89,6 +90,34 @@ _CARD_PAYMENT_TEXT_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+_OWN_TRANSFER_TEXT_RE = re.compile(r"\b(transferencia enviada|pix enviado)\b", re.IGNORECASE)
+_OWNER_LINK_TOKENS = {"de", "da", "do", "das", "dos", "e"}
+_OWNER_ALIAS_BLOCKED_TOKENS = {
+    "banco",
+    "bank",
+    "bradesco",
+    "btg",
+    "caixa",
+    "cartao",
+    "click",
+    "conta",
+    "corrente",
+    "credito",
+    "financeira",
+    "instituicao",
+    "inter",
+    "itau",
+    "mastercard",
+    "mercado",
+    "nu",
+    "nubank",
+    "pagamento",
+    "pagamentos",
+    "pago",
+    "plat",
+    "santander",
+    "visa",
+}
 _DEFAULT_PROFILE = object()
 
 _TOKEN = re.compile(r"[a-zà-ÿ0-9]+", re.IGNORECASE)
@@ -114,6 +143,47 @@ def _category_name(category: str | None) -> str:
 
 def _normalized_category(category: str | None) -> str:
     return _category_name(category).strip().lower()
+
+
+def _fold_text(value: str | None) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii")
+    return ascii_text.lower()
+
+
+def _owner_tokens(value: str | None) -> tuple[str, ...]:
+    return tuple(
+        token
+        for token in _TOKEN.findall(_fold_text(value))
+        if token not in _OWNER_LINK_TOKENS
+    )
+
+
+def _owner_alias_tokens(value: str | None) -> tuple[str, ...]:
+    tokens = _owner_tokens(value)
+    if len(tokens) < 2:
+        return ()
+    if any(token in _OWNER_ALIAS_BLOCKED_TOKENS for token in tokens):
+        return ()
+    return tokens
+
+
+def account_owner_aliases(
+    accounts: Iterable[Any],
+    *,
+    profile_name: str | None = None,
+) -> tuple[str, ...]:
+    aliases: set[str] = set()
+    for candidate in (profile_name,):
+        tokens = _owner_alias_tokens(candidate)
+        if tokens:
+            aliases.add(" ".join(tokens))
+    for account in accounts:
+        for field in ("name", "institution"):
+            tokens = _owner_alias_tokens(_row_value(account, field))
+            if tokens:
+                aliases.add(" ".join(tokens))
+    return tuple(sorted(aliases))
 
 
 def _is_non_credit_account(account_type: str | None) -> bool:
@@ -151,6 +221,37 @@ def is_card_payment_like(
         if part and part.strip()
     )
     return bool(text and _CARD_PAYMENT_TEXT_RE.search(text))
+
+
+def is_own_account_transfer_like(
+    amount: float,
+    account_type: str | None,
+    category: str | None,
+    *,
+    description: str | None = None,
+    raw_description: str | None = None,
+    owner_names: Iterable[str] | None = None,
+) -> bool:
+    if float(amount) >= 0 or not _is_non_credit_account(account_type):
+        return False
+    if not owner_names:
+        return False
+
+    text = " ".join(
+        part.strip()
+        for part in (raw_description, description)
+        if part and part.strip()
+    )
+    folded_text = _fold_text(text)
+    if not _OWN_TRANSFER_TEXT_RE.search(folded_text):
+        return False
+
+    text_tokens = set(_owner_tokens(folded_text))
+    for owner_name in owner_names:
+        owner_tokens = _owner_alias_tokens(owner_name)
+        if owner_tokens and set(owner_tokens).issubset(text_tokens):
+            return True
+    return False
 
 
 def _row_value(row: Any, key: str, default: Any = None) -> Any:
@@ -243,6 +344,7 @@ def spending_value(
     *,
     description: str | None = None,
     raw_description: str | None = None,
+    owner_names: Iterable[str] | None = None,
 ) -> float:
     """Return positive spending impact for expenses and negative impact for refunds."""
     category_name = _category_name(category)
@@ -252,6 +354,13 @@ def spending_value(
         category,
         description=description,
         raw_description=raw_description,
+    ) or is_own_account_transfer_like(
+        amount,
+        account_type,
+        category,
+        description=description,
+        raw_description=raw_description,
+        owner_names=owner_names,
     ):
         return 0.0
 
@@ -404,7 +513,9 @@ def build_financial_context(
         from ..config import settings
         family_profile = settings.family_profile
 
-    acct_type = {a["id"]: (a["type"] or "").upper() for a in db.list_accounts()}
+    accounts = db.list_accounts()
+    acct_type = {a["id"]: (a["type"] or "").upper() for a in accounts}
+    owner_names = account_owner_aliases(accounts)
     rows = db.list_transactions(limit=100_000)
     internal_transfer_income_ids = internal_transfer_credit_ids(rows, account_types=acct_type)
 
@@ -433,6 +544,7 @@ def build_financial_context(
             category,
             description=r["description"],
             raw_description=r["raw_description"],
+            owner_names=owner_names,
         )
         is_spending = spend_val != 0.0
 

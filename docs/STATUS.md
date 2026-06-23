@@ -114,6 +114,9 @@ Atualizado em: 2026-06-23
   - `PAGAMENTO ON LINE` negativo em cartão não reduz gasto de Meta;
   - movimento é tratado como pagamento de fatura nos totais;
   - `Pagamento de fatura` fica bloqueado para Meta/Tag automática por categoria.
+- Correção de transferência própria com categoria incorreta:
+  - débito bancário para titular conectado por nome não entra como gasto;
+  - caso real coberto: `Transferência enviada|DAVI DE OLIVEIRA NETO...` vindo como `Education`.
 
 ### Investimentos
 

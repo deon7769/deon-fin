@@ -5,7 +5,13 @@ from decimal import Decimal
 from typing import Any, Literal
 
 from ...agent import maintenance as mnt
-from ...agent.context import CREDIT_TYPES, income_value, internal_transfer_credit_ids, spending_value
+from ...agent.context import (
+    CREDIT_TYPES,
+    account_owner_aliases,
+    income_value,
+    internal_transfer_credit_ids,
+    spending_value,
+)
 from ...agent.buckets import match_key_for
 from ...storage import Database, Transaction
 from ...storage.reference_month import reference_month
@@ -69,6 +75,7 @@ def _signed_value(
     external_transfer_income: bool = False,
     description: str | None = None,
     raw_description: str | None = None,
+    owner_names: list[str] | tuple[str, ...] | None = None,
 ) -> float:
     income = income_value(
         amount,
@@ -82,6 +89,7 @@ def _signed_value(
         category,
         description=description,
         raw_description=raw_description,
+        owner_names=owner_names,
     )
     return round(income - expense, 2)
 
@@ -92,7 +100,11 @@ def _display_value(amount: float, account_type: str | None) -> float:
     return round(float(amount), 2)
 
 
-def _row_signed_value(row: Any, internal_transfer_income_ids: set[Any]) -> float:
+def _row_signed_value(
+    row: Any,
+    internal_transfer_income_ids: set[Any],
+    owner_names: list[str] | tuple[str, ...] | None = None,
+) -> float:
     return _signed_value(
         float(row["amount"]),
         row["account_type"],
@@ -100,6 +112,7 @@ def _row_signed_value(row: Any, internal_transfer_income_ids: set[Any]) -> float
         external_transfer_income=row["id"] not in internal_transfer_income_ids,
         description=row["description"],
         raw_description=row["raw_description"],
+        owner_names=owner_names,
     )
 
 
@@ -107,10 +120,11 @@ def _matches_type_filter(
     row: Any,
     type: Literal["income", "expense"] | None,
     internal_transfer_income_ids: set[Any],
+    owner_names: list[str] | tuple[str, ...] | None = None,
 ) -> bool:
     if type is None:
         return True
-    signed = _row_signed_value(row, internal_transfer_income_ids)
+    signed = _row_signed_value(row, internal_transfer_income_ids, owner_names)
     return signed > 0 if type == "income" else signed < 0
 
 
@@ -315,8 +329,9 @@ def _compute_summary(
     income = 0.0
     expense = 0.0
     internal_transfer_income_ids = internal_transfer_credit_ids(rows)
+    owner_names = account_owner_aliases(db.list_accounts())
     for row in rows:
-        if not _matches_type_filter(row, type, internal_transfer_income_ids):
+        if not _matches_type_filter(row, type, internal_transfer_income_ids, owner_names):
             continue
         amount = float(row["amount"])
         income += income_value(
@@ -331,6 +346,7 @@ def _compute_summary(
             row["category"],
             description=row["description"],
             raw_description=row["raw_description"],
+            owner_names=owner_names,
         )
 
     return {
@@ -389,8 +405,11 @@ def list_transactions(
         params,
     ).fetchall()
     internal_transfer_income_ids = internal_transfer_credit_ids(all_rows)
+    owner_names = account_owner_aliases(db.list_accounts())
     filtered_rows = [
-        row for row in all_rows if _matches_type_filter(row, type, internal_transfer_income_ids)
+        row
+        for row in all_rows
+        if _matches_type_filter(row, type, internal_transfer_income_ids, owner_names)
     ]
     rows = filtered_rows[offset : offset + page_size]
     cat_map = mnt.load_overrides()["categorias_pt"]

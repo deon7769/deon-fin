@@ -5,7 +5,12 @@ from datetime import date
 from typing import Any, Literal
 
 from ...agent import maintenance as mnt
-from ...agent.context import income_value, internal_transfer_credit_ids, spending_value
+from ...agent.context import (
+    account_owner_aliases,
+    income_value,
+    internal_transfer_credit_ids,
+    spending_value,
+)
 from ...config import settings
 from ...storage import Database
 from ...storage.reference_month import reference_month
@@ -151,6 +156,7 @@ def budget_for_month(db: Database, month: str) -> dict[str, Any]:
     bucket_ids = {int(bucket["id"]) for bucket in buckets}
     aggregates = {int(bucket["id"]): {"spent": 0.0, "tx_count": 0} for bucket in buckets}
     rows = _visible_transactions_for_month(db, month)
+    owner_names = account_owner_aliases(db.list_accounts())
     income, income_source = _resolve_income(db, rows)
 
     spent = 0.0
@@ -163,6 +169,7 @@ def budget_for_month(db: Database, month: str) -> dict[str, Any]:
             row["category"],
             description=row["description"],
             raw_description=row["raw_description"],
+            owner_names=owner_names,
         )
         if value == 0:
             continue

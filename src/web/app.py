@@ -22,7 +22,12 @@ from starlette.requests import Request
 from ..agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
 from ..agent.buckets import CATEGORY_BUCKET_MAP, apply_buckets_to_database
 from ..agent.budget import summarize_5030, summarize_executivo, summarize_wishlist
-from ..agent.context import income_value, internal_transfer_credit_ids, spending_value
+from ..agent.context import (
+    account_owner_aliases,
+    income_value,
+    internal_transfer_credit_ids,
+    spending_value,
+)
 from ..agent.tags import apply_tags_to_database
 from ..agent.simulator import simular_amortizacao, simular_compra
 from ..agent.cards import card_monthly_breakdown
@@ -675,7 +680,9 @@ def create_app() -> FastAPI:
         else:
             since = date.today() - timedelta(days=days or 30)
         rows = db.list_transactions(since=since, limit=10_000)
-        account_types = {row["id"]: row["type"] for row in db.list_accounts()}
+        accounts = db.list_accounts()
+        account_types = {row["id"]: row["type"] for row in accounts}
+        owner_names = account_owner_aliases(accounts)
         internal_transfer_income_ids = internal_transfer_credit_ids(rows, account_types=account_types)
 
         spend_by_cat: dict[str, float] = {}
@@ -698,6 +705,7 @@ def create_app() -> FastAPI:
                 category,
                 description=r["description"],
                 raw_description=r["raw_description"],
+                owner_names=owner_names,
             )
             if spent:
                 spend_by_cat[category] = spend_by_cat.get(category, 0.0) + spent

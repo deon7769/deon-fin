@@ -4,7 +4,12 @@ import re
 from datetime import date
 from typing import Any, Literal
 
-from ...agent.context import income_value, internal_transfer_credit_ids, spending_value
+from ...agent.context import (
+    account_owner_aliases,
+    income_value,
+    internal_transfer_credit_ids,
+    spending_value,
+)
 from ...storage import Database
 from ...storage.reference_month import reference_month
 from . import profile_repo, system_totals_repo
@@ -100,6 +105,7 @@ def month_summary(db: Database, month: str) -> dict[str, Any]:
     expense = 0.0
 
     rows = _visible_transactions_for_months(db, [month])
+    owner_names = account_owner_aliases(db.list_accounts())
     internal_transfer_income_ids = internal_transfer_credit_ids(rows)
     for row in rows:
         amount = float(row["amount"])
@@ -115,6 +121,7 @@ def month_summary(db: Database, month: str) -> dict[str, Any]:
             row["category"],
             description=row["description"],
             raw_description=row["raw_description"],
+            owner_names=owner_names,
         )
 
     accounts_balance, accounts_balance_available = _accounts_balance(db)
@@ -142,6 +149,7 @@ def history(db: Database, months: int) -> list[dict[str, Any]]:
     }
 
     rows = _visible_transactions_for_months(db, month_keys)
+    owner_names = account_owner_aliases(db.list_accounts())
     internal_transfer_income_ids = internal_transfer_credit_ids(rows)
     for row in rows:
         month = row["reference_month"]
@@ -158,6 +166,7 @@ def history(db: Database, months: int) -> list[dict[str, Any]]:
             row["category"],
             description=row["description"],
             raw_description=row["raw_description"],
+            owner_names=owner_names,
         )
 
     return [
@@ -176,6 +185,7 @@ def by_tag(db: Database, month: str, type: Literal["expense", "income"]) -> dict
 
     grouped: dict[int | None, dict[str, Any]] = {}
     rows = _visible_transactions_for_months(db, [month])
+    owner_names = account_owner_aliases(db.list_accounts())
     internal_transfer_income_ids = internal_transfer_credit_ids(rows)
     for row in rows:
         amount = float(row["amount"])
@@ -186,6 +196,7 @@ def by_tag(db: Database, month: str, type: Literal["expense", "income"]) -> dict
                 row["category"],
                 description=row["description"],
                 raw_description=row["raw_description"],
+                owner_names=owner_names,
             )
             if type == "expense"
             else income_value(

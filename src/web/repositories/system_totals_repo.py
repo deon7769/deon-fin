@@ -8,9 +8,11 @@ from ...agent.context import (
     INTERNAL_TRANSFER_MATCH_CATEGORIES,
     INVESTMENT_CATEGORIES,
     PIX_TRANSFER_INCOME_CATEGORIES,
+    account_owner_aliases,
     income_value,
     internal_transfer_credit_ids,
     is_card_payment_like,
+    is_own_account_transfer_like,
     spending_value,
 )
 from ...storage import Database
@@ -208,6 +210,7 @@ def classify_movement(
     row: Any,
     *,
     internal_transfer_income_ids: set[Any] | None = None,
+    owner_names: Iterable[str] | None = None,
 ) -> str:
     category_value = _row_value(row, "category")
     category = str(category_value or "").strip().lower()
@@ -224,6 +227,15 @@ def classify_movement(
         raw_description=raw_description,
     ):
         return "card_payment"
+    if is_own_account_transfer_like(
+        amount,
+        account_type,
+        category_value,
+        description=description,
+        raw_description=raw_description,
+        owner_names=owner_names,
+    ):
+        return "internal_transfer"
     if category in _INVESTMENT:
         return "investment"
     if category in _INTERNAL_TRANSFER:
@@ -244,6 +256,7 @@ def classify_movement(
         category_value,
         description=description,
         raw_description=raw_description,
+        owner_names=owner_names,
     )
     if spent > 0:
         return "expense"
@@ -269,8 +282,14 @@ def included_movement_types(db: Database) -> set[str]:
 def filter_rows_by_movement_policy(db: Database, rows: list[Any]) -> list[Any]:
     included = included_movement_types(db)
     internal_income_ids = internal_transfer_credit_ids(rows)
+    owner_names = account_owner_aliases(db.list_accounts())
     return [
         row
         for row in rows
-        if classify_movement(row, internal_transfer_income_ids=internal_income_ids) in included
+        if classify_movement(
+            row,
+            internal_transfer_income_ids=internal_income_ids,
+            owner_names=owner_names,
+        )
+        in included
     ]

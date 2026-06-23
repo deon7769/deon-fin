@@ -43,6 +43,29 @@ def test_credit_card_online_payment_description_does_not_count_as_refund():
     )
 
 
+def test_own_account_transfer_description_does_not_count_as_spending_when_category_is_wrong():
+    assert (
+        spending_value(
+            -3380.0,
+            "BANK",
+            "Education",
+            description="Transferência enviada|DAVI DE OLIVEIRA NETO 05398277111",
+            owner_names=["DAVI OLIVEIRA NETO"],
+        )
+        == 0.0
+    )
+    assert (
+        spending_value(
+            -200.0,
+            "BANK",
+            "Education",
+            description="Transferência enviada|LEANDRO LEMES",
+            owner_names=["DAVI OLIVEIRA NETO"],
+        )
+        == 200.0
+    )
+
+
 @pytest.mark.parametrize("category", [
     "Investimentos",
     "Pagamento de fatura",

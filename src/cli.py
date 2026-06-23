@@ -9,7 +9,7 @@ from rich.table import Table
 
 from .agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
 from .agent.buckets import apply_buckets_to_database
-from .agent.context import spending_value
+from .agent.context import account_owner_aliases, spending_value
 from .agent.tags import apply_tags_to_database
 from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
@@ -139,7 +139,9 @@ def report(days: int = 30) -> None:
     try:
         since = date.today() - timedelta(days=days)
         rows = db.list_transactions(since=since, limit=10_000)
-        account_types = {row["id"]: row["type"] for row in db.list_accounts()}
+        accounts = db.list_accounts()
+        account_types = {row["id"]: row["type"] for row in accounts}
+        owner_names = account_owner_aliases(accounts)
 
         spend_by_cat: dict[str, float] = {}
         for r in rows:
@@ -150,6 +152,7 @@ def report(days: int = 30) -> None:
                 category,
                 description=r["description"],
                 raw_description=r["raw_description"],
+                owner_names=owner_names,
             )
             if spent:
                 spend_by_cat[category] = spend_by_cat.get(category, 0.0) + spent
