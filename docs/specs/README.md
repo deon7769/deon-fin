@@ -35,6 +35,7 @@ specs assumem.
 | F2.5 | `F2.5-contas.md` | **Contas** (bancos + cartões, saldos, sync) | F0.* (reusa endpoints de item) |
 | F2.6 | `F2.6-metas.md` | **Metas** (previsto por pote + poupança) | F0.*, F1.1 |
 | F2.7 | `F2.7-perfil.md` | **Perfil** (nome, e-mail, renda, início do mês) | 00, F0.1, F0.2 |
+| F2.8 | `F2.8-metas-conciliacao-transacoes.md` | **Conciliação** transações ↔ metas de poupança (Guardado/Progresso automático, estilo ERP) | F2.6, F2.2 |
 | F3.1 | `F3.1-deploy-vps-same-origin.md` | — (deploy: Next estático same-origin com `/api` na VPS) | 00, F0.1, F0.2 |
 | F3.2 | `F3.2-manutencao.md` | **Manutenção** (saúde, ajustes e rotinas operacionais) | F3.1 |
 | F3.3 | `F3.3-simulador.md` | **Simulador** (cenários e amortização) | F3.1 |
@@ -45,10 +46,21 @@ specs assumem.
 | F4.3 | `F4.3-investimentos-perguntas.md` | Perguntas + **nota normalizada** (score) | F4 |
 | F4.4 | `F4.4-investimentos-aportar.md` | **Aportar** (Método Burro, com fixtures do PDF) | F4.1, F4.2, F4.3 |
 | F4.5 | `F4.5-investimentos-mapa.md` | **Mapa** de rating soberano por país (referência) | F4 |
+| F4-STATUS | `F4-STATUS-aderencia.md` | Status/aderência do módulo Investimentos (F4.1–F4.5 **implementados**) + follow-ups menores | — |
+| F5 | `F5-hardening-consolidacao.md` | Hardening técnico (WAL, decompor app.py, fonte única de cálculo, lifespan, sunset legado) | — |
 | ADR-001 | `ADR-001-banco-de-dados.md` | Decisão de banco: SQLite (agora, c/ WAL) → PostgreSQL (alvo); por que não MySQL | — |
 
-> **Módulo Investimentos — acento AZUL** (não amarelo). Ingestão Pluggy + Ativos básico **já entregues** (commit
-> `feat: add Pluggy investment portfolio`). Ordem das sprints: **F4.1 → F4.2 → F4.3 → F4.4 → F4.5** (F4.4 depende de F4.1–F4.3).
+> **Módulo Investimentos — acento AZUL** (não amarelo). **F4.1–F4.5 já implementados e aderentes** (ver
+> `F4-STATUS-aderencia.md`): cotações brapi, CRUD/badge manual, metas de alocação, perguntas/nota normalizada,
+> Aportar (Método Burro com afordabilidade), Mapa.
+
+## Próximas execuções (ordem lógica)
+
+1. **F2.8 — Conciliação** transações ↔ metas de poupança (feature nova; `transactions.savings_goal_id`).
+2. **F4 follow-ups** — verificar/finalizar os 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100% das
+   metas de alocação, RF por valor informado, badge manual na UI, dataset do Mapa, `investido_total` sem duplicar, tema azul).
+3. **F5 — Hardening** na ordem: **F5.1** (WAL/busy_timeout) → **F5.2** (fonte única de cálculo) → **F5.3**
+   (decompor `app.py`) → **F5.4** (lifespan) → **F5.5** (sunset do legado, quando houver paridade).
 
 ## Status em 2026-06-21
 
@@ -71,6 +83,10 @@ specs assumem.
 | F3.3 | ✅ entregue | Simulador no Next com cenários e amortização sobre `/api/simular` e `/api/amortizacao`. |
 | F3.4 | ✅ entregue | Editor de Manutenção no Next com tabelas editáveis e save em `/api/maintenance`. |
 | F3.6 | ✅ entregue | Hub "Simulações" com 7 calculadoras, formulários guiados, redirect `/simulador`→`/simulacoes` e endpoints `/api/sim/*` com avisos de defaults CDI/IPCA. |
+| F4.1–F4.5 | ✅ entregue | Módulo Investimentos: Ativos+brapi, Metas de alocação, Perguntas/nota, Aportar (Método Burro), Mapa. Aderência confirmada em `F4-STATUS-aderencia.md`. |
+| F2.8 | 📋 spec | Conciliação transações ↔ metas de poupança (`savings_goal_id`) — **a implementar**. |
+| F4 follow-ups | 📋 verificar | 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100%, RF, badge UI, dataset Mapa, tema azul…). |
+| F5 | 📋 backlog | Hardening: WAL, fonte única de cálculo, decompor app.py, lifespan, sunset legado. |
 
 ## Ordem de execução recomendada
 
