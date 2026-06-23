@@ -7,7 +7,7 @@ Atualizado em: 2026-06-23
 - Branch principal: `main`.
 - Deploy de produção na VPS: `/opt/projetos/financas-agent`.
 - Container de produção: `financas-agent`.
-- Último deploy funcional validado: `ff91082 feat: add maintenance classification health`.
+- Último deploy funcional validado: `223dbca fix: improve automatic tag classification coverage`.
 - Banco atual: SQLite em volume persistente, com backup automático antes do deploy por `scripts/vps_deploy.sh`.
 - Frontend novo: Next estático servido pela FastAPI, same-origin, com legado mantido em `/legacy`.
 
@@ -70,6 +70,11 @@ Atualizado em: 2026-06-23
 - Fallback conservador por lojista cobre padrões óbvios sem categoria Pluggy, como Apple billing, Ifood/IFD, Uber, GNV/posto, Netflix/Spotify, OpenAI/OpenRouter/Microsoft.
 - `transactions.category` permanece como dado bruto da integração para auditoria.
 - `python -m src.cli categorize` reaplica categoria, Meta, Tag e competência em dados já existentes.
+- Validação em produção após reclassificação:
+  - `49` Tags cadastradas;
+  - `0` Tags sem cor;
+  - gastos reais sem Tag no histórico: `83` -> `35`;
+  - gastos reais sem Tag em `2026-06`: `6` -> `4`.
 
 ### Manutenção
 
