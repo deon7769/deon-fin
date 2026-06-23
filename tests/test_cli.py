@@ -67,6 +67,7 @@ def test_categorize_command_fills_missing_reference_months(tmp_path, monkeypatch
             posted_at=date(2026, 6, 14),
             amount=Decimal("-10.00"),
             description="Before cycle",
+            category="Food Delivery",
             source="csv",
         )
     ])
@@ -89,8 +90,11 @@ def test_categorize_command_fills_missing_reference_months(tmp_path, monkeypatch
     assert result.exit_code == 0
 
     check = Database(db_path)
-    value = check._conn.execute(
-        "SELECT reference_month FROM transactions"
-    ).fetchone()[0]
-    assert value == "2026-05"
+    row = check._conn.execute(
+        "SELECT reference_month, tag_id, tag_source FROM transactions"
+    ).fetchone()
+    tag = check._conn.execute("SELECT name FROM tags WHERE id=?", (row["tag_id"],)).fetchone()
+    assert row["reference_month"] == "2026-05"
+    assert row["tag_source"] == "auto"
+    assert tag["name"] == "Delivery"
     check.close()

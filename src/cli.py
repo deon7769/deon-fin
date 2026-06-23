@@ -10,6 +10,7 @@ from rich.table import Table
 from .agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_context
 from .agent.buckets import apply_buckets_to_database
 from .agent.context import spending_value
+from .agent.tags import apply_tags_to_database
 from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
 from .pluggy import PluggyClient
@@ -86,8 +87,9 @@ def categorize() -> None:
     try:
         stats = Categorizer().apply_to_database(db)
         bucket_stats = apply_buckets_to_database(db)
+        tag_stats = apply_tags_to_database(db)
         _fill_missing_reference_months(db)
-        console.print({"categories": stats, "buckets": bucket_stats})
+        console.print({"categories": stats, "buckets": bucket_stats, "tags": tag_stats})
     finally:
         db.close()
 

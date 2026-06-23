@@ -44,6 +44,7 @@ Implemented in this slice:
 - Automatic creation/reuse of translated category Tags.
 - Parent Meta assignment for known category-to-bucket mappings.
 - Statistics reporting `created_tags`.
+- `src.cli categorize` reapplies category, Meta, Tag, and reference-month classification for existing data.
 - Tests covering granular translated Tags and manual preservation.
 
 Deferred:
@@ -61,4 +62,4 @@ Required checks for this slice:
 - Tag rules still override category heuristics.
 - Manual Tag assignments are not overwritten.
 - Credit card payments remain untagged.
-
+- `python -m src.cli categorize` can be used after deploy to apply the new Tag rules to transactions that were already in the database.
