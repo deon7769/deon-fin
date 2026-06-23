@@ -19,6 +19,11 @@ def _rule(category: str, pattern: str) -> Rule:
 # Regras iniciais baseadas em comerciantes/keywords comuns no BR.
 # A ordem importa: primeira regra que casar vence.
 DEFAULT_RULES: list[Rule] = [
+    _rule(
+        "Pagamento de fatura",
+        r"\b(pagamento\s+(?:de\s+)?fatura|pagamento\s+(?:do\s+)?cart[aã]o|"
+        r"pagamento\s+on\s*line|pagamento\s+online|pgto\s+fatura)\b",
+    ),
     _rule("Alimentação - Restaurante", r"\b(ifood|rappi|uber\s*eats|restaurante|burger|pizza|sushi|hambur)\b"),
     _rule("Alimentação - Mercado",     r"\b(carrefour|p[aã]o de a[cç][uú]car|extra|assa[ií]|atacad[aã]o|mercado|hortifruti|sams\s*club|big\b|tenda)\b"),
     _rule("Transporte - App",          r"\b(uber|99\s*app|99pay|99\s*pop|cabify|in\s*drive)\b"),

@@ -10,6 +10,7 @@ from ...agent.context import (
     PIX_TRANSFER_INCOME_CATEGORIES,
     income_value,
     internal_transfer_credit_ids,
+    is_card_payment_like,
     spending_value,
 )
 from ...storage import Database
@@ -189,14 +190,18 @@ def account_transaction_policy_where(setting_alias: str = "ats") -> str:
     return f"COALESCE({setting_alias}.include_transactions, 1) = 1"
 
 
-def _row_id(row: Any) -> Any:
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
     try:
-        return row["id"]
+        return row[key]
     except (KeyError, IndexError, TypeError):
         pass
     if hasattr(row, "get"):
-        return row.get("id")
-    return None
+        return row.get(key, default)
+    return default
+
+
+def _row_id(row: Any) -> Any:
+    return _row_value(row, "id")
 
 
 def classify_movement(
@@ -204,18 +209,27 @@ def classify_movement(
     *,
     internal_transfer_income_ids: set[Any] | None = None,
 ) -> str:
-    category = str(row["category"] or "").strip().lower()
-    amount = float(row["amount"] or 0.0)
-    account_type = row["account_type"]
+    category_value = _row_value(row, "category")
+    category = str(category_value or "").strip().lower()
+    amount = float(_row_value(row, "amount", 0.0) or 0.0)
+    account_type = _row_value(row, "account_type")
+    description = _row_value(row, "description")
+    raw_description = _row_value(row, "raw_description")
 
-    if category in _CARD_PAYMENT:
+    if category in _CARD_PAYMENT or is_card_payment_like(
+        amount,
+        account_type,
+        category_value,
+        description=description,
+        raw_description=raw_description,
+    ):
         return "card_payment"
     if category in _INVESTMENT:
         return "investment"
     if category in _INTERNAL_TRANSFER:
         if (
             category in _PIX_TRANSFER_INCOME
-            and income_value(amount, account_type, row["category"], external_transfer_income=True)
+            and income_value(amount, account_type, category_value, external_transfer_income=True)
             > 0
         ):
             if internal_transfer_income_ids is not None and _row_id(row) not in internal_transfer_income_ids:
@@ -224,12 +238,18 @@ def classify_movement(
     if category in _FINANCIAL_COST:
         return "financial_cost"
 
-    spent = spending_value(amount, account_type, row["category"])
+    spent = spending_value(
+        amount,
+        account_type,
+        category_value,
+        description=description,
+        raw_description=raw_description,
+    )
     if spent > 0:
         return "expense"
     if spent < 0:
         return "refund"
-    if income_value(amount, account_type, row["category"], external_transfer_income=True) > 0:
+    if income_value(amount, account_type, category_value, external_transfer_income=True) > 0:
         return "income"
     return "other_non_spending"
 

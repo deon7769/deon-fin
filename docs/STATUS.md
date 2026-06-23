@@ -110,6 +110,10 @@ Atualizado em: 2026-06-23
 - Ajuste de transferências:
   - PIX entre contas próprias não infla renda;
   - créditos vindos de contas externas podem contar como renda/movimentação.
+- Correção de pagamentos de fatura importados como `Shopping`:
+  - `PAGAMENTO ON LINE` negativo em cartão não reduz gasto de Meta;
+  - movimento é tratado como pagamento de fatura nos totais;
+  - `Pagamento de fatura` fica bloqueado para Meta/Tag automática por categoria.
 
 ### Investimentos
 
@@ -270,4 +274,3 @@ cd web && npm test && npm run build
 ```
 
 Roda testes e build do frontend.
-

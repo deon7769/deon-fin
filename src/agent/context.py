@@ -76,6 +76,19 @@ INTERNAL_TRANSFER_MATCH_CATEGORIES = {
 
 INVESTMENT_CATEGORIES = {"Investments", "Investimentos"}
 CARD_PAYMENT_CATEGORIES = {"Credit card payment", "Pagamento de fatura", "Payment"}
+_CARD_PAYMENT_CATEGORY_KEYS = {item.lower() for item in CARD_PAYMENT_CATEGORIES}
+_CARD_PAYMENT_TEXT_RE = re.compile(
+    r"\b("
+    r"pagamento\s+(?:de\s+)?fatura|"
+    r"pagamento\s+(?:do\s+)?cart[aã]o|"
+    r"pagamento\s+on\s*line|"
+    r"pagamento\s+online|"
+    r"pgto\s+fatura|"
+    r"credit\s+card\s+payment|"
+    r"invoice\s+payment"
+    r")\b",
+    re.IGNORECASE,
+)
 _DEFAULT_PROFILE = object()
 
 _TOKEN = re.compile(r"[a-zà-ÿ0-9]+", re.IGNORECASE)
@@ -117,6 +130,27 @@ def _is_pix_transfer_income_candidate(
         and _is_non_credit_account(account_type)
         and _normalized_category(category) in PIX_TRANSFER_INCOME_CATEGORIES
     )
+
+
+def is_card_payment_like(
+    amount: float,
+    account_type: str | None,
+    category: str | None,
+    *,
+    description: str | None = None,
+    raw_description: str | None = None,
+) -> bool:
+    if _normalized_category(category) in _CARD_PAYMENT_CATEGORY_KEYS:
+        return True
+    if float(amount) >= 0 or (account_type or "").upper() not in CREDIT_TYPES:
+        return False
+
+    text = " ".join(
+        part.strip()
+        for part in (raw_description, description)
+        if part and part.strip()
+    )
+    return bool(text and _CARD_PAYMENT_TEXT_RE.search(text))
 
 
 def _row_value(row: Any, key: str, default: Any = None) -> Any:
@@ -202,10 +236,23 @@ def internal_transfer_credit_ids(
     return matched
 
 
-def spending_value(amount: float, account_type: str | None, category: str | None) -> float:
+def spending_value(
+    amount: float,
+    account_type: str | None,
+    category: str | None,
+    *,
+    description: str | None = None,
+    raw_description: str | None = None,
+) -> float:
     """Return positive spending impact for expenses and negative impact for refunds."""
     category_name = _category_name(category)
-    if category_name in NON_SPENDING_CATEGORIES:
+    if category_name in NON_SPENDING_CATEGORIES or is_card_payment_like(
+        amount,
+        account_type,
+        category,
+        description=description,
+        raw_description=raw_description,
+    ):
         return 0.0
 
     value = float(amount)
@@ -380,7 +427,13 @@ def build_financial_context(
         is_credit = account_type in CREDIT_TYPES
 
         # Valor de consumo (positivo = gastou; negativo = estorno).
-        spend_val = spending_value(amount, account_type, category)
+        spend_val = spending_value(
+            amount,
+            account_type,
+            category,
+            description=r["description"],
+            raw_description=r["raw_description"],
+        )
         is_spending = spend_val != 0.0
 
         if posted > today_iso:  # compromisso futuro (ex.: parcelas a vencer)

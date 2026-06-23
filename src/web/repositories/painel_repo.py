@@ -61,6 +61,8 @@ def _visible_transactions_for_months(db: Database, months: list[str]) -> list[An
                t.posted_at,
                t.reference_month,
                t.amount,
+               t.description,
+               t.raw_description,
                t.category,
                t.tag_id,
                a.type AS account_type,
@@ -107,7 +109,13 @@ def month_summary(db: Database, month: str) -> dict[str, Any]:
             row["category"],
             external_transfer_income=row["id"] not in internal_transfer_income_ids,
         )
-        expense += spending_value(amount, row["account_type"], row["category"])
+        expense += spending_value(
+            amount,
+            row["account_type"],
+            row["category"],
+            description=row["description"],
+            raw_description=row["raw_description"],
+        )
 
     accounts_balance, accounts_balance_available = _accounts_balance(db)
     income = _money(income)
@@ -144,7 +152,13 @@ def history(db: Database, months: int) -> list[dict[str, Any]]:
             row["category"],
             external_transfer_income=row["id"] not in internal_transfer_income_ids,
         )
-        totals[month]["expense"] += spending_value(amount, row["account_type"], row["category"])
+        totals[month]["expense"] += spending_value(
+            amount,
+            row["account_type"],
+            row["category"],
+            description=row["description"],
+            raw_description=row["raw_description"],
+        )
 
     return [
         {
@@ -166,7 +180,13 @@ def by_tag(db: Database, month: str, type: Literal["expense", "income"]) -> dict
     for row in rows:
         amount = float(row["amount"])
         value = (
-            spending_value(amount, row["account_type"], row["category"])
+            spending_value(
+                amount,
+                row["account_type"],
+                row["category"],
+                description=row["description"],
+                raw_description=row["raw_description"],
+            )
             if type == "expense"
             else income_value(
                 amount,

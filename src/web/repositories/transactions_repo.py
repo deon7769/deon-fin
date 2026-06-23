@@ -67,6 +67,8 @@ def _signed_value(
     category: str | None,
     *,
     external_transfer_income: bool = False,
+    description: str | None = None,
+    raw_description: str | None = None,
 ) -> float:
     income = income_value(
         amount,
@@ -74,7 +76,13 @@ def _signed_value(
         category,
         external_transfer_income=external_transfer_income,
     )
-    expense = spending_value(amount, account_type, category)
+    expense = spending_value(
+        amount,
+        account_type,
+        category,
+        description=description,
+        raw_description=raw_description,
+    )
     return round(income - expense, 2)
 
 
@@ -90,6 +98,8 @@ def _row_signed_value(row: Any, internal_transfer_income_ids: set[Any]) -> float
         row["account_type"],
         row["category"],
         external_transfer_income=row["id"] not in internal_transfer_income_ids,
+        description=row["description"],
+        raw_description=row["raw_description"],
     )
 
 
@@ -287,7 +297,14 @@ def _compute_summary(
     )
     rows = db._conn.execute(
         f"""
-        SELECT t.id, t.account_id, t.posted_at, t.amount, t.category, a.type AS account_type
+        SELECT t.id,
+               t.account_id,
+               t.posted_at,
+               t.amount,
+               t.description,
+               t.raw_description,
+               t.category,
+               a.type AS account_type
           FROM transactions t
           LEFT JOIN accounts a ON a.id = t.account_id
          WHERE {where}
@@ -308,7 +325,13 @@ def _compute_summary(
             row["category"],
             external_transfer_income=row["id"] not in internal_transfer_income_ids,
         )
-        expense += spending_value(amount, row["account_type"], row["category"])
+        expense += spending_value(
+            amount,
+            row["account_type"],
+            row["category"],
+            description=row["description"],
+            raw_description=row["raw_description"],
+        )
 
     return {
         "income": round(income, 2),

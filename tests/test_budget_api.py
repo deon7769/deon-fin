@@ -257,6 +257,58 @@ def test_budget_for_month_aggregates_buckets_and_uncategorized(tmp_db, monkeypat
     ]
 
 
+def test_budget_ignores_credit_card_invoice_payment_with_wrong_provider_category(tmp_db, monkeypatch):
+    monkeypatch.setattr(
+        budget_repo,
+        "settings",
+        SimpleNamespace(monthly_income=None, financial_goals=[]),
+    )
+    monkeypatch.setattr(budget_repo.mnt, "load_family_profile", lambda: None)
+    _seed_accounts(tmp_db)
+
+    pleasures = _bucket_by_key(tmp_db, "prazeres")
+    tmp_db._conn.execute(
+        "UPDATE budget_buckets SET planned_kind='amount', planned_value=300 WHERE id=?",
+        (pleasures["id"],),
+    )
+    tmp_db._conn.commit()
+
+    _insert_tx(
+        tmp_db,
+        external_id="budget-payment-misclassified-salary",
+        amount="1000.00",
+        description="Salario",
+        category="Salario",
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="budget-payment-misclassified-purchase",
+        account_id="budget-card",
+        amount="200.00",
+        description="Cinema",
+        category="Shopping",
+        bucket_id=pleasures["id"],
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="budget-payment-misclassified-card-payment",
+        account_id="budget-card",
+        amount="-5384.50",
+        description="PAGAMENTO ON LINE",
+        category="Shopping",
+        bucket_id=pleasures["id"],
+    )
+
+    result = budget_repo.budget_for_month(tmp_db, "2026-06")
+    category = next(item for item in result["categories"] if item["key"] == "prazeres")
+
+    assert result["spent"] == 200.0
+    assert category["spent"] == 200.0
+    assert category["remaining"] == 100.0
+    assert category["used_pct"] == 66.67
+    assert category["tx_count"] == 1
+
+
 def test_budget_respects_account_total_policy(tmp_db, monkeypatch):
     monkeypatch.setattr(
         budget_repo,

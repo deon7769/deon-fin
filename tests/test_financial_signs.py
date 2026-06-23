@@ -22,6 +22,27 @@ def test_canonical_spending_and_income_values():
     assert spending_value(-120.0, "BANK", "Transfers") == 0.0
 
 
+def test_credit_card_online_payment_description_does_not_count_as_refund():
+    assert (
+        spending_value(
+            -5384.5,
+            "CREDIT",
+            "Shopping",
+            description="PAGAMENTO ON LINE",
+        )
+        == 0.0
+    )
+    assert (
+        spending_value(
+            -40.0,
+            "CREDIT",
+            "Shopping",
+            description="ESTORNO LOJA X",
+        )
+        == -40.0
+    )
+
+
 @pytest.mark.parametrize("category", [
     "Investimentos",
     "Pagamento de fatura",

@@ -67,6 +67,7 @@ def _visible_transactions_for_month(db: Database, month: str) -> list[Any]:
                t.posted_at,
                t.amount,
                t.description,
+               t.raw_description,
                t.category,
                t.bucket_id,
                a.type AS account_type
@@ -156,7 +157,13 @@ def budget_for_month(db: Database, month: str) -> dict[str, Any]:
     uncategorized: list[dict[str, Any]] = []
 
     for row in rows:
-        value = spending_value(float(row["amount"]), row["account_type"], row["category"])
+        value = spending_value(
+            float(row["amount"]),
+            row["account_type"],
+            row["category"],
+            description=row["description"],
+            raw_description=row["raw_description"],
+        )
         if value == 0:
             continue
 

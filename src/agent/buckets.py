@@ -87,6 +87,7 @@ CATEGORY_BUCKET_MAP: dict[str, str | None] = {
     "same person transfer": None,
     "transfer - bank slip": None,
     "credit card payment": None,
+    "pagamento de fatura": None,
     "renda - salário": None,
     "income": None,
     "salary": None,

@@ -148,6 +148,8 @@ def report(days: int = 30) -> None:
                 float(r["amount"]),
                 account_types.get(r["account_id"]),
                 category,
+                description=r["description"],
+                raw_description=r["raw_description"],
             )
             if spent:
                 spend_by_cat[category] = spend_by_cat.get(category, 0.0) + spent

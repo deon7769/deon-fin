@@ -91,6 +91,7 @@ def test_classify_bucket_covers_default_rules():
         "Transferências - PIX": None,
         "Transferências - TED/DOC": None,
         "Tarifas Bancárias": None,
+        "Pagamento de fatura": None,
         "Renda - Salário": None,
         "Investimentos": "liberdade_financeira",
     }

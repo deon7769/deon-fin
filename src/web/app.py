@@ -692,7 +692,13 @@ def create_app() -> FastAPI:
                 external_transfer_income=r["id"] not in internal_transfer_income_ids,
             )
 
-            spent = spending_value(amount, account_type, category)
+            spent = spending_value(
+                amount,
+                account_type,
+                category,
+                description=r["description"],
+                raw_description=r["raw_description"],
+            )
             if spent:
                 spend_by_cat[category] = spend_by_cat.get(category, 0.0) + spent
 
