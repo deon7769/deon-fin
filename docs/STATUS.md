@@ -7,7 +7,7 @@ Atualizado em: 2026-06-23
 - Branch principal: `main`.
 - Deploy de produção na VPS: `/opt/projetos/financas-agent`.
 - Container de produção: `financas-agent`.
-- Último deploy funcional validado: `223dbca fix: improve automatic tag classification coverage`.
+- Último deploy funcional validado: 2026-06-23, após a sprint de filtros acionáveis de classificação.
 - Banco atual: SQLite em volume persistente, com backup automático antes do deploy por `scripts/vps_deploy.sh`.
 - Frontend novo: Next estático servido pela FastAPI, same-origin, com legado mantido em `/legacy`.
 
