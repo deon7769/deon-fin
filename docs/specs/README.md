@@ -60,7 +60,7 @@ specs assumem.
    metas de alocação, RF por valor informado, badge manual na UI, dataset do Mapa, `investido_total` sem duplicar, tema azul).
 2. **Manutenção/Classificação** — filtros acionáveis "sem Tag"/"sem Meta" e filtros avançados de Transações já
    entraram; filtros por `tag_source`/`bucket_source`, reprocessamento e aplicação em massa com prévia também entraram;
-   próximos: revisão/edição de regras aprendidas e filas de ignorados por política.
+   revisão/edição de regras aprendidas também entrou; próximos: filas de ignorados por política e auditoria/histórico.
 3. **F5 — Hardening** na ordem: **F5.1** (WAL/busy_timeout) → **F5.2** (fonte única de cálculo) → **F5.3**
    (decompor `app.py`) → **F5.4** (lifespan) → **F5.5** (sunset do legado, quando houver paridade).
 4. **F2.8 polish** — melhorar heurística de candidatas, preview de conciliação e direção de resgate/subtração.
@@ -90,6 +90,7 @@ specs assumem.
 | F2.8 | ✅ entregue | Conciliação transações ↔ metas de poupança (`savings_goal_id`): Guardado derivado, endpoints, modal em Metas e edição/filtro em Transações. |
 | F3.2/F2.2 polish | ✅ entregue | Manutenção abre filas acionáveis de Transações com `quality=missing_tag` e `quality=missing_bucket`. |
 | F2.2 filtros avançados | ✅ entregue | Drawer de filtros de Transações com período, mês, valor, tipo, metas, tags, contas, ocultas e transferências internas. |
+| Manutenção regras aprendidas | ✅ entregue | `/api/maintenance/classification/rules` lista/edita/remove `tag_rules` e `bucket_rules`; `/manutencao` mostra painel de revisão. |
 | F4 follow-ups | 📋 verificar | 7 itens de polish em `F4-STATUS-aderencia.md` §3 (trava 100%, RF, badge UI, dataset Mapa, tema azul…). |
 | F5 | 📋 backlog | Hardening: WAL, fonte única de cálculo, decompor app.py, lifespan, sunset legado. |
 
@@ -151,6 +152,11 @@ Registradas em 2026-06-21 para encaixar nas próximas sprints:
     com período, mês de referência, faixa de valor, tipo, Metas, Tags, Contas, ocultas, transferências internas,
     qualidade de classificação e metas de poupança. Plano em
     `docs/superpowers/plans/2026-06-23-transacoes-filtros-avancados.md`.
+
+11. **Regras aprendidas em Manutenção:** entregue em 2026-06-23. A API lista, edita e remove regras aprendidas
+    de Tag/Meta, e a tela `/manutencao` ganhou painel dedicado para corrigir destino ou remover regra ruim antes
+    de reprocessar. Plano em
+    `docs/superpowers/plans/2026-06-23-maintenance-classification-rules.md`.
 
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.

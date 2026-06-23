@@ -190,3 +190,69 @@ def test_maintenance_bulk_preview_validates_target(client, tmp_db):
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_maintenance_classification_rules_can_be_listed_updated_and_deleted(client, tmp_db):
+    tags_repo.seed_tags(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    tag = tags_repo.list_tags(tmp_db)[0]
+    next_tag = tags_repo.list_tags(tmp_db)[1]
+    bucket = buckets_repo.list_buckets(tmp_db)[0]
+    tmp_db._conn.execute(
+        "INSERT INTO tag_rules (match_key, tag_id) VALUES (?, ?)",
+        ("-ifood mercado", tag["id"]),
+    )
+    tmp_db._conn.execute(
+        "INSERT INTO bucket_rules (match_key, bucket_id) VALUES (?, ?)",
+        ("-uber viagem", bucket["id"]),
+    )
+    tmp_db._conn.commit()
+
+    listed = client.get("/api/maintenance/classification/rules")
+
+    assert listed.status_code == 200
+    body = listed.json()
+    assert body["tag_rules"] == [
+        {
+            "kind": "tag",
+            "match_key": "-ifood mercado",
+            "target_id": tag["id"],
+            "target_name": tag["name"],
+            "target_color": tag["color"],
+        }
+    ]
+    assert body["bucket_rules"] == [
+        {
+            "kind": "bucket",
+            "match_key": "-uber viagem",
+            "target_id": bucket["id"],
+            "target_name": bucket["name"],
+            "target_color": bucket["color"],
+        }
+    ]
+
+    updated = client.patch(
+        "/api/maintenance/classification/rules",
+        json={"kind": "tag", "match_key": "-ifood mercado", "target_id": next_tag["id"]},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["tag_rules"][0]["target_id"] == next_tag["id"]
+
+    deleted = client.patch(
+        "/api/maintenance/classification/rules",
+        json={"kind": "bucket", "match_key": "-uber viagem", "target_id": None},
+    )
+
+    assert deleted.status_code == 200
+    assert deleted.json()["bucket_rules"] == []
+
+
+def test_maintenance_classification_rules_validate_targets(client, tmp_db):
+    response = client.patch(
+        "/api/maintenance/classification/rules",
+        json={"kind": "tag", "match_key": "-ifood mercado", "target_id": 9999},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"

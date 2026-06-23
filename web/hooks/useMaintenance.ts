@@ -8,7 +8,9 @@ import type {
   MaintenanceClassificationBulkApplyResponse,
   MaintenanceClassificationBulkPreviewResponse,
   MaintenanceClassificationBulkRequest,
+  MaintenanceClassificationRulePatch,
   MaintenanceClassificationReprocessResponse,
+  MaintenanceClassificationRulesResponse,
   MaintenanceResponse,
   MaintenanceSystemTotalsPayload,
   MaintenanceSystemTotalsResponse,
@@ -60,6 +62,7 @@ export function useSaveMaintenanceSystemTotals() {
 
 function invalidateClassificationData(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+  void queryClient.invalidateQueries({ queryKey: ["maintenance", "classification-rules"] });
   void queryClient.invalidateQueries({ queryKey: ["transactions"] });
   void queryClient.invalidateQueries({ queryKey: ["tags"] });
   void queryClient.invalidateQueries({ queryKey: ["painel"] });
@@ -95,6 +98,34 @@ export function useApplyMaintenanceClassificationBulk() {
     mutationFn: (payload: MaintenanceClassificationBulkRequest) =>
       api.post<MaintenanceClassificationBulkApplyResponse>(
         "/maintenance/classification/bulk-apply",
+        payload,
+      ),
+    onSuccess: () => {
+      invalidateClassificationData(queryClient);
+    },
+  });
+}
+
+export function useMaintenanceClassificationRules() {
+  return useQuery({
+    queryKey: ["maintenance", "classification-rules"],
+    queryFn: ({ signal }) =>
+      api.get<MaintenanceClassificationRulesResponse>(
+        "/maintenance/classification/rules",
+        undefined,
+        signal,
+      ),
+    staleTime: 30_000,
+  });
+}
+
+export function useSaveMaintenanceClassificationRule() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: MaintenanceClassificationRulePatch) =>
+      api.patch<MaintenanceClassificationRulesResponse>(
+        "/maintenance/classification/rules",
         payload,
       ),
     onSuccess: () => {

@@ -256,6 +256,21 @@ def list_rules(db: Database) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def list_rules_with_targets(db: Database) -> list[dict[str, Any]]:
+    rows = db._conn.execute(
+        """
+        SELECT r.match_key,
+               r.bucket_id AS target_id,
+               b.name AS target_name,
+               b.color AS target_color
+          FROM bucket_rules r
+          LEFT JOIN budget_buckets b ON b.id = r.bucket_id
+         ORDER BY r.match_key
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def get_rule(db: Database, match_key: str) -> dict[str, Any] | None:
     row = db._conn.execute(
         """

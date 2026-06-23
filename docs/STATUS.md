@@ -108,6 +108,11 @@ Atualizado em: 2026-06-23
   - a fila "sem Tag" usa gasto real via `spending_value`, evitando pagamento de fatura, transferências e movimentações que não são consumo;
   - a fila "sem Meta" também usa gasto real, mas continua respeitando categorias bloqueadas para pote;
   - botões abrem Transações já filtrada por `quality=missing_tag` ou `quality=missing_bucket`.
+- Ações operacionais de classificação:
+  - reprocessamento de Meta/Tag a partir da Manutenção;
+  - aplicação em massa com prévia para filas acionáveis;
+  - revisão de regras aprendidas (`tag_rules` e `bucket_rules`);
+  - edição do destino da regra ou remoção segura antes de novo reprocessamento.
 
 ### Transações
 
@@ -188,13 +193,14 @@ Atualizado em: 2026-06-23
 - Classificação assistida Tag/Meta: `docs/superpowers/specs/2026-06-22-assisted-tag-meta-classification-design.md`.
 - Tags granulares por de/para: `docs/superpowers/specs/2026-06-23-category-translated-tags-design.md`.
 - Saúde da classificação: `docs/superpowers/plans/2026-06-23-maintenance-classification-health.md`.
+- Regras aprendidas em Manutenção: `docs/superpowers/plans/2026-06-23-maintenance-classification-rules.md`.
 - Conciliação de metas de poupança: `docs/specs/F2.8-metas-conciliacao-transacoes.md`.
 
 ## Pendências conhecidas
 
 ### Classificação e Manutenção
 
-- Painel de saúde já permite reprocessar classificação e aplicar Tag/Meta em massa com prévia; próximos ajustes são revisar regras aprendidas e melhorar auditoria do que foi alterado.
+- Painel de saúde já permite reprocessar classificação, aplicar Tag/Meta em massa com prévia e revisar regras aprendidas; próximos ajustes são melhorar auditoria do que foi alterado.
 - Melhorar o fluxo "aplicar/sugerir para similares" no frontend:
   - deixar claro quantos registros foram afetados;
   - atualizar a lista sem recarregar a página inteira;
@@ -204,13 +210,10 @@ Atualizado em: 2026-06-23
   - propor tradução;
   - propor Tag;
   - propor Meta pai.
-- Criar revisão de regras aprendidas:
-  - listar `bucket_rules`;
-  - listar `tag_rules`;
-  - permitir remover/editar regra incorreta.
 - Separar claramente nas filas:
   - "ignorado por política" (transferências, fatura, impostos financeiros quando aplicável).
-- Persistir e auditar regras de Tag aprendidas na produção; levantamento atual indicou `tag_rules=0`, então o aprendizado visual ainda precisa ser validado ponta a ponta.
+- Validar em produção o fluxo completo de aprendizado visual de Tag; o painel já lista `tag_rules`, mas levantamento anterior indicou `tag_rules=0`.
+- Registrar histórico/auditoria das alterações em massa e das mudanças de regras.
 
 ### Categorias, Tags e resumos
 
@@ -289,17 +292,17 @@ Atualizado em: 2026-06-23
 1. **F4 follow-ups de Investimentos**
    - Revisar detalhamento dos JSONs BTG/Pluggy para proventos e movimentações.
 
-2. **Regras aprendidas**
-   - Tela ou seção em Manutenção para revisar `tag_rules` e `bucket_rules`.
-   - Remoção/edição segura de regras ruins.
+2. **Manutenção - ignorados e auditoria**
+   - Separar itens ignorados por política nas filas de classificação.
+   - Registrar histórico das aplicações em massa e edições de regras.
 
 3. **Transações - polish operacional**
    - Melhorar multiselects de Tags/Contas/origens se a lista real ficar longa.
    - Destaques visuais para itens acionáveis vindos da Manutenção.
 
-4. **Manutenção - auditoria de classificação**
-   - Separar itens ignorados por política.
-   - Registrar histórico das aplicações em massa.
+4. **Classificação aprendida - validação em produção**
+   - Confirmar criação de `tag_rules` no fluxo "aplicar similares".
+   - Ajustar propagação percebida pelo usuário quando a lista não atualiza imediatamente.
 
 5. **Renda e transferências**
    - Suite de testes com casos reais de PIX próprio, PIX externo, Koopere, dividendos, estorno e cashback.

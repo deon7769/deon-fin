@@ -38,6 +38,12 @@ class ClassificationBulkRequest(BaseModel):
     month: str | None = None
 
 
+class ClassificationRulePatch(BaseModel):
+    kind: Literal["tag", "bucket"]
+    match_key: str
+    target_id: int | None = None
+
+
 def _validate_year_month(value: str | None) -> str | None:
     if value is None:
         return None
@@ -66,6 +72,60 @@ def _target_name(db: Database, kind: Literal["tag", "bucket"], target_id: int) -
         bucket for bucket in buckets_repo.list_buckets(db) if int(bucket["id"]) == target_id
     )
     return str(bucket["name"])
+
+
+def _clean_match_key(value: str) -> str:
+    match_key = " ".join((value or "").split())
+    if not match_key:
+        raise HTTPException(status_code=422, detail="match_key obrigatório")
+    return match_key
+
+
+def _classification_rules_response(db: Database) -> dict[str, list[dict[str, Any]]]:
+    tag_rows = tags_repo.list_rules_with_targets(db)
+    bucket_rows = buckets_repo.list_rules_with_targets(db)
+    return {
+        "tag_rules": [
+            {
+                "kind": "tag",
+                "match_key": row["match_key"],
+                "target_id": row["target_id"],
+                "target_name": row["target_name"],
+                "target_color": row["target_color"],
+            }
+            for row in tag_rows
+        ],
+        "bucket_rules": [
+            {
+                "kind": "bucket",
+                "match_key": row["match_key"],
+                "target_id": row["target_id"],
+                "target_name": row["target_name"],
+                "target_color": row["target_color"],
+            }
+            for row in bucket_rows
+        ],
+    }
+
+
+def _save_classification_rule(db: Database, body: ClassificationRulePatch) -> None:
+    match_key = _clean_match_key(body.match_key)
+    if body.target_id is None:
+        if body.kind == "tag":
+            tags_repo.delete_rule(db, match_key)
+        else:
+            buckets_repo.delete_rule(db, match_key)
+        return
+
+    if body.kind == "tag":
+        if tags_repo.get_tag(db, body.target_id) is None:
+            raise HTTPException(status_code=422, detail=f"tag_id inválido: {body.target_id}")
+        tags_repo.upsert_rule(db, match_key, body.target_id)
+        return
+
+    if not buckets_repo.bucket_exists(db, body.target_id):
+        raise HTTPException(status_code=422, detail=f"bucket_id inválido: {body.target_id}")
+    buckets_repo.upsert_rule(db, match_key, body.target_id)
 
 
 def _preview_item(item: dict[str, Any]) -> dict[str, Any]:
@@ -191,3 +251,17 @@ def apply_classification_bulk(
         "updated": result["updated"],
         "not_found": result["not_found"],
     }
+
+
+@router.get("/classification/rules")
+def list_classification_rules(db: Database = Depends(get_db)) -> dict:
+    return _classification_rules_response(db)
+
+
+@router.patch("/classification/rules")
+def save_classification_rule(
+    body: ClassificationRulePatch,
+    db: Database = Depends(get_db),
+) -> dict:
+    _save_classification_rule(db, body)
+    return _classification_rules_response(db)

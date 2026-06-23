@@ -3,6 +3,7 @@ import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { ClassificationHealthPanel } from "@/components/manutencao/ClassificationHealthPanel";
+import { ClassificationRulesPanel } from "@/components/manutencao/ClassificationRulesPanel";
 import { EditableMaintenanceTable } from "@/components/manutencao/EditableMaintenanceTable";
 import { PrivacyProvider } from "@/providers/PrivacyProvider";
 import {
@@ -280,6 +281,43 @@ describe("maintenance helpers", () => {
     expect(html).toContain("Sem Meta");
     expect(html).toContain("Gerar prévia");
     expect(html).toContain("Aplicar em massa");
+  });
+
+  it("renders classification rules review panel", () => {
+    const html = renderToStaticMarkup(
+      createElement(ClassificationRulesPanel, {
+        rules: {
+          tag_rules: [
+            {
+              kind: "tag",
+              match_key: "-ifood mercado",
+              target_id: 2,
+              target_name: "Mercado",
+              target_color: "#22c55e",
+            },
+          ],
+          bucket_rules: [
+            {
+              kind: "bucket",
+              match_key: "-uber viagem",
+              target_id: 1,
+              target_name: "Conforto",
+              target_color: "#06b6d4",
+            },
+          ],
+        },
+        buckets: [{ id: 1, key: "conforto", name: "Conforto", color: "#06b6d4" }],
+        tags: [{ id: 2, name: "Mercado", color: "#22c55e" }],
+        onSaveRule: async () => undefined,
+      }),
+    );
+
+    expect(html).toContain("Regras aprendidas");
+    expect(html).toContain("-ifood mercado");
+    expect(html).toContain("Mercado");
+    expect(html).toContain("-uber viagem");
+    expect(html).toContain("Conforto");
+    expect(html).toContain("Remover regra");
   });
 
   it("renders wide editable sections as responsive field groups", () => {

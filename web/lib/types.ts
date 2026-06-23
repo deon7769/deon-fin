@@ -672,6 +672,8 @@ export type MaintenanceClassificationReprocessResponse = {
 
 export type MaintenanceClassificationBulkKind = "tag" | "bucket";
 
+export type MaintenanceClassificationRuleKind = MaintenanceClassificationBulkKind;
+
 export type MaintenanceClassificationBulkRequest = {
   kind: MaintenanceClassificationBulkKind;
   target_id: number;
@@ -696,6 +698,25 @@ export type MaintenanceClassificationBulkApplyResponse = {
   preview_total: number;
   updated: number;
   not_found: string[];
+};
+
+export type MaintenanceClassificationRule = {
+  kind: MaintenanceClassificationRuleKind;
+  match_key: string;
+  target_id: number | null;
+  target_name?: string | null;
+  target_color?: string | null;
+};
+
+export type MaintenanceClassificationRulesResponse = {
+  tag_rules: MaintenanceClassificationRule[];
+  bucket_rules: MaintenanceClassificationRule[];
+};
+
+export type MaintenanceClassificationRulePatch = {
+  kind: MaintenanceClassificationRuleKind;
+  match_key: string;
+  target_id: number | null;
 };
 
 export type ScenarioSimulationRequest = {

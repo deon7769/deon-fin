@@ -21,7 +21,7 @@
 
 **Proximas sprints sugeridas:**
 
-- Revisar e editar `bucket_rules` e `tag_rules` pela Manutencao.
+- Revisao e edicao de `bucket_rules` e `tag_rules` pela Manutencao foi entregue em `2026-06-23-maintenance-classification-rules.md`.
 - Separar itens ignorados por politica nas filas de classificacao.
 - Registrar historico/auditoria das aplicacoes em massa.
 - Continuar a suite de renda e transferencias com casos reais de PIX externo, Koopere, dividendos, estorno e cashback.

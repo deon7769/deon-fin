@@ -287,3 +287,38 @@ def delete_tag(db: Database, tag_id: int) -> dict[str, int] | None:
         cur.execute("DELETE FROM tags WHERE id=?", (tag_id,))
 
     return {"deleted_id": tag_id, "untagged": untagged}
+
+
+def list_rules_with_targets(db: Database) -> list[dict[str, Any]]:
+    rows = db._conn.execute(
+        """
+        SELECT r.match_key,
+               r.tag_id AS target_id,
+               t.name AS target_name,
+               t.color AS target_color
+          FROM tag_rules r
+          LEFT JOIN tags t ON t.id = r.tag_id
+         ORDER BY r.match_key
+        """
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def upsert_rule(db: Database, match_key: str, tag_id: int) -> None:
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute(
+            """
+            INSERT INTO tag_rules (match_key, tag_id)
+            VALUES (?, ?)
+            ON CONFLICT(match_key) DO UPDATE SET
+                tag_id=excluded.tag_id,
+                updated_at=datetime('now')
+            """,
+            (match_key, tag_id),
+        )
+
+
+def delete_rule(db: Database, match_key: str) -> bool:
+    with db._cursor() as cur:  # type: ignore[attr-defined]
+        cur.execute("DELETE FROM tag_rules WHERE match_key=?", (match_key,))
+        return cur.rowcount > 0

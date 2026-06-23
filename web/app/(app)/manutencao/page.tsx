@@ -16,6 +16,7 @@ import {
 } from "@/components/manutencao/EditableMaintenanceTable";
 import { CategoryMapPreview } from "@/components/manutencao/CategoryMapPreview";
 import { ClassificationHealthPanel } from "@/components/manutencao/ClassificationHealthPanel";
+import { ClassificationRulesPanel } from "@/components/manutencao/ClassificationRulesPanel";
 import { HealthChecklist } from "@/components/manutencao/HealthChecklist";
 import { MaintenanceSectionTable } from "@/components/manutencao/MaintenanceSectionTable";
 import { MissingCategoryTranslations } from "@/components/manutencao/MissingCategoryTranslations";
@@ -31,9 +32,11 @@ import { useBuckets } from "@/hooks/useBuckets";
 import {
   useApplyMaintenanceClassificationBulk,
   useMaintenance,
+  useMaintenanceClassificationRules,
   useMaintenanceSystemTotals,
   usePreviewMaintenanceClassificationBulk,
   useReprocessMaintenanceClassification,
+  useSaveMaintenanceClassificationRule,
   useSaveMaintenance,
   useSaveMaintenanceSystemTotals,
 } from "@/hooks/useMaintenance";
@@ -206,6 +209,8 @@ export default function ManutencaoPage() {
   const saveSystemTotals = useSaveMaintenanceSystemTotals();
   const buckets = useBuckets();
   const tags = useTags();
+  const classificationRules = useMaintenanceClassificationRules();
+  const saveClassificationRule = useSaveMaintenanceClassificationRule();
   const reprocessClassification = useReprocessMaintenanceClassification();
   const previewClassificationBulk = usePreviewMaintenanceClassificationBulk();
   const applyClassificationBulk = useApplyMaintenanceClassificationBulk();
@@ -388,6 +393,17 @@ export default function ManutencaoPage() {
                 const result = await applyClassificationBulk.mutateAsync(payload);
                 await maintenance.refetch();
                 return result;
+              }}
+            />
+
+            <ClassificationRulesPanel
+              rules={classificationRules.data}
+              buckets={buckets.data ?? []}
+              tags={tags.data ?? []}
+              saving={saveClassificationRule.isPending}
+              onSaveRule={async (payload) => {
+                await saveClassificationRule.mutateAsync(payload);
+                await classificationRules.refetch();
               }}
             />
 
