@@ -13,6 +13,7 @@ import type { MaintenanceResponse } from "@/lib/types";
 
 type ClassificationHealthPanelProps = {
   data: MaintenanceResponse;
+  month?: string | null;
 };
 
 const issueColumns: DataTableColumn<ClassificationIssueRow>[] = [
@@ -68,10 +69,24 @@ function CoverageTile({
   );
 }
 
-export function ClassificationHealthPanel({ data }: ClassificationHealthPanelProps) {
+function qualityQueueHref(
+  quality: "missing_tag" | "missing_bucket",
+  month?: string | null,
+): string {
+  const params = new URLSearchParams();
+  if (month) {
+    params.set("month", month);
+  }
+  params.set("quality", quality);
+  return `/transacoes?${params.toString()}`;
+}
+
+export function ClassificationHealthPanel({ data, month }: ClassificationHealthPanelProps) {
   const coverage = classificationCoverage(data);
   const missingTag = classificationIssueRows(data, "missing_tag");
   const missingBucket = classificationIssueRows(data, "missing_bucket");
+  const missingTagHref = qualityQueueHref("missing_tag", month);
+  const missingBucketHref = qualityQueueHref("missing_bucket", month);
 
   return (
     <SectionCard
@@ -96,9 +111,17 @@ export function ClassificationHealthPanel({ data }: ClassificationHealthPanelPro
 
         <div className="grid gap-5 xl:grid-cols-2">
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Tags size={16} className="text-muted" aria-hidden />
-              <h3 className="text-sm font-semibold text-text">Sem Tag</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Tags size={16} className="text-muted" aria-hidden />
+                <h3 className="text-sm font-semibold text-text">Sem Tag</h3>
+              </div>
+              <a
+                href={missingTagHref}
+                className="inline-flex h-8 items-center rounded-md border border-border px-2.5 text-xs font-medium text-muted transition hover:bg-surface2 hover:text-text"
+              >
+                Abrir fila sem Tag
+              </a>
             </div>
             <DataTable
               columns={issueColumns}
@@ -108,9 +131,17 @@ export function ClassificationHealthPanel({ data }: ClassificationHealthPanelPro
             />
           </div>
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={16} className="text-muted" aria-hidden />
-              <h3 className="text-sm font-semibold text-text">Sem Meta</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} className="text-muted" aria-hidden />
+                <h3 className="text-sm font-semibold text-text">Sem Meta</h3>
+              </div>
+              <a
+                href={missingBucketHref}
+                className="inline-flex h-8 items-center rounded-md border border-border px-2.5 text-xs font-medium text-muted transition hover:bg-surface2 hover:text-text"
+              >
+                Abrir fila sem Meta
+              </a>
             </div>
             <DataTable
               columns={issueColumns}

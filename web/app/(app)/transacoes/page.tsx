@@ -44,6 +44,7 @@ import {
   transactionCategoryLabel,
   transactionDisplayValue,
   transactionFilterBadges,
+  type TransactionQualityFilter,
 } from "@/lib/transactions";
 import type { Tag, Transaction, TransactionHiddenFilter, TransactionType } from "@/lib/types";
 
@@ -342,6 +343,7 @@ export default function TransacoesPage() {
     setType,
     setHidden,
     setSavingsGoal,
+    setQuality,
     setPage,
     setPageSize,
     clearFilters,
@@ -632,7 +634,7 @@ export default function TransacoesPage() {
 
         <SectionCard>
           <div className="space-y-4">
-            <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_160px_180px_190px_auto]">
+            <div className="grid gap-3 xl:grid-cols-[minmax(220px,1fr)_160px_180px_190px_210px_auto]">
               <label className="flex h-10 min-w-0 items-center gap-2 rounded-md border border-border bg-bg px-3 text-muted">
                 <Search size={16} aria-hidden />
                 <input
@@ -688,6 +690,22 @@ export default function TransacoesPage() {
                     {goal.name}
                   </option>
                 ))}
+              </select>
+              <select
+                value={filters.quality ?? ""}
+                onChange={(event) =>
+                  setQuality(
+                    event.target.value
+                      ? (event.target.value as TransactionQualityFilter)
+                      : null,
+                  )
+                }
+                className="h-10 rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
+                aria-label="Qualidade da classificação"
+              >
+                <option value="">Todas classificações</option>
+                <option value="missing_tag">Sem Tag acionável</option>
+                <option value="missing_bucket">Sem Meta acionável</option>
               </select>
               <button
                 type="button"

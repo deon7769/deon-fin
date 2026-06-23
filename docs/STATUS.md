@@ -106,7 +106,15 @@ Atualizado em: 2026-06-23
   - contagem por origem `manual`, `rule`, `auto`, `none`;
   - filas acionáveis de lançamentos sem Tag e sem Meta;
   - a fila "sem Tag" usa gasto real via `spending_value`, evitando pagamento de fatura, transferências e movimentações que não são consumo;
-  - a fila "sem Meta" também usa gasto real, mas continua respeitando categorias bloqueadas para pote.
+  - a fila "sem Meta" também usa gasto real, mas continua respeitando categorias bloqueadas para pote;
+  - botões abrem Transações já filtrada por `quality=missing_tag` ou `quality=missing_bucket`.
+
+### Transações
+
+- Filtros acionáveis de qualidade da classificação:
+  - `quality=missing_tag` lista gastos reais sem Tag, excluindo transferências e pagamentos de fatura;
+  - `quality=missing_bucket` lista gastos reais sem Meta, excluindo transferências, pagamentos de fatura e categorias bloqueadas para pote;
+  - badges indicam "Sem Tag acionável" ou "Sem Meta acionável" quando o filtro vem da Manutenção.
 
 ### Contas e cartões
 
@@ -175,9 +183,7 @@ Atualizado em: 2026-06-23
 
 ### Classificação e Manutenção
 
-- Adicionar ações no painel de saúde para:
-  - abrir Transações já filtrada por "sem Tag";
-  - abrir Transações já filtrada por "sem Meta";
+- Adicionar ações restantes no painel de saúde para:
   - aplicar Tag/Meta em massa com revisão;
   - reprocessar classificação a partir da UI.
 - Melhorar o fluxo "aplicar/sugerir para similares" no frontend:
@@ -194,8 +200,6 @@ Atualizado em: 2026-06-23
   - listar `tag_rules`;
   - permitir remover/editar regra incorreta.
 - Separar claramente nas filas:
-  - "sem Tag acionável";
-  - "sem Meta acionável";
   - "ignorado por política" (transferências, fatura, impostos financeiros quando aplicável).
 - Persistir e auditar regras de Tag aprendidas na produção; levantamento atual indicou `tag_rules=0`, então o aprendizado visual ainda precisa ser validado ponta a ponta.
 
@@ -276,23 +280,22 @@ Atualizado em: 2026-06-23
    - Revisar detalhamento dos JSONs BTG/Pluggy para proventos e movimentações.
 
 2. **Manutenção - ações de classificação**
-   - Botões para abrir filas no contexto de Transações.
    - Ação "reprocessar classificação".
    - Aplicação em massa de Tag/Meta com prévia.
 
 3. **Transações - filtros de qualidade**
-   - Filtros `sem Tag`, `sem Meta`, `tag_source`, `bucket_source`.
-   - Destaques para itens acionáveis vindos da Manutenção.
+   - Filtros por origem `tag_source` e `bucket_source`.
+   - Destaques visuais para itens acionáveis vindos da Manutenção.
 
 4. **Regras aprendidas**
    - Tela ou seção em Manutenção para revisar `tag_rules` e `bucket_rules`.
    - Remoção/edição segura de regras ruins.
 
-4. **Renda e transferências**
+5. **Renda e transferências**
    - Suite de testes com casos reais de PIX próprio, PIX externo, Koopere, dividendos, estorno e cashback.
    - Ajustes nos cálculos do mês atual.
 
-5. **Investimentos BTG/Pluggy**
+6. **Investimentos BTG/Pluggy**
    - Documentar amostras reais de JSON.
    - Completar ingestão/reconciliação dos campos que ainda não aparecem na UI.
 

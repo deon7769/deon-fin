@@ -226,7 +226,7 @@ describe("maintenance helpers", () => {
       createElement(
         PrivacyProvider,
         null,
-        createElement(ClassificationHealthPanel, { data: sample }),
+        createElement(ClassificationHealthPanel, { data: sample, month: "2026-06" }),
       ),
     );
 
@@ -236,6 +236,11 @@ describe("maintenance helpers", () => {
     expect(html).toContain("8 de 10");
     expect(html).toContain("Pet shop");
     expect(html).toContain("Sem meta");
+    expect(html).toContain("Abrir fila sem Tag");
+    expect(html).toContain("month=2026-06");
+    expect(html).toContain("quality=missing_tag");
+    expect(html).toContain("Abrir fila sem Meta");
+    expect(html).toContain("quality=missing_bucket");
   });
 
   it("renders wide editable sections as responsive field groups", () => {

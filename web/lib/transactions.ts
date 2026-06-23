@@ -5,6 +5,8 @@ export type TransactionDateRange = {
   to: string;
 };
 
+export type TransactionQualityFilter = "missing_tag" | "missing_bucket";
+
 export type TransactionFilters = {
   month?: string | null;
   range?: TransactionDateRange | null;
@@ -17,6 +19,7 @@ export type TransactionFilters = {
   bucketIds?: Array<number | null>;
   tagIds?: Array<number | null>;
   savingsGoalIds?: Array<number | null>;
+  quality?: TransactionQualityFilter | null;
   page?: number;
   pageSize?: number;
 };
@@ -62,6 +65,10 @@ export function clampPageSize(value: number | undefined): number {
 
 export function semTagFilterFromSearch(value: string | null): Array<number | null> | undefined {
   return value === "1" || value === "true" ? [null] : undefined;
+}
+
+export function qualityFilterFromSearch(value: string | null): TransactionQualityFilter | undefined {
+  return value === "missing_tag" || value === "missing_bucket" ? value : undefined;
 }
 
 export function idsFilterFromSearch(value: string | null): Array<number | null> | undefined {
@@ -126,6 +133,9 @@ export function transactionQuery(filters: TransactionFilters): TransactionQuery 
   if (savingsGoalIds) {
     query.savings_goal_id = savingsGoalIds;
   }
+  if (filters.quality) {
+    query.quality = filters.quality;
+  }
 
   if (filters.hidden) {
     query.hidden = filters.hidden;
@@ -145,7 +155,8 @@ export function hasTransactionFilters(filters: TransactionFilters): boolean {
       filters.accountId ||
       filters.bucketIds?.length ||
       filters.tagIds?.length ||
-      filters.savingsGoalIds?.length,
+      filters.savingsGoalIds?.length ||
+      filters.quality,
   );
 }
 
@@ -184,6 +195,11 @@ export function transactionFilterBadges(
         "Meta poupança",
       )}`,
     );
+  }
+  if (filters.quality === "missing_tag") {
+    badges.push("Qualidade: Sem Tag acionável");
+  } else if (filters.quality === "missing_bucket") {
+    badges.push("Qualidade: Sem Meta acionável");
   }
 
   const q = filters.q?.trim();

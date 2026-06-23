@@ -172,6 +172,38 @@ def test_get_transactions_type_filter_excludes_neutral_movements(client, tmp_db)
     assert body["summary"] == {"income": 0.0, "expense": 120.0, "balance": -120.0}
 
 
+def test_get_transactions_quality_filter_returns_actionable_missing_tag_rows(client, tmp_db):
+    _seed_account(tmp_db)
+    tagged = _insert_tx(tmp_db, external_id="api-quality-1")
+    untagged = _insert_tx(tmp_db, external_id="api-quality-2")
+    transfer = Transaction(
+        account_id="api-checking",
+        posted_at=date(2026, 6, 20),
+        amount=Decimal("-500.00"),
+        description="Pix proprio",
+        raw_description="PIX PROPRIO",
+        category="Transfer - PIX",
+        source="test",
+        external_id="api-quality-3",
+    )
+    tmp_db.insert_transactions([transfer])
+    tmp_db._conn.execute("UPDATE transactions SET reference_month='2026-06'")
+    tag_id = client.get("/api/tags").json()["items"][0]["id"]
+    tmp_db._conn.execute(
+        "UPDATE transactions SET tag_id=?, tag_source='manual' WHERE id=?",
+        (tag_id, tagged.id),
+    )
+    tmp_db._conn.commit()
+
+    response = client.get("/api/transactions?month=2026-06&quality=missing_tag")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == untagged.id
+    assert body["summary"] == {"income": 0.0, "expense": 42.5, "balance": -42.5}
+
+
 def test_patch_transaction_accepts_all_partial_fields(client, tmp_db):
     _seed_account(tmp_db)
     tx = _insert_tx(tmp_db, external_id="api-patch-1")

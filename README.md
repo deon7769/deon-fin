@@ -10,15 +10,16 @@ Suporta:
 
 ## Estado atual do projeto
 
-Status em **2026-06-21**:
+Status em **2026-06-23**:
 
 - Backend FastAPI + SQLite + Pluggy segue como núcleo operacional.
 - Frontend novo em Next.js vive em `web/` e já cobre Painel, Orçamento, Metas, Simulador, Contas, Faturas, Transações, Tags, Perfil, Manutenção com editor e FAQ.
-- As specs F0.1 até F3.3 foram implementadas, testadas e publicadas na `main`.
+- As specs principais F0.1 até F4.5, F2.8 e F3.6 foram implementadas, testadas e publicadas na `main`.
 - A VPS está em `/opt/projetos/financas-agent`, serviço Docker Compose `financas-agent`, atualizada pelo fluxo seguro de backup, pytest, build Docker e smoke.
 - Em desenvolvimento local, a API roda em `http://127.0.0.1:8000` e o Next em `http://127.0.0.1:3000`.
 - A partir da F3.1, a imagem Docker embute o build estático do Next: `/` serve a nova UI, `/api` segue na FastAPI e o legado fica em `/legacy` com rollback via `LEGACY_UI=1`.
 - O workflow `.github/workflows/ci-cd.yml` roda pytest, testes/build do frontend e build Docker. O deploy automático para a VPS já existe e executa `scripts/vps_deploy.sh` quando os secrets SSH estiverem configurados.
+- Manutenção já abre filas acionáveis em Transações para gastos reais sem Tag ou sem Meta via `quality=missing_tag` e `quality=missing_bucket`.
 
 ## Setup rápido
 
@@ -115,11 +116,11 @@ scripts/
 
 Ordem atual das próximas sprints:
 
-1. **Pluggy Connect no Next:** migrar o fluxo de conexão bancária do front legado para o frontend novo.
-2. **Melhorias de categorização/manutenção:** completar traduções, sugerir tipos de gasto automaticamente e reduzir edição manual repetitiva.
-3. **Fixes de conexões:** investigar fallback de nome para banco/cartão sem nome.
-4. **Consolidação técnica:** sunset gradual do legado, unificação de cálculos financeiros, WAL/busy timeout no SQLite e migração futura para Supabase/Postgres se necessário.
-5. **Inteligência financeira:** recorrências automáticas, projeção de fluxo 30/60/90 dias e categorização ML como fallback das regras.
+1. **Investimentos BTG/Pluggy:** aprofundar amostras reais de JSON, proventos, movimentações e reconciliação.
+2. **Manutenção/classificação:** reprocessar classificação pela UI, aplicar Tag/Meta em massa com prévia e revisar regras aprendidas.
+3. **Transações:** adicionar filtros por `tag_source` e `bucket_source`, mantendo os filtros acionáveis sem Tag/sem Meta.
+4. **Renda e transferências:** revisar PIX próprio/externo, Koopere, dividendos, estorno e cashback com testes de cálculo.
+5. **Consolidação técnica:** WAL/busy timeout no SQLite, fonte única de cálculo financeiro, decomposição de `app.py` e sunset gradual do legado.
 
 Notas de fixes observados em 2026-06-21:
 

@@ -194,6 +194,81 @@ def test_list_transactions_filters_bucket_and_tag_with_none(tmp_db):
     assert [item["id"] for item in no_tag["items"]] == [plain.id]
 
 
+def test_list_transactions_quality_filters_only_actionable_classification_rows(tmp_db):
+    _seed_accounts(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    tags_repo.seed_tags(tmp_db)
+    bucket = buckets_repo.list_buckets(tmp_db)[0]
+    tag = tags_repo.list_tags(tmp_db)[0]
+    missing = _insert(
+        tmp_db,
+        amount="-100.00",
+        description="Mercado sem classificacao",
+        category="Groceries",
+        external_id="repo-quality-1",
+    )
+    financial_cost = _insert(
+        tmp_db,
+        amount="-20.00",
+        description="IOF sem meta",
+        category="Tax on financial operations",
+        external_id="repo-quality-2",
+    )
+    transfer = _insert(
+        tmp_db,
+        amount="-500.00",
+        description="Pix proprio",
+        category="Transfer - PIX",
+        external_id="repo-quality-3",
+    )
+    payment = _insert(
+        tmp_db,
+        amount="-800.00",
+        description="Pagamento fatura",
+        category="Credit card payment",
+        external_id="repo-quality-4",
+    )
+    tagged = _insert(
+        tmp_db,
+        amount="-30.00",
+        description="Mercado com tag",
+        category="Groceries",
+        external_id="repo-quality-5",
+    )
+    bucketed = _insert(
+        tmp_db,
+        amount="-40.00",
+        description="Mercado com meta",
+        category="Groceries",
+        external_id="repo-quality-6",
+    )
+    tmp_db._conn.execute("UPDATE transactions SET tag_id=?, tag_source='manual' WHERE id=?", (tag["id"], tagged.id))
+    tmp_db._conn.execute(
+        "UPDATE transactions SET bucket_id=?, bucket_source='manual' WHERE id=?",
+        (bucket["id"], bucketed.id),
+    )
+    tmp_db._conn.commit()
+
+    missing_tag = transactions_repo.list_transactions(
+        tmp_db,
+        quality="missing_tag",
+        hidden="include",
+    )
+    assert {item["id"] for item in missing_tag["items"]} == {missing.id, financial_cost.id, bucketed.id}
+    assert missing_tag["summary"]["expense"] == 160.0
+
+    missing_bucket = transactions_repo.list_transactions(
+        tmp_db,
+        quality="missing_bucket",
+        hidden="include",
+    )
+    assert {item["id"] for item in missing_bucket["items"]} == {missing.id, tagged.id}
+    assert missing_bucket["summary"]["expense"] == 130.0
+
+    assert transfer.id not in {item["id"] for item in missing_tag["items"]}
+    assert payment.id not in {item["id"] for item in missing_tag["items"]}
+
+
 def test_list_transactions_summary_respects_hidden_filter_and_uses_sign_helpers(tmp_db):
     _seed_accounts(tmp_db)
     _insert(

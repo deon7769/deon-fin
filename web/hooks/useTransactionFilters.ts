@@ -7,6 +7,7 @@ import {
   clampPageSize,
   hasTransactionFilters,
   idsFilterFromSearch,
+  qualityFilterFromSearch,
   semTagFilterFromSearch,
   type TransactionFilters,
 } from "@/lib/transactions";
@@ -43,6 +44,7 @@ export function useTransactionFilters() {
         semTagFilterFromSearch(searchParams.get("semTag")) ??
         idsFilterFromSearch(searchParams.get("tag_ids")),
       savingsGoalIds: idsFilterFromSearch(searchParams.get("savings_goal_id")),
+      quality: qualityFilterFromSearch(searchParams.get("quality")),
       page: parsePage(searchParams.get("page")),
       pageSize: clampPageSize(Number(searchParams.get("page_size") ?? 25)),
     }),
@@ -77,6 +79,7 @@ export function useTransactionFilters() {
       "bucket_ids",
       "tag_ids",
       "savings_goal_id",
+      "quality",
     ]) {
       params.delete(key);
     }
@@ -96,6 +99,8 @@ export function useTransactionFilters() {
         savings_goal_id:
           savingsGoalId === undefined ? null : savingsGoalId === null ? "none" : savingsGoalId,
       }),
+    setQuality: (quality: NonNullable<TransactionFilters["quality"]> | null) =>
+      replaceParams({ quality }),
     setPage: (page: number) => replaceParams({ page }, false),
     setPageSize: (pageSize: number) => replaceParams({ page_size: pageSize }),
     clearFilters,

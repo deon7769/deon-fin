@@ -33,6 +33,7 @@ import {
   useSaveMaintenance,
   useSaveMaintenanceSystemTotals,
 } from "@/hooks/useMaintenance";
+import { usePeriod } from "@/providers/PeriodProvider";
 import {
   buildMaintenanceSavePayload,
   buildMaintenanceHealth,
@@ -193,6 +194,7 @@ function RetryState({ error, onRetry }: { error: unknown; onRetry: () => void })
 }
 
 export default function ManutencaoPage() {
+  const { month } = usePeriod();
   const maintenance = useMaintenance();
   const saveMaintenance = useSaveMaintenance();
   const systemTotals = useMaintenanceSystemTotals();
@@ -362,7 +364,7 @@ export default function ManutencaoPage() {
               }}
             />
 
-            <ClassificationHealthPanel data={data} />
+            <ClassificationHealthPanel data={data} month={month} />
 
             <div className="grid gap-5 xl:grid-cols-2">
               <SectionCard

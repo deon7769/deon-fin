@@ -107,6 +107,20 @@ describe("transaction helpers", () => {
     ).toEqual(["Meta poupança: Viagem", "Meta poupança: Sem meta"]);
   });
 
+  it("serializes and labels actionable quality filters", () => {
+    const filters = { month: "2026-06", quality: "missing_tag" as const };
+
+    expect(transactionQuery(filters)).toMatchObject({
+      month: "2026-06",
+      quality: "missing_tag",
+    });
+    expect(hasTransactionFilters(filters)).toBe(true);
+    expect(transactionFilterBadges(filters)).toEqual(["Qualidade: Sem Tag acionável"]);
+    expect(transactionFilterBadges({ quality: "missing_bucket" })).toEqual([
+      "Qualidade: Sem Meta acionável",
+    ]);
+  });
+
   it("prefers transaction display_value over aggregate signed_value", () => {
     expect(transactionDisplayValue({ amount: -300, signed_value: 0, display_value: -300 })).toBe(-300);
     expect(transactionDisplayValue({ amount: -300, signed_value: 0 })).toBe(0);

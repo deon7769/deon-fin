@@ -12,7 +12,7 @@ from ...agent.context import (
     internal_transfer_credit_ids,
     spending_value,
 )
-from ...agent.buckets import match_key_for
+from ...agent.buckets import CATEGORY_BUCKET_MAP, match_key_for
 from ...storage import Database, Transaction
 from ...storage.reference_month import reference_month
 from . import buckets_repo, profile_repo, savings_repo, tags_repo
@@ -40,6 +40,9 @@ class AccountNotFoundError(ValueError):
 
 _UNSET = object()
 _HIDDEN_VALUES = {"exclude", "include", "only"}
+_BLOCKED_CLASSIFICATION_CATEGORY_KEYS = {
+    key for key, bucket_key in CATEGORY_BUCKET_MAP.items() if bucket_key is None
+}
 
 SELECT_COLS = """
   SELECT t.id, t.account_id, t.posted_at, t.amount, t.description,
@@ -132,6 +135,46 @@ def _matches_type_filter(
         return True
     signed = _row_signed_value(row, internal_transfer_income_ids, owner_names)
     return signed > 0 if type == "income" else signed < 0
+
+
+def _is_actionable_spending_row(
+    row: Any,
+    owner_names: list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    return (
+        spending_value(
+            float(row["amount"] or 0.0),
+            row["account_type"],
+            row["category"],
+            description=row["description"],
+            raw_description=row["raw_description"],
+            owner_names=owner_names,
+        )
+        > 0
+    )
+
+
+def _is_bucket_actionable_row(
+    row: Any,
+    owner_names: list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    if not _is_actionable_spending_row(row, owner_names):
+        return False
+    return str(row["category"] or "").strip().lower() not in _BLOCKED_CLASSIFICATION_CATEGORY_KEYS
+
+
+def _matches_quality_filter(
+    row: Any,
+    quality: Literal["missing_tag", "missing_bucket"] | None,
+    owner_names: list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    if quality is None:
+        return True
+    if quality == "missing_tag":
+        return row["tag_id"] is None and _is_actionable_spending_row(row, owner_names)
+    if quality == "missing_bucket":
+        return row["bucket_id"] is None and _is_bucket_actionable_row(row, owner_names)
+    raise ValueError("quality inválido")
 
 
 def _category_label(category: str | None, cat_map: dict[str, str] | None = None) -> str:
@@ -232,6 +275,7 @@ def _build_where(
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
     savings_goal_ids: list[int | None] | None = None,
+    quality: Literal["missing_tag", "missing_bucket"] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
 ) -> tuple[str, list[Any]]:
     clauses = ["1=1"]
@@ -308,6 +352,7 @@ def _compute_summary(
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
     savings_goal_ids: list[int | None] | None = None,
+    quality: Literal["missing_tag", "missing_bucket"] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
 ) -> dict[str, float]:
     where, params = _build_where(
@@ -322,6 +367,7 @@ def _compute_summary(
         bucket_ids=bucket_ids,
         tag_ids=tag_ids,
         savings_goal_ids=savings_goal_ids,
+        quality=quality,
         hidden=hidden,
     )
     rows = db._conn.execute(
@@ -333,6 +379,8 @@ def _compute_summary(
                t.description,
                t.raw_description,
                t.category,
+               t.bucket_id,
+               t.tag_id,
                a.type AS account_type
           FROM transactions t
           LEFT JOIN accounts a ON a.id = t.account_id
@@ -347,6 +395,8 @@ def _compute_summary(
     owner_names = account_owner_aliases(db.list_accounts())
     for row in rows:
         if not _matches_type_filter(row, type, internal_transfer_income_ids, owner_names):
+            continue
+        if not _matches_quality_filter(row, quality, owner_names):
             continue
         amount = float(row["amount"])
         income += income_value(
@@ -393,6 +443,7 @@ def list_transactions(
     bucket_ids: list[int | None] | None = None,
     tag_ids: list[int | None] | None = None,
     savings_goal_ids: list[int | None] | None = None,
+    quality: Literal["missing_tag", "missing_bucket"] | None = None,
     hidden: Literal["exclude", "include", "only"] = "exclude",
     page: int = 1,
     page_size: int = 25,
@@ -413,6 +464,7 @@ def list_transactions(
         "bucket_ids": bucket_ids,
         "tag_ids": tag_ids,
         "savings_goal_ids": savings_goal_ids,
+        "quality": quality,
         "hidden": hidden,
     }
     sql_filters = {**filters, "type": None}
@@ -427,6 +479,7 @@ def list_transactions(
         row
         for row in all_rows
         if _matches_type_filter(row, type, internal_transfer_income_ids, owner_names)
+        and _matches_quality_filter(row, quality, owner_names)
     ]
     rows = filtered_rows[offset : offset + page_size]
     cat_map = mnt.load_overrides()["categorias_pt"]
