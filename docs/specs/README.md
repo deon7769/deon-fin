@@ -106,6 +106,11 @@ Registradas em 2026-06-21 para encaixar nas próximas sprints:
    registros similares, o fluxo deve reclassificar também registros parecidos que estejam com meta automática antiga,
    preservando apenas classificações manuais do usuário.
 
+7. **Tags granulares a partir do de/para:** decisão validada em 2026-06-23. `transactions.category` permanece como
+   dado bruto da integração; o de/para `categorias_pt` passa a ser usado pelo classificador automático para criar/reusar
+   Tags granulares como `Delivery`, `Táxi/App` e `Serviços digitais`, vinculando a Tag à Meta quando houver regra no
+   mapa de categorias para potes. Detalhe em `docs/superpowers/specs/2026-06-23-category-translated-tags-design.md`.
+
 > F2.1 e F2.4 funcionam antes de F2.5, degradando o que depende de saldo/limite (KPI "Saldo em conta"
 > mostra "indisponível"; cartão sem limite mostra "—"). F2.5 ativa esses números sem mudar contratos.
 

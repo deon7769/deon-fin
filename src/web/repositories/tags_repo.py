@@ -138,6 +138,15 @@ def name_taken(db: Database, name: str, *, exclude_id: int | None = None) -> boo
     )
 
 
+def find_tag_by_name(db: Database, name: str) -> dict[str, Any] | None:
+    normalized = normalize_name(name)
+    rows = db._conn.execute("SELECT id, name FROM tags").fetchall()
+    for row in rows:
+        if row["name"].casefold() == normalized.casefold():
+            return get_tag(db, int(row["id"]))
+    return None
+
+
 def create_tag(
     db: Database,
     *,
@@ -165,6 +174,19 @@ def create_tag(
     if tag is None:
         raise RuntimeError("tag created but not found")
     return tag
+
+
+def get_or_create_tag(
+    db: Database,
+    *,
+    name: str,
+    color: str | None = None,
+    bucket_id: int | None = None,
+) -> tuple[dict[str, Any], bool]:
+    existing = find_tag_by_name(db, name)
+    if existing is not None:
+        return existing, False
+    return create_tag(db, name=name, color=color, bucket_id=bucket_id), True
 
 
 def update_tag(

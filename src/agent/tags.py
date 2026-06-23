@@ -3,39 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from ..storage import Database
-from .buckets import match_key_for
+from . import maintenance as mnt
+from .buckets import CATEGORY_BUCKET_MAP, match_key_for
 
-TAG_CATEGORY_MAP: dict[str, str | None] = {
-    "groceries": "Alimentação",
-    "food and drinks": "Alimentação",
-    "eating out": "Alimentação",
-    "food delivery": "Alimentação",
-    "alimentação - mercado": "Alimentação",
-    "alimentação - restaurante": "Alimentação",
-    "alimentaÃ§Ã£o - mercado": "Alimentação",
-    "alimentaÃ§Ã£o - restaurante": "Alimentação",
-    "pharmacy": "Saúde",
-    "healthcare": "Saúde",
-    "hospital clinics and labs": "Saúde",
-    "taxi and ride-hailing": "Transporte",
-    "transport": "Transporte",
-    "parking": "Transporte",
-    "gas stations": "Transporte",
-    "video streaming": "Lazer",
-    "music streaming": "Lazer",
-    "entertainment": "Lazer",
-    "leisure": "Lazer",
-    "tickets": "Lazer",
-    "education": "Educação",
-    "bookstore": "Educação",
-    "office supplies": "Educação",
-    "clothing": "Vestuário",
-    "credit card payment": None,
-    "transfer - pix": None,
-    "transfers": None,
-    "same person transfer": None,
-    "income": None,
-    "salary": None,
+BLOCKED_CATEGORY_KEYS = {
+    key
+    for key, bucket_key in CATEGORY_BUCKET_MAP.items()
+    if bucket_key is None
 }
 
 TAG_MERCHANT_MAP: dict[str, str] = {
@@ -62,6 +36,13 @@ def _tag_ids_by_name(db: Database) -> dict[str, int]:
     return {_norm(tag["name"]): int(tag["id"]) for tag in tags_repo.list_tags(db)}
 
 
+def _bucket_ids_by_key(db: Database) -> dict[str, int]:
+    from ..web.repositories import buckets_repo
+
+    buckets_repo.seed_buckets(db)
+    return {bucket["key"]: int(bucket["id"]) for bucket in buckets_repo.list_buckets(db)}
+
+
 def _rules(db: Database) -> dict[str, int | None]:
     rows = db._conn.execute(
         """
@@ -76,11 +57,31 @@ def _rules(db: Database) -> dict[str, int | None]:
     }
 
 
-def _heuristic_tag_name(row: Any) -> str | None:
-    category_key = _norm(row["category"])
-    if category_key in TAG_CATEGORY_MAP:
-        return TAG_CATEGORY_MAP[category_key]
+def _category_translations() -> dict[str, str]:
+    raw = mnt.load_overrides()["categorias_pt"]
+    return {
+        _norm(key): str(value).strip()
+        for key, value in raw.items()
+        if _norm(key) and str(value).strip()
+    }
 
+
+def _translated_category_tag(row: Any, cat_map: dict[str, str]) -> tuple[str, str | None] | None:
+    category_key = _norm(row["category"])
+    if not category_key or category_key in BLOCKED_CATEGORY_KEYS:
+        return None
+
+    translated = cat_map.get(category_key)
+    if not translated and category_key in CATEGORY_BUCKET_MAP:
+        translated = str(row["category"]).strip()
+    if not translated:
+        return None
+
+    bucket_key = CATEGORY_BUCKET_MAP.get(category_key)
+    return translated, bucket_key
+
+
+def _merchant_tag_name(row: Any) -> str | None:
     raw = _norm(row["raw_description"] or row["description"])
     for needle, tag_name in TAG_MERCHANT_MAP.items():
         if needle in raw:
@@ -89,9 +90,19 @@ def _heuristic_tag_name(row: Any) -> str | None:
 
 
 def apply_tags_to_database(db: Database) -> dict[str, int]:
+    from ..web.repositories import tags_repo
+
     tag_ids = _tag_ids_by_name(db)
+    bucket_ids = _bucket_ids_by_key(db)
+    cat_map = _category_translations()
     rules = _rules(db)
-    stats = {"by_rule": 0, "by_map": 0, "unmatched": 0, "skipped_manual": 0}
+    stats = {
+        "by_rule": 0,
+        "by_map": 0,
+        "unmatched": 0,
+        "skipped_manual": 0,
+        "created_tags": 0,
+    }
 
     with db._cursor() as cur:  # type: ignore[attr-defined]
         cur.execute(
@@ -117,10 +128,25 @@ def apply_tags_to_database(db: Database) -> dict[str, int]:
                 target_id = int(rules[match_key])
                 source = "rule"
             else:
-                tag_name = _heuristic_tag_name(row)
-                if tag_name:
-                    target_id = tag_ids.get(_norm(tag_name))
-                    source = "auto" if target_id is not None else None
+                category_tag = _translated_category_tag(row, cat_map)
+                if category_tag is not None:
+                    tag_name, bucket_key = category_tag
+                    bucket_id = bucket_ids.get(bucket_key or "")
+                    tag, created = tags_repo.get_or_create_tag(
+                        db,
+                        name=tag_name,
+                        color=None,
+                        bucket_id=bucket_id,
+                    )
+                    target_id = int(tag["id"])
+                    tag_ids[_norm(tag["name"])] = target_id
+                    stats["created_tags"] += 1 if created else 0
+                    source = "auto"
+                else:
+                    tag_name = _merchant_tag_name(row)
+                    if tag_name:
+                        target_id = tag_ids.get(_norm(tag_name))
+                        source = "auto" if target_id is not None else None
 
             if target_id is None or source is None:
                 stats["unmatched"] += 1

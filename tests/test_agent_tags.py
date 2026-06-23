@@ -67,7 +67,7 @@ def test_apply_tags_uses_rules_before_category_heuristics(tmp_db):
     assert stats["by_map"] == 0
 
 
-def test_apply_tags_maps_known_category_and_merchant_without_overwriting_manual(tmp_db):
+def test_apply_tags_creates_granular_tag_from_translated_category_without_overwriting_manual(tmp_db):
     _seed_account(tmp_db)
     tags_repo.seed_tags(tmp_db)
     mapped = _insert(
@@ -91,15 +91,61 @@ def test_apply_tags_maps_known_category_and_merchant_without_overwriting_manual(
 
     stats = apply_tags_to_database(tmp_db)
 
-    alimentacao = _tag_by_name(tmp_db, "Alimentação")
+    delivery = _tag_by_name(tmp_db, "Delivery")
+    assert delivery["bucket_key"] == "conforto"
     rows = {
         row["id"]: (row["tag_id"], row["tag_source"])
         for row in tmp_db._conn.execute("SELECT id, tag_id, tag_source FROM transactions")
     }
-    assert rows[mapped.id] == (alimentacao["id"], "auto")
+    assert rows[mapped.id] == (delivery["id"], "auto")
     assert rows[manual.id] == (lazer["id"], "manual")
     assert stats["by_map"] == 1
     assert stats["skipped_manual"] == 1
+    assert stats["created_tags"] == 1
+
+
+def test_apply_tags_uses_translated_category_as_granular_tag_with_parent_bucket(tmp_db):
+    _seed_account(tmp_db)
+    tx = _insert(
+        tmp_db,
+        external_id="agent-tags-translation-1",
+        description="UBER TRIP",
+        category="Taxi and ride-hailing",
+    )
+
+    stats = apply_tags_to_database(tmp_db)
+
+    taxi = _tag_by_name(tmp_db, "Táxi/App")
+    row = tmp_db._conn.execute(
+        "SELECT tag_id, tag_source FROM transactions WHERE id=?",
+        (tx.id,),
+    ).fetchone()
+    assert taxi["bucket_key"] == "custos_fixos"
+    assert (row["tag_id"], row["tag_source"]) == (taxi["id"], "auto")
+    assert stats["by_map"] == 1
+    assert stats["created_tags"] == 1
+
+
+def test_apply_tags_uses_existing_portuguese_category_as_granular_tag(tmp_db):
+    _seed_account(tmp_db)
+    tx = _insert(
+        tmp_db,
+        external_id="agent-tags-pt-category-1",
+        description="MERCADO LOCAL",
+        category="Alimentação - Mercado",
+    )
+
+    stats = apply_tags_to_database(tmp_db)
+
+    mercado = _tag_by_name(tmp_db, "Alimentação - Mercado")
+    row = tmp_db._conn.execute(
+        "SELECT tag_id, tag_source FROM transactions WHERE id=?",
+        (tx.id,),
+    ).fetchone()
+    assert mercado["bucket_key"] == "conforto"
+    assert (row["tag_id"], row["tag_source"]) == (mercado["id"], "auto")
+    assert stats["by_map"] == 1
+    assert stats["created_tags"] == 1
 
 
 def test_apply_tags_keeps_credit_card_payments_untagged(tmp_db):
