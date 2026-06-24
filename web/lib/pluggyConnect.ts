@@ -40,6 +40,7 @@ declare global {
 type OpenPluggyConnectInput = {
   PluggyConnect?: PluggyConnectConstructor;
   clientUserId?: string;
+  itemId?: string;
 };
 
 type OpenPluggyConnectResult =
@@ -83,9 +84,13 @@ function connectedItem(payload: PluggySuccessPayload): PluggyItem {
 export async function openPluggyConnect({
   PluggyConnect,
   clientUserId = "local-user",
+  itemId,
 }: OpenPluggyConnectInput = {}): Promise<OpenPluggyConnectResult> {
   const [{ accessToken }, Widget] = await Promise.all([
-    api.post<{ accessToken: string }>("/connect-token", { client_user_id: clientUserId }),
+    api.post<{ accessToken: string }>("/connect-token", {
+      client_user_id: clientUserId,
+      item_id: itemId,
+    }),
     PluggyConnect ? Promise.resolve(PluggyConnect) : ensurePluggyConnectScript(),
   ]);
 

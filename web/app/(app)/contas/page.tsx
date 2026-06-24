@@ -12,13 +12,8 @@ import { KpiCard } from "@/components/ui/KpiCard";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { Skeleton } from "@/components/ui/Skeleton";
-import {
-  useAccountCredentials,
-  useAccounts,
-  useDeleteAccount,
-  useReorderAccounts,
-  useSyncAccount,
-} from "@/hooks/useAccounts";
+import { useAccounts, useDeleteAccount, useReorderAccounts, useSyncAccount } from "@/hooks/useAccounts";
+import { pluggyItemIdForAccount } from "@/lib/accounts";
 import { openPluggyConnect } from "@/lib/pluggyConnect";
 
 type ViewMode = "list" | "cards";
@@ -71,11 +66,11 @@ export default function ContasPage() {
   const [orderMode, setOrderMode] = useState(false);
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
   const [connecting, setConnecting] = useState(false);
+  const [credentialAccountId, setCredentialAccountId] = useState<string | null>(null);
   const [connectMessage, setConnectMessage] = useState<string | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
   const accounts = useAccounts();
   const syncAccount = useSyncAccount();
-  const credentials = useAccountCredentials();
   const deleteAccount = useDeleteAccount();
   const reorder = useReorderAccounts();
   const data = accounts.data;
@@ -98,18 +93,34 @@ export default function ContasPage() {
 
   const busyAccountId =
     (syncAccount.isPending ? syncAccount.variables?.accountId : null) ??
-    (credentials.isPending ? credentials.variables : null) ??
+    credentialAccountId ??
     (deleteAccount.isPending ? deleteAccount.variables : null);
 
-  const handleCredentials = (accountId: string) => {
-    credentials.mutate(accountId, {
-      onSuccess: (response) => {
-        if (typeof navigator !== "undefined" && navigator.clipboard) {
-          void navigator.clipboard.writeText(response.accessToken);
-        }
-        window.alert("Token de atualização gerado.");
-      },
-    });
+  const handleCredentials = async (accountId: string) => {
+    const itemId = pluggyItemIdForAccount(banks, cards, accountId);
+    if (!itemId) {
+      setConnectMessage(null);
+      setConnectError("Esta conta nao possui uma conexao Pluggy ativa para atualizar.");
+      return;
+    }
+
+    setCredentialAccountId(accountId);
+    setConnectError(null);
+    setConnectMessage("Abrindo hub para atualizar credenciais...");
+    try {
+      const result = await openPluggyConnect({ itemId });
+      if (result.status === "connected") {
+        setConnectMessage("Credenciais atualizadas. A sincronizacao foi agendada.");
+        await accounts.refetch();
+      } else {
+        setConnectMessage("Hub fechado sem atualizar credenciais.");
+      }
+    } catch (error) {
+      setConnectMessage(null);
+      setConnectError(error instanceof Error ? error.message : "Nao foi possivel atualizar as credenciais.");
+    } finally {
+      setCredentialAccountId(null);
+    }
   };
 
   const handleDelete = (accountId: string) => {

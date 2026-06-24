@@ -100,4 +100,42 @@ describe("pluggy connect helper", () => {
       itemId: "item-123",
     });
   });
+
+  it("requests an update token for an existing Pluggy item", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(200, { accessToken: "update-token" }))
+      .mockResolvedValueOnce(response(200, { item_id: "item-inter", sync_scheduled: true }));
+    class FakePluggyConnect {
+      constructor(options: {
+        onSuccess: (payload: {
+          item: { id: string; status: string; connector: { id: number; name: string } };
+        }) => void;
+      }) {
+        options.onSuccess({
+          item: { id: "item-inter", status: "UPDATED", connector: { id: 77, name: "Inter" } },
+        });
+      }
+
+      init = vi.fn();
+    }
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { openPluggyConnect } = await import("@/lib/pluggyConnect");
+
+    await openPluggyConnect({
+      PluggyConnect: FakePluggyConnect,
+      clientUserId: "local-user",
+      itemId: "item-inter",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/connect-token",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ client_user_id: "local-user", item_id: "item-inter" }),
+      }),
+    );
+  });
 });

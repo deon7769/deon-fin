@@ -41,3 +41,17 @@ export function bankAccountLine(agency?: string | null, number?: string | null):
   const parts = [agency, number].filter(Boolean);
   return parts.length ? parts.join(" - ") : "--";
 }
+
+type AccountPluggyRef = {
+  id: string;
+  pluggy_item_id?: string | null;
+};
+
+export function pluggyItemIdForAccount(
+  banks: readonly AccountPluggyRef[],
+  cards: readonly AccountPluggyRef[],
+  accountId: string,
+): string | null {
+  const account = [...banks, ...cards].find((item) => item.id === accountId);
+  return account?.pluggy_item_id || null;
+}
