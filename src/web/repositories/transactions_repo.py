@@ -9,6 +9,7 @@ from ...agent.context import (
     CREDIT_TYPES,
     INTERNAL_TRANSFER_MATCH_CATEGORIES,
     PIX_TRANSFER_INCOME_CATEGORIES,
+    PIX_TRANSFER_SPENDING_CATEGORIES,
     account_owner_aliases,
     income_value,
     internal_transfer_credit_ids,
@@ -52,6 +53,9 @@ _INTERNAL_TRANSFER_CATEGORY_KEYS = {
 }
 _PIX_TRANSFER_INCOME_CATEGORY_KEYS = {
     value.strip().lower() for value in PIX_TRANSFER_INCOME_CATEGORIES
+}
+_PIX_TRANSFER_SPENDING_CATEGORY_KEYS = {
+    value.strip().lower() for value in PIX_TRANSFER_SPENDING_CATEGORIES
 }
 
 SELECT_COLS = """
@@ -103,6 +107,7 @@ def _signed_value(
     category: str | None,
     *,
     external_transfer_income: bool = False,
+    external_transfer_spending: bool = False,
     description: str | None = None,
     raw_description: str | None = None,
     owner_names: list[str] | tuple[str, ...] | None = None,
@@ -120,6 +125,7 @@ def _signed_value(
         description=description,
         raw_description=raw_description,
         owner_names=owner_names,
+        external_transfer_spending=external_transfer_spending,
     )
     return round(income - expense, 2)
 
@@ -133,6 +139,7 @@ def _display_value(amount: float, account_type: str | None) -> float:
 def _row_signed_value(
     row: Any,
     internal_transfer_income_ids: set[Any],
+    internal_transfer_ids: set[Any],
     owner_names: list[str] | tuple[str, ...] | None = None,
 ) -> float:
     return _signed_value(
@@ -140,6 +147,7 @@ def _row_signed_value(
         row["account_type"],
         row["category"],
         external_transfer_income=row["id"] not in internal_transfer_income_ids,
+        external_transfer_spending=row["id"] not in internal_transfer_ids,
         description=row["description"],
         raw_description=row["raw_description"],
         owner_names=owner_names,
@@ -150,17 +158,20 @@ def _matches_type_filter(
     row: Any,
     type: Literal["income", "expense"] | None,
     internal_transfer_income_ids: set[Any],
+    internal_transfer_ids: set[Any],
     owner_names: list[str] | tuple[str, ...] | None = None,
 ) -> bool:
     if type is None:
         return True
-    signed = _row_signed_value(row, internal_transfer_income_ids, owner_names)
+    signed = _row_signed_value(row, internal_transfer_income_ids, internal_transfer_ids, owner_names)
     return signed > 0 if type == "income" else signed < 0
 
 
 def _is_actionable_spending_row(
     row: Any,
     owner_names: list[str] | tuple[str, ...] | None = None,
+    *,
+    external_transfer_spending: bool = False,
 ) -> bool:
     return (
         spending_value(
@@ -170,6 +181,7 @@ def _is_actionable_spending_row(
             description=row["description"],
             raw_description=row["raw_description"],
             owner_names=owner_names,
+            external_transfer_spending=external_transfer_spending,
         )
         > 0
     )
@@ -178,44 +190,45 @@ def _is_actionable_spending_row(
 def _is_bucket_actionable_row(
     row: Any,
     owner_names: list[str] | tuple[str, ...] | None = None,
+    *,
+    external_transfer_spending: bool = False,
 ) -> bool:
-    if not _is_actionable_spending_row(row, owner_names):
+    if not _is_actionable_spending_row(
+        row,
+        owner_names,
+        external_transfer_spending=external_transfer_spending,
+    ):
         return False
-    return str(row["category"] or "").strip().lower() not in _BLOCKED_CLASSIFICATION_CATEGORY_KEYS
+    category_key = str(row["category"] or "").strip().lower()
+    if external_transfer_spending and category_key in _PIX_TRANSFER_SPENDING_CATEGORY_KEYS:
+        return True
+    return category_key not in _BLOCKED_CLASSIFICATION_CATEGORY_KEYS
 
 
 def _matches_quality_filter(
     row: Any,
     quality: Literal["missing_tag", "missing_bucket"] | None,
     owner_names: list[str] | tuple[str, ...] | None = None,
+    internal_transfer_ids: set[Any] | None = None,
 ) -> bool:
     if quality is None:
         return True
-    if quality == "missing_tag":
-        return row["tag_id"] is None and _is_actionable_spending_row(row, owner_names)
-    if quality == "missing_bucket":
-        return row["bucket_id"] is None and _is_bucket_actionable_row(row, owner_names)
-    raise ValueError("quality inválido")
-
-
-def _is_internal_transfer_debit_candidate(
-    row: Any,
-    owner_names: list[str] | tuple[str, ...] | None = None,
-) -> bool:
-    amount = float(row["amount"] or 0.0)
-    if amount >= 0 or not _is_non_credit(row["account_type"]):
-        return False
-    category_key = str(row["category"] or "").strip().lower()
-    if category_key in _INTERNAL_TRANSFER_CATEGORY_KEYS:
-        return True
-    return is_own_account_transfer_like(
-        amount,
-        row["account_type"],
-        row["category"],
-        description=row["description"],
-        raw_description=row["raw_description"],
-        owner_names=owner_names,
+    external_transfer_spending = (
+        internal_transfer_ids is not None and row["id"] not in internal_transfer_ids
     )
+    if quality == "missing_tag":
+        return row["tag_id"] is None and _is_actionable_spending_row(
+            row,
+            owner_names,
+            external_transfer_spending=external_transfer_spending,
+        )
+    if quality == "missing_bucket":
+        return row["bucket_id"] is None and _is_bucket_actionable_row(
+            row,
+            owner_names,
+            external_transfer_spending=external_transfer_spending,
+        )
+    raise ValueError("quality inválido")
 
 
 def _internal_transfer_row_ids(
@@ -239,33 +252,53 @@ def _internal_transfer_row_ids(
             continue
 
         category_key = str(row["category"] or "").strip().lower()
+        own_like = is_own_account_transfer_like(
+            amount,
+            row["account_type"],
+            row["category"],
+            description=row["description"],
+            raw_description=row["raw_description"],
+            owner_names=owner_names,
+        )
         payload = {
             "id": row_id,
             "account_id": str(account_id),
             "posted": posted,
             "amount_abs": round(abs(amount), 2),
+            "own_like": own_like,
         }
         if amount > 0 and category_key in _PIX_TRANSFER_INCOME_CATEGORY_KEYS:
             credits.append(payload)
             continue
         if amount < 0 and category_key in _INTERNAL_TRANSFER_CATEGORY_KEYS:
             debits.append(payload)
+            if own_like:
+                own_transfer_debits.add(row_id)
             continue
-        if _is_internal_transfer_debit_candidate(row, owner_names):
+        if own_like:
             own_transfer_debits.add(row_id)
 
     matched: set[Any] = set(own_transfer_debits)
+    used_debits: set[Any] = set()
     for credit in credits:
+        candidates: list[dict[str, Any]] = []
         for debit in debits:
+            if debit["id"] in used_debits:
+                continue
             if credit["account_id"] == debit["account_id"]:
                 continue
             if abs(credit["amount_abs"] - debit["amount_abs"]) > 0.01:
                 continue
             if abs((credit["posted"] - debit["posted"]).days) > day_window:
                 continue
-            matched.add(credit["id"])
-            matched.add(debit["id"])
-            break
+            candidates.append(debit)
+        if not candidates:
+            continue
+        own_candidates = [debit for debit in candidates if debit["own_like"]]
+        debit = (own_candidates or candidates)[0]
+        matched.add(credit["id"])
+        matched.add(debit["id"])
+        used_debits.add(debit["id"])
     return matched
 
 
@@ -294,6 +327,8 @@ def _serialize_item(
     row: Any,
     *,
     external_transfer_income: bool = False,
+    external_transfer_spending: bool = False,
+    owner_names: list[str] | tuple[str, ...] | None = None,
     cat_map: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     amount = float(row["amount"])
@@ -343,6 +378,10 @@ def _serialize_item(
             row["account_type"],
             row["category"],
             external_transfer_income=external_transfer_income,
+            external_transfer_spending=external_transfer_spending,
+            description=row["description"],
+            raw_description=row["raw_description"],
+            owner_names=owner_names,
         ),
         "display_value": _display_value(amount, row["account_type"]),
         "type": _display_type(amount, row["account_type"]),
@@ -554,9 +593,15 @@ def _compute_summary(
     owner_names = account_owner_aliases(db.list_accounts())
     internal_transfer_ids = _internal_transfer_row_ids(rows, owner_names)
     for row in rows:
-        if not _matches_type_filter(row, type, internal_transfer_income_ids, owner_names):
+        if not _matches_type_filter(
+            row,
+            type,
+            internal_transfer_income_ids,
+            internal_transfer_ids,
+            owner_names,
+        ):
             continue
-        if not _matches_quality_filter(row, quality, owner_names):
+        if not _matches_quality_filter(row, quality, owner_names, internal_transfer_ids):
             continue
         if not _matches_internal_transfer_filter(row, internal_transfer, internal_transfer_ids):
             continue
@@ -574,6 +619,7 @@ def _compute_summary(
             description=row["description"],
             raw_description=row["raw_description"],
             owner_names=owner_names,
+            external_transfer_spending=row["id"] not in internal_transfer_ids,
         )
 
     return {
@@ -588,7 +634,24 @@ def get_transaction(db: Database, transaction_id: str) -> dict[str, Any] | None:
         f"{SELECT_COLS} WHERE t.id = ?",
         (transaction_id,),
     ).fetchone()
-    return _serialize_item(row) if row else None
+    if row is None:
+        return None
+
+    context_month = row["reference_month"] or str(row["posted_at"])[:7]
+    context_rows = db._conn.execute(
+        f"{SELECT_COLS} WHERE COALESCE(t.reference_month, substr(t.posted_at, 1, 7)) = ?",
+        (context_month,),
+    ).fetchall()
+    owner_names = account_owner_aliases(db.list_accounts())
+    internal_transfer_income_ids = internal_transfer_credit_ids(context_rows)
+    internal_transfer_ids = _internal_transfer_row_ids(context_rows, owner_names)
+    return _serialize_item(
+        row,
+        external_transfer_income=row["id"] not in internal_transfer_income_ids,
+        external_transfer_spending=row["id"] not in internal_transfer_ids,
+        owner_names=owner_names,
+        cat_map=mnt.load_overrides()["categorias_pt"],
+    )
 
 
 def list_transactions(
@@ -649,8 +712,14 @@ def list_transactions(
     filtered_rows = [
         row
         for row in all_rows
-        if _matches_type_filter(row, type, internal_transfer_income_ids, owner_names)
-        and _matches_quality_filter(row, quality, owner_names)
+        if _matches_type_filter(
+            row,
+            type,
+            internal_transfer_income_ids,
+            internal_transfer_ids,
+            owner_names,
+        )
+        and _matches_quality_filter(row, quality, owner_names, internal_transfer_ids)
         and _matches_internal_transfer_filter(row, internal_transfer, internal_transfer_ids)
     ]
     rows = filtered_rows[offset : offset + page_size]
@@ -661,6 +730,8 @@ def list_transactions(
             _serialize_item(
                 row,
                 external_transfer_income=row["id"] not in internal_transfer_income_ids,
+                external_transfer_spending=row["id"] not in internal_transfer_ids,
+                owner_names=owner_names,
                 cat_map=cat_map,
             )
             for row in rows

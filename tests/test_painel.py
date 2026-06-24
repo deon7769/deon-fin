@@ -462,10 +462,17 @@ def test_month_summary_counts_external_pix_without_counting_mirrored_own_pix(tmp
     )
     _insert_tx(
         tmp_db,
+        external_id="painel-external-pix-sent",
+        amount="-321.09",
+        description="Pix enviado fornecedor externo",
+        category="Transfer - PIX",
+    )
+    _insert_tx(
+        tmp_db,
         external_id="painel-own-pix-out",
         amount="-5400.00",
         description="Pix enviado conta propria",
-        category="Same person transfer",
+        category="Transfer - PIX",
     )
     _insert_tx(
         tmp_db,
@@ -479,7 +486,18 @@ def test_month_summary_counts_external_pix_without_counting_mirrored_own_pix(tmp
     summary = painel_repo.month_summary(tmp_db, "2026-06")
 
     assert summary["income"] == 7845.4
-    assert summary["expense"] == 0.0
+    assert summary["expense"] == 321.09
+    assert summary["result"] == 7524.31
+
+    system_totals_repo.update_movement_settings(
+        tmp_db,
+        [{"movement_type": "internal_transfer", "include_in_totals": False}],
+    )
+    without_internal_transfers = painel_repo.month_summary(tmp_db, "2026-06")
+
+    assert without_internal_transfers["income"] == 7845.4
+    assert without_internal_transfers["expense"] == 321.09
+    assert without_internal_transfers["result"] == 7524.31
 
 
 def test_by_tag_applies_refunds_to_tag_total(tmp_db):

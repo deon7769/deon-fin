@@ -27,9 +27,11 @@ from ..agent.context import (
     FINANCIAL_COST_CATEGORIES,
     INTERNAL_TRANSFER_MATCH_CATEGORIES,
     INVESTMENT_CATEGORIES,
+    PIX_TRANSFER_SPENDING_CATEGORIES,
     account_owner_aliases,
     income_value,
     internal_transfer_credit_ids,
+    internal_transfer_row_ids,
     is_card_payment_like,
     is_own_account_transfer_like,
     spending_value,
@@ -336,6 +338,9 @@ _CLASSIFICATION_SOURCES = ("manual", "rule", "auto")
 _BLOCKED_CLASSIFICATION_CATEGORY_KEYS = {
     key for key, bucket_key in CATEGORY_BUCKET_MAP.items() if bucket_key is None
 }
+_PIX_TRANSFER_SPENDING_CATEGORY_KEYS = {
+    value.strip().lower() for value in PIX_TRANSFER_SPENDING_CATEGORIES
+}
 _INTERNAL_TRANSFER_CATEGORY_KEYS = {
     value.strip().lower() for value in INTERNAL_TRANSFER_MATCH_CATEGORIES
 }
@@ -375,6 +380,7 @@ def _classification_policy_reason(
     owner_names: list[str] | tuple[str, ...],
     *,
     bucket_policy: bool,
+    internal_transfer_ids: set[Any] | None = None,
 ) -> tuple[str, str]:
     amount = float(row["amount"] or 0.0)
     category = row["category"]
@@ -382,6 +388,8 @@ def _classification_policy_reason(
     account_type = row["account_type"]
     description = row["description"]
     raw_description = row["raw_description"]
+    row_id = row["id"]
+    is_known_internal_transfer = internal_transfer_ids is not None and row_id in internal_transfer_ids
 
     if is_card_payment_like(
         amount,
@@ -391,7 +399,7 @@ def _classification_policy_reason(
         raw_description=raw_description,
     ):
         return "card_payment", "Pagamento de fatura"
-    if category_key in _INTERNAL_TRANSFER_CATEGORY_KEYS or is_own_account_transfer_like(
+    if is_known_internal_transfer or is_own_account_transfer_like(
         amount,
         account_type,
         category,
@@ -417,11 +425,13 @@ def _classification_policy_row(
     owner_names: list[str] | tuple[str, ...],
     *,
     bucket_policy: bool,
+    internal_transfer_ids: set[Any] | None = None,
 ) -> dict[str, Any]:
     reason, reason_label = _classification_policy_reason(
         row,
         owner_names,
         bucket_policy=bucket_policy,
+        internal_transfer_ids=internal_transfer_ids,
     )
     return {
         **_classification_issue_row(row, cat_map),
@@ -446,6 +456,7 @@ def _classification_health(db: Database, cat_map: dict[str, str]) -> dict[str, A
     total = len(rows)
     tagged = sum(1 for row in rows if row["tag_id"] is not None)
     bucketed = sum(1 for row in rows if row["bucket_id"] is not None)
+    internal_transfer_ids = internal_transfer_row_ids(rows, owner_names=owner_names)
 
     spending_rows = [
         row
@@ -457,6 +468,7 @@ def _classification_health(db: Database, cat_map: dict[str, str]) -> dict[str, A
             description=row["description"],
             raw_description=row["raw_description"],
             owner_names=owner_names,
+            external_transfer_spending=row["id"] not in internal_transfer_ids,
         )
         > 0
     ]
@@ -465,6 +477,11 @@ def _classification_health(db: Database, cat_map: dict[str, str]) -> dict[str, A
         for row in spending_rows
         if str(row["category"] or "").strip().lower()
         not in _BLOCKED_CLASSIFICATION_CATEGORY_KEYS
+        or (
+            row["id"] not in internal_transfer_ids
+            and str(row["category"] or "").strip().lower()
+            in _PIX_TRANSFER_SPENDING_CATEGORY_KEYS
+        )
     ]
     missing_tag = [row for row in spending_rows if row["tag_id"] is None]
     missing_bucket = [row for row in bucket_actionable_rows if row["bucket_id"] is None]
@@ -498,11 +515,23 @@ def _classification_health(db: Database, cat_map: dict[str, str]) -> dict[str, A
         "missing_tag": [_classification_issue_row(row, cat_map) for row in missing_tag[:10]],
         "missing_bucket": [_classification_issue_row(row, cat_map) for row in missing_bucket[:10]],
         "ignored_tag_policy": [
-            _classification_policy_row(row, cat_map, owner_names, bucket_policy=False)
+            _classification_policy_row(
+                row,
+                cat_map,
+                owner_names,
+                bucket_policy=False,
+                internal_transfer_ids=internal_transfer_ids,
+            )
             for row in ignored_tag_policy[:10]
         ],
         "ignored_bucket_policy": [
-            _classification_policy_row(row, cat_map, owner_names, bucket_policy=True)
+            _classification_policy_row(
+                row,
+                cat_map,
+                owner_names,
+                bucket_policy=True,
+                internal_transfer_ids=internal_transfer_ids,
+            )
             for row in ignored_bucket_policy[:10]
         ],
     }
@@ -796,6 +825,11 @@ def create_app() -> FastAPI:
         account_types = {row["id"]: row["type"] for row in accounts}
         owner_names = account_owner_aliases(accounts)
         internal_transfer_income_ids = internal_transfer_credit_ids(rows, account_types=account_types)
+        internal_transfer_ids = internal_transfer_row_ids(
+            rows,
+            account_types=account_types,
+            owner_names=owner_names,
+        )
 
         spend_by_cat: dict[str, float] = {}
         inflow = 0.0
@@ -818,6 +852,7 @@ def create_app() -> FastAPI:
                 description=r["description"],
                 raw_description=r["raw_description"],
                 owner_names=owner_names,
+                external_transfer_spending=r["id"] not in internal_transfer_ids,
             )
             if spent:
                 spend_by_cat[category] = spend_by_cat.get(category, 0.0) + spent

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from src.storage import Account, Transaction
 from src.storage.reference_month import reference_month
 from src.web.app import create_app, get_db, get_pluggy
-from src.web.repositories import buckets_repo, budget_repo, profile_repo
+from src.web.repositories import buckets_repo, budget_repo, profile_repo, system_totals_repo
 
 
 @pytest.fixture
@@ -553,12 +553,19 @@ def test_budget_income_counts_external_pix_without_counting_mirrored_own_pix(
         description="Pix recebido cliente externo",
         category="Transfer - PIX",
     )
+    external_pix_sent = _insert_tx(
+        tmp_db,
+        external_id="budget-external-pix-sent",
+        amount="-321.09",
+        description="Pix enviado fornecedor externo",
+        category="Transfer - PIX",
+    )
     _insert_tx(
         tmp_db,
         external_id="budget-own-pix-out",
         amount="-5400.00",
         description="Pix enviado conta propria",
-        category="Same person transfer",
+        category="Transfer - PIX",
     )
     _insert_tx(
         tmp_db,
@@ -573,6 +580,32 @@ def test_budget_income_counts_external_pix_without_counting_mirrored_own_pix(
 
     assert result["income"] == 7845.4
     assert result["income_source"] == "transactions"
+    assert result["spent"] == 321.09
+    assert result["uncategorized"] == [
+        {
+            "id": external_pix_sent.id,
+            "description": "Pix enviado fornecedor externo",
+            "date": "2026-06-15",
+            "amount": 321.09,
+        }
+    ]
+
+    system_totals_repo.update_movement_settings(
+        tmp_db,
+        [{"movement_type": "internal_transfer", "include_in_totals": False}],
+    )
+    without_internal_transfers = budget_repo.budget_for_month(tmp_db, "2026-06")
+
+    assert without_internal_transfers["income"] == 7845.4
+    assert without_internal_transfers["spent"] == 321.09
+    assert without_internal_transfers["uncategorized"] == [
+        {
+            "id": external_pix_sent.id,
+            "description": "Pix enviado fornecedor externo",
+            "date": "2026-06-15",
+            "amount": 321.09,
+        }
+    ]
 
 
 def test_resolve_month_uses_profile_start_day(tmp_db, monkeypatch):

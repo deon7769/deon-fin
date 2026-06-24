@@ -174,6 +174,7 @@ def test_get_transactions_translates_pluggy_category_labels(client, tmp_db):
 
 def test_get_transactions_type_filter_excludes_neutral_movements(client, tmp_db):
     _seed_account(tmp_db)
+    _seed_account(tmp_db, account_id="api-reserve")
     rows = [
         Transaction(
             account_id="api-checking",
@@ -188,12 +189,32 @@ def test_get_transactions_type_filter_excludes_neutral_movements(client, tmp_db)
         Transaction(
             account_id="api-checking",
             posted_at=date(2026, 6, 20),
+            amount=Decimal("-321.09"),
+            description="Pix fornecedor externo",
+            raw_description="PIX FORNECEDOR EXTERNO",
+            category="Transfer - PIX",
+            source="test",
+            external_id="api-type-expense-2",
+        ),
+        Transaction(
+            account_id="api-checking",
+            posted_at=date(2026, 6, 20),
             amount=Decimal("-700.00"),
             description="Pix entre contas",
             raw_description="PIX ENTRE CONTAS",
             category="Transfer - PIX",
             source="test",
-            external_id="api-type-expense-2",
+            external_id="api-type-expense-3",
+        ),
+        Transaction(
+            account_id="api-reserve",
+            posted_at=date(2026, 6, 20),
+            amount=Decimal("700.00"),
+            description="Pix recebido entre contas",
+            raw_description="PIX RECEBIDO ENTRE CONTAS",
+            category="Transfer - PIX",
+            source="test",
+            external_id="api-type-expense-4",
         ),
         Transaction(
             account_id="api-checking",
@@ -203,7 +224,7 @@ def test_get_transactions_type_filter_excludes_neutral_movements(client, tmp_db)
             raw_description="PAGAMENTO FATURA",
             category="Credit card payment",
             source="test",
-            external_id="api-type-expense-3",
+            external_id="api-type-expense-5",
         ),
     ]
     tmp_db.insert_transactions(rows)
@@ -214,15 +235,26 @@ def test_get_transactions_type_filter_excludes_neutral_movements(client, tmp_db)
 
     assert response.status_code == 200
     body = response.json()
-    assert [item["id"] for item in body["items"]] == [rows[0].id]
-    assert body["summary"] == {"income": 0.0, "expense": 120.0, "balance": -120.0}
+    assert {item["id"] for item in body["items"]} == {rows[0].id, rows[1].id}
+    assert body["summary"] == {"income": 0.0, "expense": 441.09, "balance": -441.09}
 
 
 def test_get_transactions_quality_filter_returns_actionable_missing_tag_rows(client, tmp_db):
     _seed_account(tmp_db)
+    _seed_account(tmp_db, account_id="api-reserve")
     tagged = _insert_tx(tmp_db, external_id="api-quality-1")
     untagged = _insert_tx(tmp_db, external_id="api-quality-2")
-    transfer = Transaction(
+    external_pix = Transaction(
+        account_id="api-checking",
+        posted_at=date(2026, 6, 20),
+        amount=Decimal("-321.09"),
+        description="Pix fornecedor externo",
+        raw_description="PIX FORNECEDOR EXTERNO",
+        category="Transfer - PIX",
+        source="test",
+        external_id="api-quality-3",
+    )
+    own_pix_out = Transaction(
         account_id="api-checking",
         posted_at=date(2026, 6, 20),
         amount=Decimal("-500.00"),
@@ -230,9 +262,19 @@ def test_get_transactions_quality_filter_returns_actionable_missing_tag_rows(cli
         raw_description="PIX PROPRIO",
         category="Transfer - PIX",
         source="test",
-        external_id="api-quality-3",
+        external_id="api-quality-4",
     )
-    tmp_db.insert_transactions([transfer])
+    own_pix_in = Transaction(
+        account_id="api-reserve",
+        posted_at=date(2026, 6, 20),
+        amount=Decimal("500.00"),
+        description="Pix recebido proprio",
+        raw_description="PIX RECEBIDO PROPRIO",
+        category="Transfer - PIX",
+        source="test",
+        external_id="api-quality-5",
+    )
+    tmp_db.insert_transactions([external_pix, own_pix_out, own_pix_in])
     tmp_db._conn.execute("UPDATE transactions SET reference_month='2026-06'")
     tag_id = client.get("/api/tags").json()["items"][0]["id"]
     tmp_db._conn.execute(
@@ -240,14 +282,26 @@ def test_get_transactions_quality_filter_returns_actionable_missing_tag_rows(cli
         (tag_id, tagged.id),
     )
     tmp_db._conn.commit()
+    bucket_id = client.get("/api/buckets").json()["items"][0]["id"]
+    tmp_db._conn.execute(
+        "UPDATE transactions SET bucket_id=?, bucket_source='manual' WHERE id=?",
+        (bucket_id, tagged.id),
+    )
+    tmp_db._conn.commit()
 
     response = client.get("/api/transactions?month=2026-06&quality=missing_tag")
 
     assert response.status_code == 200
     body = response.json()
-    assert body["total"] == 1
-    assert body["items"][0]["id"] == untagged.id
-    assert body["summary"] == {"income": 0.0, "expense": 42.5, "balance": -42.5}
+    assert body["total"] == 2
+    assert {item["id"] for item in body["items"]} == {untagged.id, external_pix.id}
+    assert body["summary"] == {"income": 0.0, "expense": 363.59, "balance": -363.59}
+
+    bucket_response = client.get("/api/transactions?month=2026-06&quality=missing_bucket")
+    assert bucket_response.status_code == 200
+    bucket_body = bucket_response.json()
+    assert {item["id"] for item in bucket_body["items"]} == {untagged.id, external_pix.id}
+    assert bucket_body["summary"] == {"income": 0.0, "expense": 363.59, "balance": -363.59}
 
 
 def test_get_transactions_filters_classification_sources(client, tmp_db):

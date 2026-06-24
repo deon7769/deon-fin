@@ -398,6 +398,7 @@ def test_maintenance_endpoint_reports_missing_category_translations(client, tmp_
 
 def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monkeypatch):
     tmp_db.upsert_account(Account(id="bank-health", source="test", name="Bank", type="BANK"))
+    tmp_db.upsert_account(Account(id="bank-health-2", source="test", name="Reserve", type="BANK"))
     tmp_db.upsert_account(
         Account(id="card-health", source="test", name="Card", type="CREDIT_CARD")
     )
@@ -430,11 +431,29 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
     intentional_transfer = Transaction(
         account_id="bank-health",
         posted_at=date(2026, 6, 3),
-        amount=Decimal("100.00"),
-        description="PIX proprio",
+        amount=Decimal("-100.00"),
+        description="PIX enviado proprio",
         source="test",
         category="Transfer - PIX",
-        external_id="health-transfer",
+        external_id="health-transfer-out",
+    )
+    intentional_transfer_in = Transaction(
+        account_id="bank-health-2",
+        posted_at=date(2026, 6, 3),
+        amount=Decimal("100.00"),
+        description="PIX recebido proprio",
+        source="test",
+        category="Transfer - PIX",
+        external_id="health-transfer-in",
+    )
+    external_pix_sent = Transaction(
+        account_id="bank-health",
+        posted_at=date(2026, 6, 6),
+        amount=Decimal("-321.09"),
+        description="PIX fornecedor externo",
+        source="test",
+        category="Transfer - PIX",
+        external_id="health-external-pix",
     )
     card_payment = Transaction(
         account_id="card-health",
@@ -455,7 +474,15 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
         external_id="health-iof",
     )
     tmp_db.insert_transactions(
-        [classified, needs_review, intentional_transfer, card_payment, financial_cost]
+        [
+            classified,
+            needs_review,
+            intentional_transfer,
+            intentional_transfer_in,
+            external_pix_sent,
+            card_payment,
+            financial_cost,
+        ]
     )
     tmp_db._conn.execute(
         """
@@ -476,18 +503,27 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
 
     assert response.status_code == 200
     assert response.json()["classification_health"] == {
-        "total_transactions": 5,
+        "total_transactions": 7,
         "tagged": 1,
-        "untagged": 4,
+        "untagged": 6,
         "bucketed": 1,
-        "unbucketed": 4,
-        "tag_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 4},
-        "bucket_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 4},
-        "missing_tag_review_count": 2,
-        "missing_bucket_review_count": 1,
-        "ignored_tag_policy_count": 2,
-        "ignored_bucket_policy_count": 3,
+        "unbucketed": 6,
+        "tag_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 6},
+        "bucket_sources": {"manual": 1, "rule": 0, "auto": 0, "none": 6},
+        "missing_tag_review_count": 3,
+        "missing_bucket_review_count": 2,
+        "ignored_tag_policy_count": 3,
+        "ignored_bucket_policy_count": 4,
         "missing_tag": [
+            {
+                "id": external_pix_sent.id,
+                "date": "2026-06-06",
+                "description": "PIX fornecedor externo",
+                "account_name": "Bank",
+                "category": "Transfer - PIX",
+                "category_label": "Transfer - PIX",
+                "amount_abs": 321.09,
+            },
             {
                 "id": needs_review.id,
                 "date": "2026-06-02",
@@ -508,6 +544,15 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
             }
         ],
         "missing_bucket": [
+            {
+                "id": external_pix_sent.id,
+                "date": "2026-06-06",
+                "description": "PIX fornecedor externo",
+                "account_name": "Bank",
+                "category": "Transfer - PIX",
+                "category_label": "Transfer - PIX",
+                "amount_abs": 321.09,
+            },
             {
                 "id": needs_review.id,
                 "date": "2026-06-02",
@@ -531,9 +576,20 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
                 "reason_label": "Pagamento de fatura",
             },
             {
+                "id": intentional_transfer_in.id,
+                "date": "2026-06-03",
+                "description": "PIX recebido proprio",
+                "account_name": "Reserve",
+                "category": "Transfer - PIX",
+                "category_label": "Transfer - PIX",
+                "amount_abs": 100.0,
+                "reason": "internal_transfer",
+                "reason_label": "Transferência interna",
+            },
+            {
                 "id": intentional_transfer.id,
                 "date": "2026-06-03",
-                "description": "PIX proprio",
+                "description": "PIX enviado proprio",
                 "account_name": "Bank",
                 "category": "Transfer - PIX",
                 "category_label": "Transfer - PIX",
@@ -555,9 +611,20 @@ def test_maintenance_endpoint_reports_classification_health(client, tmp_db, monk
                 "reason_label": "Pagamento de fatura",
             },
             {
+                "id": intentional_transfer_in.id,
+                "date": "2026-06-03",
+                "description": "PIX recebido proprio",
+                "account_name": "Reserve",
+                "category": "Transfer - PIX",
+                "category_label": "Transfer - PIX",
+                "amount_abs": 100.0,
+                "reason": "internal_transfer",
+                "reason_label": "Transferência interna",
+            },
+            {
                 "id": intentional_transfer.id,
                 "date": "2026-06-03",
-                "description": "PIX proprio",
+                "description": "PIX enviado proprio",
                 "account_name": "Bank",
                 "category": "Transfer - PIX",
                 "category_label": "Transfer - PIX",
@@ -692,6 +759,45 @@ def test_summary_uses_canonical_financial_signs(client, tmp_db):
 
     by_category = {row["category"]: row["amount"] for row in s["by_category"]}
     assert by_category == {"Shopping": -250.0, "Groceries": -100.0}
+
+
+def test_summary_counts_external_pix_sent_as_outflow(client, tmp_db):
+    posted = date.today() - timedelta(days=3)
+    tmp_db.upsert_account(Account(id="bank1", source="test", name="Bank", type="BANK"))
+    tmp_db.upsert_account(Account(id="bank2", source="test", name="Reserve", type="BANK"))
+    tmp_db.insert_transactions([
+        Transaction(
+            account_id="bank1",
+            posted_at=posted,
+            amount=Decimal("-321.09"),
+            description="Pix enviado fornecedor externo",
+            source="test",
+            category="Transfer - PIX",
+        ),
+        Transaction(
+            account_id="bank1",
+            posted_at=posted,
+            amount=Decimal("-5400.00"),
+            description="Pix enviado reserva",
+            source="test",
+            category="Transfer - PIX",
+        ),
+        Transaction(
+            account_id="bank2",
+            posted_at=posted,
+            amount=Decimal("5400.00"),
+            description="Pix recebido corrente",
+            source="test",
+            category="Transfer - PIX",
+        ),
+    ])
+
+    s = client.get("/api/summary?days=30").json()
+
+    assert s["inflow"] == 0.0
+    assert s["outflow"] == -321.09
+    assert s["net"] == -321.09
+    assert s["by_category"] == [{"category": "Transfer - PIX", "amount": -321.09}]
 
 
 def _seed_refund_heavy_summary_transactions(db):

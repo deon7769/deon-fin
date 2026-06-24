@@ -56,9 +56,23 @@ NON_SPENDING_CATEGORIES = {
     "Pagamento de fatura",
     "Investments",
     "Investimentos",
+    "Automatic investment",
+    "Investment application",
 }
 
 PIX_TRANSFER_INCOME_CATEGORIES = {"transfer - pix", "transferência - pix"}
+PIX_TRANSFER_SPENDING_CATEGORIES = {
+    "transfer - pix",
+    "transferência - pix",
+    "transferências - pix",
+}
+_PIX_TRANSFER_SPENDING_DEFAULT_CATEGORIES = {"transfer - pix"}
+_PIX_TRANSFER_SPENDING_TEXT_RE = re.compile(r"\bpix enviado\b", re.IGNORECASE)
+_PIX_INTERNAL_TRANSFER_TEXT_RE = re.compile(
+    r"\b(entre contas|conta propria|contas proprias|proprio|propria|transferencia interna)\b",
+    re.IGNORECASE,
+)
+_GENERIC_TRANSFER_TEXTS = {"transferencia", "transferencias"}
 
 INTERNAL_TRANSFER_MATCH_CATEGORIES = {
     "same person transfer",
@@ -75,7 +89,12 @@ INTERNAL_TRANSFER_MATCH_CATEGORIES = {
     "transfers",
 }
 
-INVESTMENT_CATEGORIES = {"Investments", "Investimentos"}
+INVESTMENT_CATEGORIES = {
+    "Investments",
+    "Investimentos",
+    "Automatic investment",
+    "Investment application",
+}
 CARD_PAYMENT_CATEGORIES = {"Credit card payment", "Pagamento de fatura", "Payment"}
 _CARD_PAYMENT_CATEGORY_KEYS = {item.lower() for item in CARD_PAYMENT_CATEGORIES}
 _CARD_PAYMENT_TEXT_RE = re.compile(
@@ -202,6 +221,33 @@ def _is_pix_transfer_income_candidate(
     )
 
 
+def _is_external_pix_transfer_debit_candidate(
+    amount: float,
+    account_type: str | None,
+    category: str | None,
+    *,
+    description: str | None = None,
+    raw_description: str | None = None,
+) -> bool:
+    if float(amount) >= 0 or not _is_non_credit_account(account_type):
+        return False
+    category_key = _normalized_category(category)
+    if category_key not in PIX_TRANSFER_SPENDING_CATEGORIES:
+        return False
+    text = _fold_text(
+        " ".join(
+            part.strip()
+            for part in (raw_description, description)
+            if part and part.strip()
+        )
+    )
+    if _PIX_INTERNAL_TRANSFER_TEXT_RE.search(text) or text.strip() in _GENERIC_TRANSFER_TEXTS:
+        return False
+    if category_key in _PIX_TRANSFER_SPENDING_DEFAULT_CATEGORIES:
+        return True
+    return bool(_PIX_TRANSFER_SPENDING_TEXT_RE.search(text))
+
+
 def is_card_payment_like(
     amount: float,
     account_type: str | None,
@@ -284,15 +330,16 @@ def _row_date(row: Any) -> date | None:
         return None
 
 
-def internal_transfer_credit_ids(
+def _internal_transfer_id_sets(
     rows: list[Any],
     *,
     account_types: dict[str, str] | None = None,
+    owner_names: Iterable[str] | None = None,
     day_window: int = 2,
-) -> set[Any]:
-    """Return positive PIX transfer row ids that have a mirrored connected-account debit."""
+) -> tuple[set[Any], set[Any]]:
     credits: list[dict[str, Any]] = []
     debits: list[dict[str, Any]] = []
+    own_transfer_debit_ids: set[Any] = set()
 
     for row in rows:
         account_type = _row_account_type(row, account_types)
@@ -312,29 +359,85 @@ def internal_transfer_credit_ids(
             continue
 
         normalized_category = _normalized_category(category)
+        own_like = is_own_account_transfer_like(
+            amount,
+            account_type,
+            category,
+            description=_row_value(row, "description"),
+            raw_description=_row_value(row, "raw_description"),
+            owner_names=owner_names,
+        )
         payload = {
             "id": row_id,
             "account_id": str(account_id),
             "posted": posted,
             "amount_abs": round(abs(amount), 2),
+            "own_like": own_like,
         }
         if amount > 0 and normalized_category in PIX_TRANSFER_INCOME_CATEGORIES:
             credits.append(payload)
         elif amount < 0 and normalized_category in INTERNAL_TRANSFER_MATCH_CATEGORIES:
             debits.append(payload)
+            if own_like:
+                own_transfer_debit_ids.add(row_id)
+        elif own_like:
+            own_transfer_debit_ids.add(row_id)
 
-    matched: set[Any] = set()
+    matched_credit_ids: set[Any] = set()
+    matched_debit_ids: set[Any] = set(own_transfer_debit_ids)
+    used_debit_ids: set[Any] = set()
     for credit in credits:
+        candidates: list[dict[str, Any]] = []
         for debit in debits:
+            if debit["id"] in used_debit_ids:
+                continue
             if credit["account_id"] == debit["account_id"]:
                 continue
             if abs(credit["amount_abs"] - debit["amount_abs"]) > 0.01:
                 continue
             if abs((credit["posted"] - debit["posted"]).days) > day_window:
                 continue
-            matched.add(credit["id"])
-            break
-    return matched
+            candidates.append(debit)
+        if not candidates:
+            continue
+        own_candidates = [debit for debit in candidates if debit["own_like"]]
+        debit = (own_candidates or candidates)[0]
+        matched_credit_ids.add(credit["id"])
+        matched_debit_ids.add(debit["id"])
+        used_debit_ids.add(debit["id"])
+    return matched_credit_ids, matched_debit_ids
+
+
+def internal_transfer_credit_ids(
+    rows: list[Any],
+    *,
+    account_types: dict[str, str] | None = None,
+    day_window: int = 2,
+) -> set[Any]:
+    """Return positive PIX transfer row ids that have a mirrored connected-account debit."""
+    credit_ids, _ = _internal_transfer_id_sets(
+        rows,
+        account_types=account_types,
+        day_window=day_window,
+    )
+    return credit_ids
+
+
+def internal_transfer_row_ids(
+    rows: list[Any],
+    *,
+    account_types: dict[str, str] | None = None,
+    owner_names: Iterable[str] | None = None,
+    day_window: int = 2,
+) -> set[Any]:
+    """Return both sides of mirrored own-account transfers when both rows are visible."""
+    credit_ids, debit_ids = _internal_transfer_id_sets(
+        rows,
+        account_types=account_types,
+        owner_names=owner_names,
+        day_window=day_window,
+    )
+    return credit_ids | debit_ids
 
 
 def spending_value(
@@ -345,10 +448,24 @@ def spending_value(
     description: str | None = None,
     raw_description: str | None = None,
     owner_names: Iterable[str] | None = None,
+    external_transfer_spending: bool = False,
 ) -> float:
     """Return positive spending impact for expenses and negative impact for refunds."""
     category_name = _category_name(category)
-    if category_name in NON_SPENDING_CATEGORIES or is_card_payment_like(
+    if category_name in NON_SPENDING_CATEGORIES:
+        if not (
+            external_transfer_spending
+            and _is_external_pix_transfer_debit_candidate(
+                amount,
+                account_type,
+                category,
+                description=description,
+                raw_description=raw_description,
+            )
+        ):
+            return 0.0
+
+    if is_card_payment_like(
         amount,
         account_type,
         category,
@@ -533,6 +650,11 @@ def build_financial_context(
     owner_names = account_owner_aliases(accounts)
     rows = db.list_transactions(limit=100_000)
     internal_transfer_income_ids = internal_transfer_credit_ids(rows, account_types=acct_type)
+    internal_transfer_ids = internal_transfer_row_ids(
+        rows,
+        account_types=acct_type,
+        owner_names=owner_names,
+    )
 
     realized_months: dict[str, dict[str, float]] = defaultdict(
         lambda: {"renda": 0.0, "gasto": 0.0, "investido": 0.0}
@@ -560,6 +682,7 @@ def build_financial_context(
             description=r["description"],
             raw_description=r["raw_description"],
             owner_names=owner_names,
+            external_transfer_spending=r["id"] not in internal_transfer_ids,
         )
         is_spending = spend_val != 0.0
 

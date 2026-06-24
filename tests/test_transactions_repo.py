@@ -135,6 +135,15 @@ def test_filter_income_includes_credit_refunds(tmp_db):
 
 def test_filter_expense_excludes_neutral_transfers_and_card_payments(tmp_db):
     _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="repo-savings",
+            source="test",
+            institution="Banco Teste",
+            name="Conta Reserva",
+            type="CHECKING",
+        )
+    )
     grocery = _insert(
         tmp_db,
         amount="-120.00",
@@ -151,6 +160,14 @@ def test_filter_expense_excludes_neutral_transfers_and_card_payments(tmp_db):
     )
     _insert(
         tmp_db,
+        account_id="repo-savings",
+        amount="700.00",
+        description="Pix recebido entre contas",
+        category="Transfer - PIX",
+        external_id="repo-type-expense-2b",
+    )
+    _insert(
+        tmp_db,
         amount="-900.00",
         description="Pagamento fatura",
         category="Credit card payment",
@@ -162,6 +179,262 @@ def test_filter_expense_excludes_neutral_transfers_and_card_payments(tmp_db):
     assert [item["id"] for item in page["items"]] == [grocery.id]
     assert page["total"] == 1
     assert page["summary"] == {"income": 0.0, "expense": 120.0, "balance": -120.0}
+
+
+def test_transactions_summary_counts_external_pix_sent_without_counting_internal_pair(tmp_db):
+    _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="repo-savings",
+            source="test",
+            institution="Banco Teste",
+            name="Conta Reserva",
+            type="CHECKING",
+        )
+    )
+    external_pix_sent = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-321.09",
+        description="Pix enviado fornecedor externo",
+        category="Transfer - PIX",
+        external_id="repo-external-pix-sent-1",
+    )
+    internal_pix_sent = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-5400.00",
+        description="Pix enviado para reserva",
+        category="Transfer - PIX",
+        external_id="repo-external-pix-sent-2",
+    )
+    internal_pix_received = _insert(
+        tmp_db,
+        account_id="repo-savings",
+        amount="5400.00",
+        description="Pix recebido da conta corrente",
+        category="Transfer - PIX",
+        external_id="repo-external-pix-sent-3",
+    )
+
+    page = transactions_repo.list_transactions(
+        tmp_db,
+        month="2026-06",
+        type="expense",
+        hidden="include",
+    )
+    all_rows = transactions_repo.list_transactions(
+        tmp_db,
+        month="2026-06",
+        hidden="include",
+    )
+
+    assert [item["id"] for item in page["items"]] == [external_pix_sent.id]
+    assert page["summary"] == {"income": 0.0, "expense": 321.09, "balance": -321.09}
+    signed_values = {item["id"]: item["signed_value"] for item in all_rows["items"]}
+    assert signed_values[external_pix_sent.id] == -321.09
+    assert signed_values[internal_pix_sent.id] == 0.0
+    assert signed_values[internal_pix_received.id] == 0.0
+
+
+def test_transactions_summary_prefers_own_pix_pair_when_external_debit_has_same_amount(tmp_db):
+    _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="repo-savings",
+            source="test",
+            institution="Banco Teste",
+            name="Davi Oliveira Neto Reserva",
+            type="CHECKING",
+        )
+    )
+    external_pix_sent = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-500.00",
+        description="Pix enviado fornecedor externo",
+        category="Transfer - PIX",
+        external_id="repo-same-amount-pix-1",
+    )
+    internal_pix_sent = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-500.00",
+        description="Pix enviado Davi Oliveira Neto reserva",
+        category="Transfer - PIX",
+        external_id="repo-same-amount-pix-2",
+    )
+    internal_pix_received = _insert(
+        tmp_db,
+        account_id="repo-savings",
+        amount="500.00",
+        description="Pix recebido Davi Oliveira Neto reserva",
+        category="Transfer - PIX",
+        external_id="repo-same-amount-pix-3",
+    )
+
+    page = transactions_repo.list_transactions(
+        tmp_db,
+        month="2026-06",
+        type="expense",
+        hidden="include",
+    )
+    all_rows = transactions_repo.list_transactions(
+        tmp_db,
+        month="2026-06",
+        hidden="include",
+    )
+
+    assert [item["id"] for item in page["items"]] == [external_pix_sent.id]
+    assert page["summary"] == {"income": 0.0, "expense": 500.0, "balance": -500.0}
+    signed_values = {item["id"]: item["signed_value"] for item in all_rows["items"]}
+    assert signed_values[external_pix_sent.id] == -500.0
+    assert signed_values[internal_pix_sent.id] == 0.0
+    assert signed_values[internal_pix_received.id] == 0.0
+
+
+def test_quality_filter_includes_external_pix_sent_without_counting_internal_pair(tmp_db):
+    _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="repo-savings",
+            source="test",
+            institution="Banco Teste",
+            name="Conta Reserva",
+            type="CHECKING",
+        )
+    )
+    external_pix_sent = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-321.09",
+        description="Pix enviado fornecedor externo",
+        category="Transfer - PIX",
+        external_id="repo-quality-external-pix-sent-1",
+    )
+    internal_pix_sent = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-5400.00",
+        description="Pix enviado para reserva",
+        category="Transfer - PIX",
+        external_id="repo-quality-external-pix-sent-2",
+    )
+    internal_pix_received = _insert(
+        tmp_db,
+        account_id="repo-savings",
+        amount="5400.00",
+        description="Pix recebido da conta corrente",
+        category="Transfer - PIX",
+        external_id="repo-quality-external-pix-sent-3",
+    )
+
+    missing_tag = transactions_repo.list_transactions(
+        tmp_db,
+        month="2026-06",
+        quality="missing_tag",
+        hidden="include",
+    )
+
+    assert [item["id"] for item in missing_tag["items"]] == [external_pix_sent.id]
+    assert missing_tag["summary"] == {"income": 0.0, "expense": 321.09, "balance": -321.09}
+    assert internal_pix_sent.id not in {item["id"] for item in missing_tag["items"]}
+    assert internal_pix_received.id not in {item["id"] for item in missing_tag["items"]}
+
+    missing_bucket = transactions_repo.list_transactions(
+        tmp_db,
+        month="2026-06",
+        quality="missing_bucket",
+        hidden="include",
+    )
+
+    assert [item["id"] for item in missing_bucket["items"]] == [external_pix_sent.id]
+    assert missing_bucket["summary"] == {"income": 0.0, "expense": 321.09, "balance": -321.09}
+
+
+def test_quality_filter_includes_portuguese_external_pix_sent(tmp_db):
+    _seed_accounts(tmp_db)
+    external_pix_sent = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-111.25",
+        description="Pix enviado fornecedor externo",
+        category="Transfer\u00eancia - PIX",
+        external_id="repo-quality-external-pix-sent-pt",
+    )
+
+    missing_bucket = transactions_repo.list_transactions(
+        tmp_db,
+        month="2026-06",
+        quality="missing_bucket",
+        hidden="include",
+    )
+
+    assert [item["id"] for item in missing_bucket["items"]] == [external_pix_sent.id]
+    assert missing_bucket["summary"] == {"income": 0.0, "expense": 111.25, "balance": -111.25}
+
+
+def test_get_transaction_counts_external_pix_sent_signed_value(tmp_db):
+    _seed_accounts(tmp_db)
+    external_pix_sent = _insert(
+        tmp_db,
+        account_id="repo-checking",
+        amount="-321.09",
+        description="Pix enviado fornecedor externo",
+        category="Transfer - PIX",
+        external_id="repo-get-external-pix-sent",
+    )
+
+    item = transactions_repo.get_transaction(tmp_db, external_pix_sent.id)
+
+    assert item is not None
+    assert item["signed_value"] == -321.09
+
+
+def test_get_transaction_uses_pair_context_when_reference_month_is_missing(tmp_db):
+    _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="repo-savings",
+            source="test",
+            institution="Banco Teste",
+            name="Conta Reserva",
+            type="CHECKING",
+        )
+    )
+    debit = Transaction(
+        account_id="repo-checking",
+        posted_at=date(2026, 6, 20),
+        amount=Decimal("-500.00"),
+        description="Pix enviado para reserva",
+        raw_description="PIX ENVIADO PARA RESERVA",
+        category="Transfer - PIX",
+        source="test",
+        external_id="repo-get-null-month-pix-out",
+    )
+    credit = Transaction(
+        account_id="repo-savings",
+        posted_at=date(2026, 6, 20),
+        amount=Decimal("500.00"),
+        description="Pix recebido da conta corrente",
+        raw_description="PIX RECEBIDO DA CONTA CORRENTE",
+        category="Transfer - PIX",
+        source="test",
+        external_id="repo-get-null-month-pix-in",
+    )
+    tmp_db.insert_transactions([debit, credit])
+
+    list_page = transactions_repo.list_transactions(tmp_db, hidden="include")
+    signed_values = {item["id"]: item["signed_value"] for item in list_page["items"]}
+    debit_item = transactions_repo.get_transaction(tmp_db, debit.id)
+    credit_item = transactions_repo.get_transaction(tmp_db, credit.id)
+
+    assert signed_values[debit.id] == 0.0
+    assert signed_values[credit.id] == 0.0
+    assert debit_item is not None
+    assert debit_item["signed_value"] == 0.0
+    assert credit_item is not None
+    assert credit_item["signed_value"] == 0.0
 
 
 def test_list_transactions_filters_internal_transfer_pairs(tmp_db):
@@ -333,6 +606,15 @@ def test_list_transactions_filters_bucket_and_tag_sources(tmp_db):
 
 def test_list_transactions_quality_filters_only_actionable_classification_rows(tmp_db):
     _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="repo-savings",
+            source="test",
+            institution="Banco Teste",
+            name="Conta Reserva",
+            type="CHECKING",
+        )
+    )
     buckets_repo.seed_buckets(tmp_db)
     tags_repo.seed_tags(tmp_db)
     bucket = buckets_repo.list_buckets(tmp_db)[0]
@@ -357,6 +639,14 @@ def test_list_transactions_quality_filters_only_actionable_classification_rows(t
         description="Pix proprio",
         category="Transfer - PIX",
         external_id="repo-quality-3",
+    )
+    transfer_in = _insert(
+        tmp_db,
+        account_id="repo-savings",
+        amount="500.00",
+        description="Pix recebido proprio",
+        category="Transfer - PIX",
+        external_id="repo-quality-3b",
     )
     payment = _insert(
         tmp_db,
@@ -403,6 +693,7 @@ def test_list_transactions_quality_filters_only_actionable_classification_rows(t
     assert missing_bucket["summary"]["expense"] == 130.0
 
     assert transfer.id not in {item["id"] for item in missing_tag["items"]}
+    assert transfer_in.id not in {item["id"] for item in missing_tag["items"]}
     assert payment.id not in {item["id"] for item in missing_tag["items"]}
 
 

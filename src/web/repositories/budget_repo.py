@@ -9,6 +9,7 @@ from ...agent.context import (
     account_owner_aliases,
     income_value,
     internal_transfer_credit_ids,
+    internal_transfer_row_ids,
     spending_value,
 )
 from ...config import settings
@@ -157,6 +158,7 @@ def budget_for_month(db: Database, month: str) -> dict[str, Any]:
     aggregates = {int(bucket["id"]): {"spent": 0.0, "tx_count": 0} for bucket in buckets}
     rows = _visible_transactions_for_month(db, month)
     owner_names = account_owner_aliases(db.list_accounts())
+    internal_transfer_ids = internal_transfer_row_ids(rows, owner_names=owner_names)
     income, income_source = _resolve_income(db, rows)
 
     spent = 0.0
@@ -170,6 +172,7 @@ def budget_for_month(db: Database, month: str) -> dict[str, Any]:
             description=row["description"],
             raw_description=row["raw_description"],
             owner_names=owner_names,
+            external_transfer_spending=row["id"] not in internal_transfer_ids,
         )
         if value == 0:
             continue

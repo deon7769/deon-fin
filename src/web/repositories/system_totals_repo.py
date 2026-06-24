@@ -11,6 +11,7 @@ from ...agent.context import (
     account_owner_aliases,
     income_value,
     internal_transfer_credit_ids,
+    internal_transfer_row_ids,
     is_card_payment_like,
     is_own_account_transfer_like,
     spending_value,
@@ -210,6 +211,7 @@ def classify_movement(
     row: Any,
     *,
     internal_transfer_income_ids: set[Any] | None = None,
+    internal_transfer_ids: set[Any] | None = None,
     owner_names: Iterable[str] | None = None,
 ) -> str:
     category_value = _row_value(row, "category")
@@ -239,13 +241,26 @@ def classify_movement(
     if category in _INVESTMENT:
         return "investment"
     if category in _INTERNAL_TRANSFER:
+        row_id = _row_id(row)
         if (
             category in _PIX_TRANSFER_INCOME
             and income_value(amount, account_type, category_value, external_transfer_income=True)
             > 0
         ):
-            if internal_transfer_income_ids is not None and _row_id(row) not in internal_transfer_income_ids:
+            if internal_transfer_income_ids is not None and row_id not in internal_transfer_income_ids:
                 return "income"
+        if internal_transfer_ids is not None and row_id not in internal_transfer_ids:
+            spent = spending_value(
+                amount,
+                account_type,
+                category_value,
+                description=description,
+                raw_description=raw_description,
+                owner_names=owner_names,
+                external_transfer_spending=True,
+            )
+            if spent > 0:
+                return "expense"
         return "internal_transfer"
     if category in _FINANCIAL_COST:
         return "financial_cost"
@@ -283,12 +298,14 @@ def filter_rows_by_movement_policy(db: Database, rows: list[Any]) -> list[Any]:
     included = included_movement_types(db)
     internal_income_ids = internal_transfer_credit_ids(rows)
     owner_names = account_owner_aliases(db.list_accounts())
+    internal_transfer_ids = internal_transfer_row_ids(rows, owner_names=owner_names)
     return [
         row
         for row in rows
         if classify_movement(
             row,
             internal_transfer_income_ids=internal_income_ids,
+            internal_transfer_ids=internal_transfer_ids,
             owner_names=owner_names,
         )
         in included
