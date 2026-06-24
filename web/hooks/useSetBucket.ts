@@ -28,6 +28,10 @@ export function useSetBucket() {
       queryClient.invalidateQueries({ queryKey: ["budget"] });
       queryClient.invalidateQueries({ queryKey: ["invoice"] });
       queryClient.invalidateQueries({ queryKey: ["painel"] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance"] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance", "classification-audit"] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance", "classification-rules"] });
+      queryClient.invalidateQueries({ queryKey: ["maintenance", "classification-suggestions"] });
     },
   });
 }

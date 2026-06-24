@@ -179,6 +179,118 @@ def test_maintenance_bulk_preview_and_apply_updates_classification_queue(
     }
 
 
+def test_maintenance_classification_suggestions_group_missing_tag_and_bucket(
+    client,
+    tmp_db,
+    monkeypatch,
+):
+    _seed_account(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    monkeypatch.setattr(
+        "src.agent.maintenance.load_overrides",
+        lambda: {"categorias_pt": {"digital services": "Servi\u00e7os digitais"}, "recorrencias": []},
+    )
+    first = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-1",
+        description="OpenAI ChatGPT assinatura",
+        category="Digital services",
+    )
+    second = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-2",
+        description="OpenAI ChatGPT adicional",
+        category="Digital services",
+    )
+
+    response = client.get("/api/maintenance/classification/suggestions?month=2026-06")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["month"] == "2026-06"
+    assert body["total"] == 1
+    item = body["items"][0]
+    assert item["raw_category"] == "Digital services"
+    assert item["category_label"] == "Servi\u00e7os digitais"
+    assert item["suggested_translation"] == "Servi\u00e7os digitais"
+    assert item["transaction_count"] == 2
+    assert item["missing_tag_count"] == 2
+    assert item["missing_bucket_count"] == 2
+    assert item["suggested_tag"] == {
+        "id": None,
+        "name": "Servi\u00e7os digitais",
+        "color": item["suggested_tag"]["color"],
+        "bucket_id": item["suggested_bucket"]["id"],
+        "bucket_key": "prazeres",
+        "bucket_name": "Prazeres",
+        "source": "category",
+    }
+    assert item["suggested_bucket"]["key"] == "prazeres"
+    assert item["suggested_bucket"]["name"] == "Prazeres"
+    assert {example["id"] for example in item["examples"]} == {first.id, second.id}
+
+
+def test_maintenance_apply_classification_returns_affected_count_and_ids(client, tmp_db):
+    _seed_account(tmp_db)
+    tags_repo.seed_tags(tmp_db)
+    tags = tags_repo.list_tags(tmp_db)
+    target_tag = tags[0]
+    manual_tag = tags[1]
+    first = _insert_tx(
+        tmp_db,
+        external_id="maint-apply-1",
+        description="Uber trip help",
+        category="Taxi and ride-hailing",
+    )
+    second = _insert_tx(
+        tmp_db,
+        external_id="maint-apply-2",
+        description="Uber trip help",
+        category="Taxi and ride-hailing",
+    )
+    manual = _insert_tx(
+        tmp_db,
+        external_id="maint-apply-3",
+        description="Uber trip help",
+        category="Taxi and ride-hailing",
+    )
+    tmp_db._conn.execute(
+        "UPDATE transactions SET tag_id=?, tag_source='manual' WHERE id=?",
+        (manual_tag["id"], manual.id),
+    )
+    tmp_db._conn.commit()
+
+    response = client.post(
+        "/api/maintenance/classification/apply",
+        json={
+            "kind": "tag",
+            "transaction_id": first.id,
+            "target_id": target_tag["id"],
+            "apply_to_similar": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "tag"
+    assert body["target_id"] == target_tag["id"]
+    assert body["target_name"] == target_tag["name"]
+    assert body["affected_count"] == 2
+    assert set(body["affected_transaction_ids"]) == {first.id, second.id}
+    rows = {
+        row["id"]: (row["tag_id"], row["tag_source"])
+        for row in tmp_db._conn.execute("SELECT id, tag_id, tag_source FROM transactions")
+    }
+    assert rows[first.id] == (target_tag["id"], "manual")
+    assert rows[second.id] == (target_tag["id"], "rule")
+    assert rows[manual.id] == (manual_tag["id"], "manual")
+
+    audit = client.get("/api/maintenance/classification/audit").json()["items"][0]
+    assert audit["action"] == "similar_apply"
+    assert audit["affected_count"] == 2
+    assert set(audit["metadata"]["affected_transaction_ids"]) == {first.id, second.id}
+
+
 def test_maintenance_bulk_preview_validates_target(client, tmp_db):
     _seed_account(tmp_db)
     _insert_tx(tmp_db, external_id="maint-bulk-invalid")

@@ -22,6 +22,7 @@ import type {
   MaintenanceClassificationBulkRequest,
   MaintenanceClassificationPolicyIssue,
   MaintenanceClassificationReprocessResponse,
+  MaintenanceClassificationSuggestionsResponse,
   MaintenanceResponse,
   Tag,
 } from "@/lib/types";
@@ -34,6 +35,9 @@ type ClassificationHealthPanelProps = {
   reprocessing?: boolean;
   previewing?: boolean;
   applying?: boolean;
+  suggestions?: MaintenanceClassificationSuggestionsResponse;
+  suggestionsLoading?: boolean;
+  suggestionsError?: unknown;
   onReprocess?: () => Promise<Partial<MaintenanceClassificationReprocessResponse>>;
   onPreviewBulk?: (
     payload: MaintenanceClassificationBulkRequest,
@@ -146,6 +150,100 @@ function qualityQueueHref(
   return `/transacoes?${params.toString()}`;
 }
 
+function colorDot(color?: string | null) {
+  return (
+    <span
+      aria-hidden
+      className="h-2.5 w-2.5 shrink-0 rounded-full border border-border"
+      style={{ backgroundColor: color ?? "transparent" }}
+    />
+  );
+}
+
+function ClassificationSuggestions({
+  data,
+  loading,
+  error,
+}: {
+  data?: MaintenanceClassificationSuggestionsResponse;
+  loading?: boolean;
+  error?: unknown;
+}) {
+  const items = data?.items ?? [];
+
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-surface2 p-4">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-text">Sugestões de classificação</h3>
+          <p className="text-xs text-muted">
+            Categorias agrupadas com Tag e Meta sugeridas pela regra atual.
+          </p>
+        </div>
+        <span className="text-xs font-medium text-muted">{data?.total ?? 0} grupo(s)</span>
+      </div>
+
+      {loading ? (
+        <div className="rounded-md border border-dashed border-border bg-bg p-4 text-sm text-muted">
+          Carregando sugestões...
+        </div>
+      ) : error ? (
+        <div className="rounded-md border border-negative/40 bg-negative/10 p-4 text-sm text-negative">
+          Não foi possível carregar sugestões.
+        </div>
+      ) : items.length ? (
+        <div className="grid gap-3 xl:grid-cols-2">
+          {items.slice(0, 6).map((item) => (
+            <div key={item.raw_category} className="rounded-md border border-border bg-bg p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-text">{item.category_label}</p>
+                  <p className="mt-1 truncate text-xs text-muted">{item.raw_category}</p>
+                </div>
+                <div className="text-right text-xs text-muted">
+                  <p>{item.transaction_count} lançamento(s)</p>
+                  <MoneyText value={item.total_abs} className="font-semibold text-text" />
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-md border border-border bg-surface px-3 py-2">
+                  <p className="text-xs font-medium text-muted">Tag sugerida</p>
+                  <p className="mt-1 flex min-w-0 items-center gap-2 text-sm font-semibold text-text">
+                    {colorDot(item.suggested_tag?.color)}
+                    <span className="truncate">{item.suggested_tag?.name ?? "Sem sugestão"}</span>
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-surface px-3 py-2">
+                  <p className="text-xs font-medium text-muted">Meta sugerida</p>
+                  <p className="mt-1 flex min-w-0 items-center gap-2 text-sm font-semibold text-text">
+                    {colorDot(item.suggested_bucket?.color)}
+                    <span className="truncate">{item.suggested_bucket?.name ?? "Sem sugestão"}</span>
+                  </p>
+                </div>
+              </div>
+
+              {item.examples.length ? (
+                <ul className="mt-3 space-y-1 text-xs text-muted">
+                  {item.examples.slice(0, 2).map((example) => (
+                    <li key={example.id} className="truncate">
+                      {example.date} · {example.description}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-md border border-dashed border-border bg-bg p-4 text-sm text-muted">
+          Nenhuma sugestão pendente.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ClassificationHealthPanel({
   data,
   month,
@@ -154,6 +252,9 @@ export function ClassificationHealthPanel({
   reprocessing = false,
   previewing = false,
   applying = false,
+  suggestions,
+  suggestionsLoading = false,
+  suggestionsError,
   onReprocess,
   onPreviewBulk,
   onApplyBulk,
@@ -352,6 +453,12 @@ export function ClassificationHealthPanel({
             ) : null}
           </div>
         ) : null}
+
+        <ClassificationSuggestions
+          data={suggestions}
+          loading={suggestionsLoading}
+          error={suggestionsError}
+        />
 
         <div className="grid gap-4 md:grid-cols-2">
           <CoverageTile

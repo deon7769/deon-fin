@@ -709,6 +709,42 @@ export type MaintenanceClassificationBulkApplyResponse = {
   not_found: string[];
 };
 
+export type MaintenanceClassificationSuggestionTag = {
+  id: number | null;
+  name: string;
+  color?: string | null;
+  bucket_id?: number | null;
+  bucket_key?: string | null;
+  bucket_name?: string | null;
+  source: "category" | "merchant" | string;
+};
+
+export type MaintenanceClassificationSuggestionBucket = {
+  id: number | null;
+  key: string;
+  name: string;
+  color?: string | null;
+};
+
+export type MaintenanceClassificationSuggestion = {
+  raw_category: string;
+  category_label: string;
+  suggested_translation: string;
+  transaction_count: number;
+  missing_tag_count: number;
+  missing_bucket_count: number;
+  total_abs: number;
+  suggested_tag: MaintenanceClassificationSuggestionTag | null;
+  suggested_bucket: MaintenanceClassificationSuggestionBucket | null;
+  examples: MaintenanceClassificationIssue[];
+};
+
+export type MaintenanceClassificationSuggestionsResponse = {
+  month?: string | null;
+  total: number;
+  items: MaintenanceClassificationSuggestion[];
+};
+
 export type MaintenanceClassificationRule = {
   kind: MaintenanceClassificationRuleKind;
   match_key: string;

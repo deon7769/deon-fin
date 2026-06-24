@@ -12,6 +12,7 @@ import type {
   MaintenanceClassificationRulePatch,
   MaintenanceClassificationReprocessResponse,
   MaintenanceClassificationRulesResponse,
+  MaintenanceClassificationSuggestionsResponse,
   MaintenanceResponse,
   MaintenanceSystemTotalsPayload,
   MaintenanceSystemTotalsResponse,
@@ -65,6 +66,7 @@ function invalidateClassificationData(queryClient: ReturnType<typeof useQueryCli
   void queryClient.invalidateQueries({ queryKey: ["maintenance"] });
   void queryClient.invalidateQueries({ queryKey: ["maintenance", "classification-audit"] });
   void queryClient.invalidateQueries({ queryKey: ["maintenance", "classification-rules"] });
+  void queryClient.invalidateQueries({ queryKey: ["maintenance", "classification-suggestions"] });
   void queryClient.invalidateQueries({ queryKey: ["transactions"] });
   void queryClient.invalidateQueries({ queryKey: ["tags"] });
   void queryClient.invalidateQueries({ queryKey: ["painel"] });
@@ -105,6 +107,19 @@ export function useApplyMaintenanceClassificationBulk() {
     onSuccess: () => {
       invalidateClassificationData(queryClient);
     },
+  });
+}
+
+export function useMaintenanceClassificationSuggestions(month?: string | null) {
+  return useQuery({
+    queryKey: ["maintenance", "classification-suggestions", month ?? null],
+    queryFn: ({ signal }) =>
+      api.get<MaintenanceClassificationSuggestionsResponse>(
+        "/maintenance/classification/suggestions",
+        { month },
+        signal,
+      ),
+    staleTime: 30_000,
   });
 }
 

@@ -6,7 +6,9 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ...agent.buckets import apply_buckets_to_database
+from ...agent import maintenance as mnt
+from ...agent import tags as tag_agent
+from ...agent.buckets import CATEGORY_BUCKET_MAP, apply_buckets_to_database
 from ...agent.tags import apply_tags_to_database
 from ...storage import Database
 from ..dependencies import get_db
@@ -48,6 +50,13 @@ class ClassificationRulePatch(BaseModel):
     kind: Literal["tag", "bucket"]
     match_key: str
     target_id: int | None = None
+
+
+class ClassificationApplyRequest(BaseModel):
+    kind: Literal["tag", "bucket"]
+    transaction_id: str
+    target_id: int | None = None
+    apply_to_similar: bool = False
 
 
 def _validate_year_month(value: str | None) -> str | None:
@@ -143,6 +152,57 @@ def _save_classification_rule(db: Database, body: ClassificationRulePatch) -> di
     }
 
 
+def _apply_classification_response(db: Database, body: ClassificationApplyRequest) -> dict[str, Any]:
+    target_name = _target_name(db, body.kind, body.target_id) if body.target_id is not None else None
+    try:
+        if body.kind == "tag":
+            result = transactions_repo.set_tag(
+                db,
+                body.transaction_id,
+                tag_id=body.target_id,
+                apply_to_similar=body.apply_to_similar,
+            )
+        else:
+            result = transactions_repo.set_bucket(
+                db,
+                body.transaction_id,
+                bucket_id=body.target_id,
+                apply_to_similar=body.apply_to_similar,
+            )
+    except transactions_repo.TransactionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="transaÃ§Ã£o nÃ£o encontrada") from exc
+    except (transactions_repo.TagNotFoundError, transactions_repo.BucketNotFoundError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    affected_transaction_ids = [body.transaction_id, *result.get("similar_ids", [])]
+    action = "similar_apply" if body.apply_to_similar else "single_apply"
+    classification_audit_repo.record(
+        db,
+        action=action,
+        kind=body.kind,
+        target_id=body.target_id,
+        target_name=target_name,
+        match_key=result.get("match_key"),
+        affected_count=len(affected_transaction_ids),
+        preview_total=len(affected_transaction_ids),
+        metadata={
+            "transaction_id": body.transaction_id,
+            "affected_transaction_ids": affected_transaction_ids,
+            "similar_affected": int(result.get("similar_affected", 0) or 0),
+        },
+    )
+    return {
+        "kind": body.kind,
+        "transaction_id": body.transaction_id,
+        "target_id": body.target_id,
+        "target_name": target_name,
+        "match_key": result.get("match_key"),
+        "affected_count": len(affected_transaction_ids),
+        "affected_transaction_ids": affected_transaction_ids,
+        "similar_affected": int(result.get("similar_affected", 0) or 0),
+    }
+
+
 def _preview_item(item: dict[str, Any]) -> dict[str, Any]:
     amount = item.get("display_value", item.get("amount", 0.0))
     return {
@@ -181,6 +241,133 @@ def _classification_candidates(
             break
         page += 1
     return items
+
+
+def _bucket_suggestion(bucket: dict[str, Any] | None, bucket_key: str | None) -> dict[str, Any] | None:
+    if bucket is None:
+        if not bucket_key:
+            return None
+        return {
+            "id": None,
+            "key": bucket_key,
+            "name": bucket_key,
+            "color": None,
+        }
+    return {
+        "id": bucket["id"],
+        "key": bucket["key"],
+        "name": bucket["name"],
+        "color": bucket["color"],
+    }
+
+
+def _suggested_tag(
+    db: Database,
+    item: dict[str, Any],
+    cat_map: dict[str, str],
+    buckets_by_key: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    category = str(item.get("category") or "").strip()
+    category_key = category.lower()
+    tag_name: str | None = None
+    bucket_key: str | None = None
+    source: str | None = None
+
+    if category_key and category_key not in tag_agent.BLOCKED_CATEGORY_KEYS:
+        translated = cat_map.get(category_key)
+        if not translated and category_key in CATEGORY_BUCKET_MAP:
+            translated = category
+        if translated:
+            tag_name = translated
+            bucket_key = CATEGORY_BUCKET_MAP.get(category_key)
+            source = "category"
+
+    if tag_name is None:
+        raw_text = str(item.get("raw_description") or item.get("description") or "").lower()
+        for needle, merchant_tag in tag_agent.TAG_MERCHANT_MAP.items():
+            if needle in raw_text:
+                tag_name, bucket_key = merchant_tag
+                source = "merchant"
+                break
+
+    if tag_name is None:
+        return None
+
+    existing = tags_repo.find_tag_by_name(db, tag_name)
+    bucket = buckets_by_key.get(bucket_key or "")
+    return {
+        "id": existing["id"] if existing else None,
+        "name": existing["name"] if existing else tag_name,
+        "color": existing["color"] if existing else tags_repo.default_tag_color(tag_name),
+        "bucket_id": existing["bucket_id"] if existing else (bucket["id"] if bucket else None),
+        "bucket_key": existing["bucket_key"] if existing else bucket_key,
+        "bucket_name": existing["bucket_name"] if existing else (bucket["name"] if bucket else None),
+        "source": source,
+    }
+
+
+def _classification_suggestions_response(db: Database, month: str | None) -> dict[str, Any]:
+    month = _validate_year_month(month)
+    buckets_repo.seed_buckets(db)
+    tags_repo.seed_tags_if_empty(db)
+    cat_map = mnt.load_overrides()["categorias_pt"]
+    buckets_by_key = {bucket["key"]: bucket for bucket in buckets_repo.list_buckets(db)}
+    groups: dict[str, dict[str, Any]] = {}
+
+    for kind in ("tag", "bucket"):
+        for item in _classification_candidates(db, kind=kind, month=month):
+            raw_category = item.get("category") or "(sem categoria)"
+            group_key = str(raw_category).strip().lower()
+            group = groups.setdefault(
+                group_key,
+                {
+                    "raw_category": raw_category,
+                    "category_label": item.get("category_label") or raw_category,
+                    "sample": item,
+                    "ids": set(),
+                    "missing_tag_ids": set(),
+                    "missing_bucket_ids": set(),
+                    "total_abs_by_id": {},
+                    "examples": [],
+                },
+            )
+            group["ids"].add(item["id"])
+            if kind == "tag":
+                group["missing_tag_ids"].add(item["id"])
+            else:
+                group["missing_bucket_ids"].add(item["id"])
+            amount_abs = round(abs(float(item.get("display_value", item.get("amount", 0.0)) or 0.0)), 2)
+            group["total_abs_by_id"][item["id"]] = amount_abs
+            if len(group["examples"]) < 5 and item["id"] not in {row["id"] for row in group["examples"]}:
+                group["examples"].append(_preview_item(item))
+
+    items: list[dict[str, Any]] = []
+    for group in groups.values():
+        sample = group["sample"]
+        category_key = str(group["raw_category"] or "").strip().lower()
+        bucket_key = CATEGORY_BUCKET_MAP.get(category_key)
+        tag = _suggested_tag(db, sample, cat_map, buckets_by_key)
+        if bucket_key is None and tag is not None:
+            bucket_key = tag.get("bucket_key")
+        bucket = _bucket_suggestion(buckets_by_key.get(bucket_key or ""), bucket_key)
+        translated = mnt.translate_category(str(group["raw_category"]), cat_map)
+        items.append(
+            {
+                "raw_category": group["raw_category"],
+                "category_label": group["category_label"],
+                "suggested_translation": translated,
+                "transaction_count": len(group["ids"]),
+                "missing_tag_count": len(group["missing_tag_ids"]),
+                "missing_bucket_count": len(group["missing_bucket_ids"]),
+                "total_abs": round(sum(group["total_abs_by_id"].values()), 2),
+                "suggested_tag": tag,
+                "suggested_bucket": bucket,
+                "examples": group["examples"],
+            }
+        )
+
+    items.sort(key=lambda row: (-int(row["transaction_count"]), str(row["raw_category"]).lower()))
+    return {"month": month, "total": len(items), "items": items}
 
 
 def _bulk_preview_response(
@@ -248,6 +435,14 @@ def preview_classification_bulk(
     return _bulk_preview_response(db, body)
 
 
+@router.get("/classification/suggestions")
+def list_classification_suggestions(
+    month: str | None = None,
+    db: Database = Depends(get_db),
+) -> dict:
+    return _classification_suggestions_response(db, month)
+
+
 @router.post("/classification/bulk-apply")
 def apply_classification_bulk(
     body: ClassificationBulkRequest,
@@ -276,6 +471,14 @@ def apply_classification_bulk(
         "updated": result["updated"],
         "not_found": result["not_found"],
     }
+
+
+@router.post("/classification/apply")
+def apply_classification(
+    body: ClassificationApplyRequest,
+    db: Database = Depends(get_db),
+) -> dict:
+    return _apply_classification_response(db, body)
 
 
 @router.get("/classification/rules")

@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { Save, Trash2 } from "lucide-react";
+import { BucketSelect } from "@/components/ui/BucketSelect";
 import { SectionCard } from "@/components/ui/SectionCard";
+import { TagSelect } from "@/components/ui/TagSelect";
 import type {
   Bucket,
   MaintenanceClassificationRule,
@@ -51,6 +53,8 @@ function colorDot(color?: string | null) {
 function RuleRow({
   rule,
   targets,
+  buckets,
+  tags,
   disabled,
   draftValue,
   onDraftChange,
@@ -59,6 +63,8 @@ function RuleRow({
 }: {
   rule: MaintenanceClassificationRule;
   targets: RuleTarget[];
+  buckets: Bucket[];
+  tags: Tag[];
   disabled?: boolean;
   draftValue?: number | null;
   onDraftChange: (rule: MaintenanceClassificationRule, targetId: number | null) => void;
@@ -81,24 +87,26 @@ function RuleRow({
         </p>
       </div>
 
-      <label className="space-y-1">
+      <div className="space-y-1">
         <span className="text-xs font-medium text-muted">Destino</span>
-        <select
-          value={selectedTargetId ?? ""}
-          disabled={disabled}
-          onChange={(event) =>
-            onDraftChange(rule, event.target.value ? Number(event.target.value) : null)
-          }
-          className="h-9 w-full rounded-md border border-border bg-surface2 px-2 text-sm text-text outline-none transition focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <option value="">Selecione</option>
-          {targets.map((target) => (
-            <option key={target.id} value={target.id}>
-              {target.name}
-            </option>
-          ))}
-        </select>
-      </label>
+        {rule.kind === "tag" ? (
+          <TagSelect
+            value={selectedTargetId}
+            options={tags}
+            disabled={disabled}
+            onChange={(targetId) => onDraftChange(rule, targetId)}
+            placeholder="Selecione a Tag"
+          />
+        ) : (
+          <BucketSelect
+            value={selectedTargetId}
+            options={buckets}
+            disabled={disabled}
+            onChange={(targetId) => onDraftChange(rule, targetId)}
+            placeholder="Selecione a Meta"
+          />
+        )}
+      </div>
 
       <button
         type="button"
@@ -129,6 +137,8 @@ function RuleGroup({
   kind,
   rules,
   targets,
+  buckets,
+  tags,
   saving,
   drafts,
   onDraftChange,
@@ -140,6 +150,8 @@ function RuleGroup({
   kind: MaintenanceClassificationRuleKind;
   rules: MaintenanceClassificationRule[];
   targets: RuleTarget[];
+  buckets: Bucket[];
+  tags: Tag[];
   saving?: boolean;
   drafts: Record<string, number | null>;
   onDraftChange: (rule: MaintenanceClassificationRule, targetId: number | null) => void;
@@ -165,6 +177,8 @@ function RuleGroup({
               key={ruleKey(rule)}
               rule={rule}
               targets={targets}
+              buckets={buckets}
+              tags={tags}
               disabled={saving}
               draftValue={drafts[ruleKey(rule)]}
               onDraftChange={onDraftChange}
@@ -244,6 +258,8 @@ export function ClassificationRulesPanel({
           kind="tag"
           rules={tagRules}
           targets={tags}
+          buckets={buckets}
+          tags={tags}
           saving={saving}
           drafts={drafts}
           onDraftChange={changeDraft}
@@ -257,6 +273,8 @@ export function ClassificationRulesPanel({
           kind="bucket"
           rules={bucketRules}
           targets={buckets}
+          buckets={buckets}
+          tags={tags}
           saving={saving}
           drafts={drafts}
           onDraftChange={changeDraft}

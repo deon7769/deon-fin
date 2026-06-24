@@ -35,6 +35,7 @@ import {
   useMaintenance,
   useMaintenanceClassificationAudit,
   useMaintenanceClassificationRules,
+  useMaintenanceClassificationSuggestions,
   useMaintenanceSystemTotals,
   usePreviewMaintenanceClassificationBulk,
   useReprocessMaintenanceClassification,
@@ -213,6 +214,7 @@ export default function ManutencaoPage() {
   const tags = useTags();
   const classificationRules = useMaintenanceClassificationRules();
   const classificationAudit = useMaintenanceClassificationAudit();
+  const classificationSuggestions = useMaintenanceClassificationSuggestions(month);
   const saveClassificationRule = useSaveMaintenanceClassificationRule();
   const reprocessClassification = useReprocessMaintenanceClassification();
   const previewClassificationBulk = usePreviewMaintenanceClassificationBulk();
@@ -390,6 +392,9 @@ export default function ManutencaoPage() {
               reprocessing={reprocessClassification.isPending}
               previewing={previewClassificationBulk.isPending}
               applying={applyClassificationBulk.isPending}
+              suggestions={classificationSuggestions.data}
+              suggestionsLoading={classificationSuggestions.isLoading}
+              suggestionsError={classificationSuggestions.error}
               onReprocess={() => reprocessClassification.mutateAsync()}
               onPreviewBulk={(payload) => previewClassificationBulk.mutateAsync(payload)}
               onApplyBulk={async (payload) => {

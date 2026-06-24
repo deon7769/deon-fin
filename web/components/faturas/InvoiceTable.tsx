@@ -20,7 +20,7 @@ type InvoiceTableProps = {
   savingBucket?: boolean;
   savingTag?: boolean;
   onSetBucket: (item: InvoiceItem, bucketId: number | null, applyToSimilar: boolean) => void;
-  onSetTag: (item: InvoiceItem, tagId: number | null) => void;
+  onSetTag: (item: InvoiceItem, tagId: number | null, applyToSimilar: boolean) => void;
   onCreateTag: (name: string) => Promise<Tag>;
 };
 
@@ -92,7 +92,9 @@ export function InvoiceTable({
             options={tags}
             disabled={savingTag}
             loading={tagsLoading}
-            onChange={(tagId) => onSetTag(item, tagId)}
+            onChangeWithPropagation={(tagId, applyToSimilar) =>
+              onSetTag(item, tagId, applyToSimilar)
+            }
             onCreate={onCreateTag}
           />
         ),

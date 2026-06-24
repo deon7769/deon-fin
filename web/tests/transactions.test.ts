@@ -9,6 +9,7 @@ import {
   parseTransactionAmountInput,
   semTagFilterFromSearch,
   transactionCategoryLabel,
+  transactionClassificationFeedback,
   transactionDisplayValue,
   transactionFilterBadges,
   transactionQuery,
@@ -207,6 +208,15 @@ describe("transaction helpers", () => {
     );
     expect(transactionCategoryLabel({ category: "Shopping", category_label: " " })).toBe("Shopping");
     expect(transactionCategoryLabel({ category: null, category_label: null })).toBe("Sem categoria");
+  });
+
+  it("formats classification propagation feedback", () => {
+    expect(transactionClassificationFeedback("tag", { updated: 1, similar_affected: 0 })).toBe(
+      "Tag atualizada.",
+    );
+    expect(transactionClassificationFeedback("bucket", { updated: 1, similar_affected: 3 })).toBe(
+      "Meta atualizada em 4 lançamento(s), incluindo 3 similar(es).",
+    );
   });
 
   it("parses transaction amount input without accepting JavaScript numeric quirks", () => {

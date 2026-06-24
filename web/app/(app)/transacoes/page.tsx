@@ -45,6 +45,7 @@ import { tagSourceLabel } from "@/lib/tags";
 import {
   parseTransactionAmountInput,
   transactionCategoryLabel,
+  transactionClassificationFeedback,
   transactionDisplayValue,
   transactionFilterBadges,
 } from "@/lib/transactions";
@@ -359,6 +360,7 @@ export default function TransacoesPage() {
   const updateTx = useUpdateTransaction();
   const createTx = useCreateTransaction();
   const deleteTx = useDeleteTransaction();
+  const [classificationStatus, setClassificationStatus] = useState<string | null>(null);
   const data = transactionsQuery.data;
   const rows = data?.items ?? EMPTY_TRANSACTIONS;
   const summary = data?.summary ?? { income: 0, expense: 0, balance: 0 };
@@ -402,6 +404,30 @@ export default function TransacoesPage() {
   const createInlineTag = useCallback(
     async (name: string) => createTag.mutateAsync({ name, color: null }),
     [createTag],
+  );
+  const setTransactionBucket = useCallback(
+    async (tx: Transaction, bucketId: number | null, applyToSimilar: boolean) => {
+      setClassificationStatus("Atualizando Meta...");
+      try {
+        const result = await setBucket.mutateAsync({ txId: tx.id, bucketId, applyToSimilar });
+        setClassificationStatus(transactionClassificationFeedback("bucket", result));
+      } catch (error) {
+        setClassificationStatus(errorMessage(error) ?? "Falha ao atualizar Meta.");
+      }
+    },
+    [setBucket],
+  );
+  const setTransactionTag = useCallback(
+    async (tx: Transaction, tagId: number | null, applyToSimilar: boolean) => {
+      setClassificationStatus("Atualizando Tag...");
+      try {
+        const result = await setTag.mutateAsync({ txId: tx.id, tagId, applyToSimilar });
+        setClassificationStatus(transactionClassificationFeedback("tag", result));
+      } catch (error) {
+        setClassificationStatus(errorMessage(error) ?? "Falha ao atualizar Tag.");
+      }
+    },
+    [setTag],
   );
 
   const columns = useMemo<DataTableColumn<Transaction>[]>(
@@ -476,7 +502,7 @@ export default function TransacoesPage() {
             loading={bucketsQuery.isLoading}
             disabled={setBucket.isPending}
             onChangeWithPropagation={(bucketId, applyToSimilar) =>
-              setBucket.mutate({ txId: tx.id, bucketId, applyToSimilar })
+              void setTransactionBucket(tx, bucketId, applyToSimilar)
             }
           />
         ),
@@ -495,7 +521,7 @@ export default function TransacoesPage() {
                 loading={tagsQuery.isLoading}
                 disabled={setTag.isPending || createTag.isPending}
                 onChangeWithPropagation={(tagId, applyToSimilar) =>
-                  setTag.mutate({ txId: tx.id, tagId, applyToSimilar })
+                  void setTransactionTag(tx, tagId, applyToSimilar)
                 }
                 onCreate={createInlineTag}
               />
@@ -574,6 +600,8 @@ export default function TransacoesPage() {
       savingsGoalsQuery.data,
       savingsGoalsQuery.isLoading,
       setBucket,
+      setTransactionBucket,
+      setTransactionTag,
       setTag,
       tagsQuery.data,
       tagsQuery.isLoading,
@@ -703,6 +731,12 @@ export default function TransacoesPage() {
             {transactionsQuery.isError ? (
               <div className="rounded-md border border-negative/40 bg-negative/10 px-4 py-3 text-sm text-negative">
                 {errorMessage(transactionsQuery.error) ?? "Não foi possível carregar as transações."}
+              </div>
+            ) : null}
+
+            {classificationStatus ? (
+              <div className="rounded-md border border-border bg-surface2 px-4 py-3 text-sm text-muted">
+                {classificationStatus}
               </div>
             ) : null}
 

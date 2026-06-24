@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, ReceiptText } from "lucide-react";
 import { CardPicker } from "@/components/faturas/CardPicker";
@@ -21,6 +21,7 @@ import { useCreateTag } from "@/hooks/useTagMutations";
 import { useTags } from "@/hooks/useTags";
 import { formatMonthYear } from "@/lib/format";
 import { invoiceCategoryLabel } from "@/lib/invoices";
+import { transactionClassificationFeedback } from "@/lib/transactions";
 import { usePeriod } from "@/providers/PeriodProvider";
 import type { CardItem, InvoiceItem, Tag } from "@/lib/types";
 
@@ -97,6 +98,7 @@ export default function FaturasPage() {
   const setTag = useSetTag();
   const createTag = useCreateTag();
   const reorderCards = useReorderAccounts();
+  const [classificationStatus, setClassificationStatus] = useState<string | null>(null);
   const cards = cardsQuery.data?.items ?? EMPTY_CARDS;
   const canSaveCardOrder = sameCardOrderDraft(draftOrder, cards);
   const displayCards = useMemo(() => {
@@ -122,6 +124,32 @@ export default function FaturasPage() {
 
   const createInlineTag = async (name: string): Promise<Tag> =>
     createTag.mutateAsync({ name, color: null });
+
+  const setInvoiceBucket = useCallback(
+    async (item: InvoiceItem, bucketId: number | null, applyToSimilar: boolean) => {
+      setClassificationStatus("Atualizando Meta...");
+      try {
+        const result = await setBucket.mutateAsync({ txId: item.id, bucketId, applyToSimilar });
+        setClassificationStatus(transactionClassificationFeedback("bucket", result));
+      } catch (error) {
+        setClassificationStatus(error instanceof Error ? error.message : "Falha ao atualizar Meta.");
+      }
+    },
+    [setBucket],
+  );
+
+  const setInvoiceTag = useCallback(
+    async (item: InvoiceItem, tagId: number | null, applyToSimilar: boolean) => {
+      setClassificationStatus("Atualizando Tag...");
+      try {
+        const result = await setTag.mutateAsync({ txId: item.id, tagId, applyToSimilar });
+        setClassificationStatus(transactionClassificationFeedback("tag", result));
+      } catch (error) {
+        setClassificationStatus(error instanceof Error ? error.message : "Falha ao atualizar Tag.");
+      }
+    },
+    [setTag],
+  );
 
   const startOrder = () => {
     setDraftOrder(cards.map((card) => card.id));
@@ -203,23 +231,30 @@ export default function FaturasPage() {
               title="Lançamentos"
               subtitle={formatMonthYear(invoice.invoice.reference_month)}
             >
-              <InvoiceTable
-                items={invoice.items}
-                buckets={bucketsQuery.data ?? []}
-                tags={tagsQuery.data ?? []}
-                loading={invoiceQuery.isLoading}
-                bucketsLoading={bucketsQuery.isLoading}
-                tagsLoading={tagsQuery.isLoading}
-                savingBucket={setBucket.isPending}
-                savingTag={setTag.isPending || createTag.isPending}
-                onSetBucket={(item: InvoiceItem, bucketId, applyToSimilar) =>
-                  setBucket.mutate({ txId: item.id, bucketId, applyToSimilar })
-                }
-                onSetTag={(item: InvoiceItem, tagId) =>
-                  setTag.mutate({ txId: item.id, tagId })
-                }
-                onCreateTag={createInlineTag}
-              />
+              <div className="space-y-3">
+                {classificationStatus ? (
+                  <div className="rounded-md border border-border bg-surface2 px-4 py-3 text-sm text-muted">
+                    {classificationStatus}
+                  </div>
+                ) : null}
+                <InvoiceTable
+                  items={invoice.items}
+                  buckets={bucketsQuery.data ?? []}
+                  tags={tagsQuery.data ?? []}
+                  loading={invoiceQuery.isLoading}
+                  bucketsLoading={bucketsQuery.isLoading}
+                  tagsLoading={tagsQuery.isLoading}
+                  savingBucket={setBucket.isPending}
+                  savingTag={setTag.isPending || createTag.isPending}
+                  onSetBucket={(item: InvoiceItem, bucketId, applyToSimilar) =>
+                    void setInvoiceBucket(item, bucketId, applyToSimilar)
+                  }
+                  onSetTag={(item: InvoiceItem, tagId, applyToSimilar) =>
+                    void setInvoiceTag(item, tagId, applyToSimilar)
+                  }
+                  onCreateTag={createInlineTag}
+                />
+              </div>
             </SectionCard>
 
             <SectionCard title="Resumo por categoria">

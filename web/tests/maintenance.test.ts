@@ -326,6 +326,67 @@ describe("maintenance helpers", () => {
     expect(html).toContain("Aplicar em massa");
   });
 
+  it("renders structured classification suggestions", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        PrivacyProvider,
+        null,
+        createElement(ClassificationHealthPanel, {
+          data: sample,
+          month: "2026-06",
+          suggestions: {
+            month: "2026-06",
+            total: 1,
+            items: [
+              {
+                raw_category: "Digital services",
+                category_label: "Servi\u00e7os digitais",
+                suggested_translation: "Servi\u00e7os digitais",
+                transaction_count: 2,
+                missing_tag_count: 2,
+                missing_bucket_count: 2,
+                total_abs: 240,
+                suggested_tag: {
+                  id: null,
+                  name: "Servi\u00e7os digitais",
+                  color: "#0ea5e9",
+                  bucket_id: 1,
+                  bucket_key: "prazeres",
+                  bucket_name: "Prazeres",
+                  source: "category",
+                },
+                suggested_bucket: {
+                  id: 1,
+                  key: "prazeres",
+                  name: "Prazeres",
+                  color: "#f97316",
+                },
+                examples: [
+                  {
+                    id: "tx-openai",
+                    date: "2026-06-10",
+                    description: "OpenAI ChatGPT",
+                    account_name: "Card",
+                    category: "Digital services",
+                    category_label: "Servi\u00e7os digitais",
+                    amount_abs: 120,
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      ),
+    );
+
+    expect(html).toContain("Sugest\u00f5es de classifica\u00e7\u00e3o");
+    expect(html).toContain("Servi\u00e7os digitais");
+    expect(html).toContain("Tag sugerida");
+    expect(html).toContain("Meta sugerida");
+    expect(html).toContain("2 lan\u00e7amento(s)");
+    expect(html).toContain("OpenAI ChatGPT");
+  });
+
   it("renders classification rules review panel", () => {
     const html = renderToStaticMarkup(
       createElement(ClassificationRulesPanel, {
@@ -361,6 +422,7 @@ describe("maintenance helpers", () => {
     expect(html).toContain("-uber viagem");
     expect(html).toContain("Conforto");
     expect(html).toContain("Remover regra");
+    expect(html).not.toContain("<select");
   });
 
   it("renders classification audit history", () => {

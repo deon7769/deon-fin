@@ -350,6 +350,19 @@ export function transactionCategoryLabel(
   return transaction.category_label?.trim() || transaction.category?.trim() || "Sem categoria";
 }
 
+export function transactionClassificationFeedback(
+  kind: "tag" | "bucket",
+  result: { updated?: number; similar_affected?: number },
+): string {
+  const label = kind === "tag" ? "Tag" : "Meta";
+  const similar = Math.max(0, Number(result.similar_affected ?? 0));
+  if (similar > 0) {
+    const total = Math.max(1, Number(result.updated ?? 1)) + similar;
+    return `${label} atualizada em ${total} lançamento(s), incluindo ${similar} similar(es).`;
+  }
+  return `${label} atualizada.`;
+}
+
 export function parseTransactionAmountInput(value: string): number | null {
   const raw = value.trim();
   if (!raw || /[^0-9.,]/.test(raw)) {
