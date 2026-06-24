@@ -20,7 +20,7 @@ export function BucketBudgetCard({ category, month }: BucketBudgetCardProps) {
     : category.tx_count === 0
       ? "Sem gastos"
       : formatBudgetPercent(category.used_pct);
-  const href = `/transacoes?month=${month}&bucket_ids=${category.id}`;
+  const href = `/transacoes?month=${month}&bucket_ids=${category.id}&type=expense`;
 
   return (
     <article className="rounded-card border border-border bg-bg p-4">

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 
+from src.agent.buckets import apply_buckets_to_database
+from src.agent.tags import apply_tags_to_database
 from src.importers.pluggy_sync import sync_pluggy_item
 from src.storage import Database
+from src.web.repositories import buckets_repo, tags_repo, transactions_repo
 
 
 class FakePluggy:
@@ -90,4 +93,41 @@ def test_sync_pluggy_item_populates_account_balances(tmp_db: Database):
     assert card_balance["brand"] == "MASTERCARD"
     assert card_balance["last4"] == "1234"
     assert card_balance["sync_status"] == "UPDATED"
+    assert tmp_db.count_transactions("pluggy:bank-1") == 1
+
+
+def test_sync_pluggy_item_preserves_manual_transaction_classification(tmp_db: Database):
+    tmp_db.upsert_pluggy_item("item-1", connector_name="Banco Inter", status="UPDATED")
+    sync_pluggy_item(FakePluggy(), tmp_db, "item-1", since=date(2026, 6, 1))
+
+    buckets_repo.seed_buckets(tmp_db)
+    bucket_id = int(
+        tmp_db._conn.execute(
+            "SELECT id FROM budget_buckets WHERE key='metas'"
+        ).fetchone()["id"]
+    )
+    tag_id = int(tags_repo.create_tag(tmp_db, name="Reserva", bucket_id=bucket_id)["id"])
+    tx_id = tmp_db._conn.execute(
+        "SELECT id FROM transactions WHERE external_id='tx-bank-1'"
+    ).fetchone()["id"]
+
+    transactions_repo.set_bucket(tmp_db, tx_id, bucket_id=bucket_id)
+    transactions_repo.set_tag(tmp_db, tx_id, tag_id=tag_id)
+
+    sync_pluggy_item(FakePluggy(), tmp_db, "item-1", since=date(2026, 6, 1))
+    apply_buckets_to_database(tmp_db)
+    apply_tags_to_database(tmp_db)
+
+    row = tmp_db._conn.execute(
+        """
+        SELECT bucket_id, bucket_source, tag_id, tag_source
+          FROM transactions
+         WHERE id=?
+        """,
+        (tx_id,),
+    ).fetchone()
+    assert row["bucket_id"] == bucket_id
+    assert row["bucket_source"] == "manual"
+    assert row["tag_id"] == tag_id
+    assert row["tag_source"] == "manual"
     assert tmp_db.count_transactions("pluggy:bank-1") == 1

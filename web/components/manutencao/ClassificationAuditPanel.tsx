@@ -39,6 +39,7 @@ function metadataMonth(item: MaintenanceClassificationAuditItem): string | null 
 
 function AuditItem({ item }: { item: MaintenanceClassificationAuditItem }) {
   const month = metadataMonth(item);
+  const primaryLabel = item.target_name ?? item.match_key ?? "Sem destino";
 
   return (
     <li className="grid gap-3 border-b border-border py-3 last:border-b-0 lg:grid-cols-[minmax(0,1.2fr)_minmax(140px,0.45fr)_minmax(120px,0.35fr)] lg:items-center">
@@ -50,11 +51,9 @@ function AuditItem({ item }: { item: MaintenanceClassificationAuditItem }) {
           <span className="text-xs font-medium text-muted">{kindLabel(item.kind)}</span>
           {month ? <span className="text-xs text-muted">{month}</span> : null}
         </div>
-        <p className="mt-2 truncate text-sm font-semibold text-text">
-          {item.match_key ?? item.target_name ?? "Sem destino"}
-        </p>
-        {item.match_key && item.target_name ? (
-          <p className="mt-1 text-xs text-muted">{item.target_name}</p>
+        <p className="mt-2 truncate text-sm font-semibold text-text">{primaryLabel}</p>
+        {item.match_key ? (
+          <p className="mt-1 truncate font-mono text-xs text-muted">Chave: {item.match_key}</p>
         ) : null}
       </div>
 

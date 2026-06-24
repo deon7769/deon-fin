@@ -80,11 +80,11 @@ function RuleRow({
   return (
     <div className="grid gap-3 rounded-md border border-border bg-bg p-3 lg:grid-cols-[minmax(0,1fr)_minmax(180px,240px)_auto_auto] lg:items-center">
       <div className="min-w-0">
-        <p className="font-mono text-sm font-semibold text-text">{rule.match_key}</p>
-        <p className="mt-1 flex min-w-0 items-center gap-2 text-xs text-muted">
+        <p className="flex min-w-0 items-center gap-2 text-sm font-semibold text-text">
           {colorDot(currentColor)}
           <span className="truncate">{targetName({ ...rule, target_id: selectedTargetId }, targets)}</span>
         </p>
+        <p className="mt-1 truncate font-mono text-xs text-muted">Chave: {rule.match_key}</p>
       </div>
 
       <div className="space-y-1">

@@ -419,6 +419,7 @@ describe("maintenance helpers", () => {
     expect(html).toContain("Regras aprendidas");
     expect(html).toContain("-ifood mercado");
     expect(html).toContain("Mercado");
+    expect(html.indexOf("Mercado")).toBeLessThan(html.indexOf("-ifood mercado"));
     expect(html).toContain("-uber viagem");
     expect(html).toContain("Conforto");
     expect(html).toContain("Remover regra");
@@ -464,7 +465,27 @@ describe("maintenance helpers", () => {
     expect(html).toContain("Aplicação em massa");
     expect(html).toContain("Mercado");
     expect(html).toContain("-ifood mercado");
+    expect(html.indexOf("Mercado")).toBeLessThan(html.indexOf("-ifood mercado"));
     expect(html).toContain("4 de 4");
+  });
+
+  it("renders compact editable sections as responsive field groups", () => {
+    const Component = EditableMaintenanceTable as ComponentType<Record<string, unknown>>;
+    const html = renderToStaticMarkup(
+      createElement(Component, {
+        section: "receitas",
+        title: "Receitas",
+        rows: [{ membro: "Davi", valor: 5000 }],
+        columns: [
+          { key: "membro", label: "Membro", type: "text" },
+          { key: "valor", label: "Valor", type: "number" },
+        ],
+        onChange: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('data-layout="cards"');
+    expect(html).not.toContain("<table");
   });
 
   it("renders wide editable sections as responsive field groups", () => {

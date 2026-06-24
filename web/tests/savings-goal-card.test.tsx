@@ -38,6 +38,7 @@ describe("SavingsGoalCard", () => {
     expect(html).toContain("R$ 750,00");
     expect(html).toContain("manual + R$ 250,00 em lançamentos");
     expect(html).toContain("2 lançamentos");
+    expect(html).toContain('href="/transacoes?savings_goal_id=1"');
     expect(html).toContain("Conciliar");
   });
 });

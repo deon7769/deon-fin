@@ -1,6 +1,7 @@
 "use client";
 
 import { Edit3, Link2, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { cn } from "@/lib/cn";
@@ -84,9 +85,19 @@ export function SavingsGoalCard({
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-2">
-        <span className="rounded-md border border-border px-2 py-1 text-xs text-muted">
-          {linkedCount} {linkedCount === 1 ? "lançamento" : "lançamentos"}
-        </span>
+        {linkedCount > 0 ? (
+          <Link
+            href={`/transacoes?savings_goal_id=${goal.id}`}
+            aria-label={`Ver lançamentos de ${goal.name}`}
+            className="rounded-md border border-border px-2 py-1 text-xs text-muted transition hover:bg-surface2 hover:text-text"
+          >
+            {linkedCount} {linkedCount === 1 ? "lançamento" : "lançamentos"}
+          </Link>
+        ) : (
+          <span className="rounded-md border border-border px-2 py-1 text-xs text-muted">
+            {linkedCount} {linkedCount === 1 ? "lançamento" : "lançamentos"}
+          </span>
+        )}
         <div className="flex justify-end gap-2">
           {onReconcile ? (
             <button
