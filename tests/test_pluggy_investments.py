@@ -162,3 +162,42 @@ def test_sync_pluggy_investments_is_idempotent_and_updates_values(tmp_db: Databa
     wege = next(asset for asset in assets if asset["ticker"] == "WEGE3")
     assert wege["quantity"] == 11.0
     assert wege["current_value"] == 473.0
+
+
+def test_sync_preserves_manual_asset_class_override(tmp_db: Database):
+    fake = FakePluggyInvestments()
+    sync_pluggy_investments(fake, tmp_db, "item-btg")
+    mxrf = next(asset for asset in portfolio_repo.list_assets(tmp_db) if asset["ticker"] == "MXRF11")
+
+    updated = portfolio_repo.update_asset(tmp_db, mxrf["id"], asset_class="etf")
+
+    assert updated is not None
+    assert updated["asset_class"] == "etf"
+    assert updated["manually_adjusted"] is True
+
+    fake.list_investments = lambda item_id, page_size=500: [
+        {
+            "id": "inv-mxrf",
+            "itemId": "item-btg",
+            "name": "MXRF11",
+            "code": "MXRF11",
+            "type": "EQUITY",
+            "subtype": "STOCK",
+            "currencyCode": "BRL",
+            "quantity": 21,
+            "value": 11.0,
+            "balance": 231.0,
+            "amount": 231.0,
+            "date": "2026-06-22T03:00:00.000Z",
+            "status": "ACTIVE",
+        }
+    ]
+    fake.list_investment_transactions = lambda investment_id, page_size=500: []
+
+    sync_pluggy_investments(fake, tmp_db, "item-btg")
+
+    refreshed = next(asset for asset in portfolio_repo.list_assets(tmp_db, include_inactive=True) if asset["ticker"] == "MXRF11")
+    assert refreshed["asset_class"] == "etf"
+    assert refreshed["quantity"] == 21.0
+    assert refreshed["current_value"] == 231.0
+    assert refreshed["manually_adjusted"] is True

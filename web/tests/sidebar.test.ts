@@ -50,7 +50,8 @@ describe("sidebar helpers", () => {
   it("keeps the desktop sidebar pinned while page content scrolls", () => {
     const html = renderToStaticMarkup(createElement(PrivacyProvider, null, createElement(Sidebar)));
 
-    expect(html).toContain("sticky top-0");
+    expect(html).toContain("fixed left-0 top-0");
+    expect(html).toContain('aria-hidden="true"');
     expect(html).toContain("h-screen");
     expect(html).toContain("transition-[width]");
   });

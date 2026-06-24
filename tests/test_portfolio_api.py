@@ -300,6 +300,58 @@ def test_auvp11_is_etf_and_class_edit_survives_pluggy_sync(client, tmp_db):
     assert refreshed["current_value"] == 222.0
 
 
+def test_manual_asset_class_override_survives_pluggy_sync(client, tmp_db):
+    asset_id = portfolio_repo.upsert_pluggy_asset(
+        tmp_db,
+        {
+            "id": "inv-mxrf",
+            "name": "MXRF11",
+            "code": "MXRF11",
+            "type": "EQUITY",
+            "subtype": "STOCK",
+            "currencyCode": "BRL",
+            "quantity": 20,
+            "value": 10,
+            "balance": 200,
+            "status": "ACTIVE",
+            "date": "2026-06-21T03:00:00.000Z",
+        },
+    )
+
+    patched = client.patch(
+        f"/api/investments/assets/{asset_id}",
+        json={"asset_class": "etf"},
+    )
+
+    assert patched.status_code == 200
+    assert patched.json()["asset_class"] == "etf"
+    assert patched.json()["manually_adjusted"] is True
+
+    portfolio_repo.upsert_pluggy_asset(
+        tmp_db,
+        {
+            "id": "inv-mxrf",
+            "name": "MXRF11",
+            "code": "MXRF11",
+            "type": "EQUITY",
+            "subtype": "STOCK",
+            "currencyCode": "BRL",
+            "quantity": 21,
+            "value": 11,
+            "balance": 231,
+            "status": "ACTIVE",
+            "date": "2026-06-22T03:00:00.000Z",
+        },
+    )
+
+    refreshed = client.get("/api/investments").json()["assets"][0]
+    assert refreshed["asset_class"] == "etf"
+    assert refreshed["asset_class_label"] == "ETFs"
+    assert refreshed["quantity"] == 21.0
+    assert refreshed["current_value"] == 231.0
+    assert refreshed["manually_adjusted"] is True
+
+
 def test_investment_profiles_and_targets_contract(client):
     profiles = client.get("/api/investments/profiles")
 

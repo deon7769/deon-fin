@@ -276,7 +276,7 @@ function InvestmentAssetModalContent({
 
           {asset?.source === "pluggy" ? (
             <p className="rounded-md border border-blue-400/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-200">
-              Alterar a quantidade marca o ativo como ajuste manual. No próximo sync, o Pluggy volta a prevalecer.
+              Tipo alterado manualmente permanece no próximo sync. Quantidade e valores continuam sendo atualizados pelo Pluggy.
             </p>
           ) : null}
 

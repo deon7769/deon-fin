@@ -78,7 +78,8 @@ describe("CardPicker", () => {
     );
 
     expect(html).toContain("Salvar ordem");
-    expect(html).toContain("Mover Cartao A para baixo");
-    expect(html).toContain("Mover Cartao B para cima");
+    expect(html).toContain("Use as setas para reposicionar os cart");
+    expect(html).toContain("Mover Cartao A para a direita");
+    expect(html).toContain("Mover Cartao B para a esquerda");
   });
 });

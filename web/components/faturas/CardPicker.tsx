@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, CreditCard } from "lucide-react";
+import { ArrowLeft, ArrowRight, CreditCard } from "lucide-react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { MoneyText } from "@/components/ui/MoneyText";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -96,6 +96,7 @@ export function CardPicker({
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <p className="mr-auto text-xs text-muted">Use as setas para reposicionar os cartÃµes.</p>
           <button
             type="button"
             onClick={onCancelOrder}
@@ -130,21 +131,21 @@ export function CardPicker({
                   type="button"
                   onClick={() => onMove?.(card.id, -1)}
                   disabled={savingOrder || index === 0}
-                  aria-label={`Mover ${card.name} para cima`}
-                  title="Mover para cima"
+                  aria-label={`Mover ${card.name} para a esquerda`}
+                  title="Mover para a esquerda"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted transition hover:bg-surface2 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <ArrowUp size={15} aria-hidden />
+                  <ArrowLeft size={15} aria-hidden />
                 </button>
                 <button
                   type="button"
                   onClick={() => onMove?.(card.id, 1)}
                   disabled={savingOrder || index === cards.length - 1}
-                  aria-label={`Mover ${card.name} para baixo`}
-                  title="Mover para baixo"
+                  aria-label={`Mover ${card.name} para a direita`}
+                  title="Mover para a direita"
                   className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted transition hover:bg-surface2 hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <ArrowDown size={15} aria-hidden />
+                  <ArrowRight size={15} aria-hidden />
                 </button>
               </div>
             </article>

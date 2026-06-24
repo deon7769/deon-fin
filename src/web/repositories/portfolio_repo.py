@@ -56,6 +56,8 @@ B3_ETF_TICKERS = {
     "XFIX11",
 }
 
+_MANUAL_ASSET_CLASS_OVERRIDE_KEY = "_manual_asset_class_override"
+
 INVESTMENT_PROFILES: dict[str, dict[str, Any]] = {
     "conservador": {
         "key": "conservador",
@@ -119,6 +121,21 @@ def _number(value: Any) -> float | None:
 def _text(value: Any) -> str | None:
     text = str(value or "").strip()
     return text or None
+
+
+def _load_meta(raw: str | None) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _manual_asset_class_override(meta: dict[str, Any]) -> str | None:
+    value = _text(meta.get(_MANUAL_ASSET_CLASS_OVERRIDE_KEY))
+    return value if value in VALID_ASSET_CLASSES else None
 
 
 def _descriptor(value: Any) -> str:
@@ -206,13 +223,13 @@ def upsert_pluggy_asset(db: Database, investment: dict[str, Any]) -> int:
     if not external_id:
         raise ValueError("investimento Pluggy sem id")
     ticker = (_text(investment.get("code")) or _text(investment.get("name")))
-    asset_class = classify_pluggy_investment(investment)
+    detected_asset_class = classify_pluggy_investment(investment)
     current_value = _number(investment.get("balance"))
     if current_value is None:
         current_value = _number(investment.get("amount"))
     unit_price = _number(investment.get("value"))
     quantity = _number(investment.get("quantity")) or 0.0
-    metadata = {
+    provider_metadata = {
         key: value
         for key, value in investment.items()
         if key
@@ -233,13 +250,20 @@ def upsert_pluggy_asset(db: Database, investment: dict[str, Any]) -> int:
     with db._cursor() as cur:  # type: ignore[attr-defined]
         row = cur.execute(
             """
-            SELECT id
+            SELECT id, metadata_json
               FROM portfolio_assets
              WHERE source='pluggy'
                AND external_id=?
             """,
             (external_id,),
         ).fetchone()
+        manual_class_override = (
+            _manual_asset_class_override(_load_meta(row["metadata_json"])) if row else None
+        )
+        asset_class = manual_class_override or detected_asset_class
+        metadata = dict(provider_metadata)
+        if manual_class_override:
+            metadata[_MANUAL_ASSET_CLASS_OVERRIDE_KEY] = manual_class_override
         values = (
             asset_class,
             ticker.upper() if ticker else None,
@@ -257,8 +281,13 @@ def upsert_pluggy_asset(db: Database, investment: dict[str, Any]) -> int:
             json.dumps(metadata, ensure_ascii=False),
         )
         if row:
+            manual_sql = (
+                "manually_adjusted=1, manual_adjusted_at=COALESCE(manual_adjusted_at, datetime('now'))"
+                if manual_class_override
+                else "manually_adjusted=0, manual_adjusted_at=NULL"
+            )
             cur.execute(
-                """
+                f"""
                 UPDATE portfolio_assets
                    SET asset_class=?,
                        ticker=?,
@@ -274,8 +303,7 @@ def upsert_pluggy_asset(db: Database, investment: dict[str, Any]) -> int:
                        status=?,
                        as_of_date=?,
                        metadata_json=?,
-                       manually_adjusted=0,
-                       manual_adjusted_at=NULL,
+                       {manual_sql},
                        updated_at=datetime('now')
                  WHERE id=?
                 """,
@@ -408,8 +436,18 @@ def update_asset(db: Database, asset_id: int, **updates: Any) -> dict[str, Any] 
         return None
 
     asset_class = current["asset_class"]
+    metadata_json = current["metadata_json"]
+    metadata_changed = False
+    class_changed = False
     if "asset_class" in updates and updates["asset_class"] is not None:
-        asset_class = _validate_asset_class(updates["asset_class"])
+        next_asset_class = _validate_asset_class(updates["asset_class"])
+        class_changed = next_asset_class != asset_class
+        asset_class = next_asset_class
+        if class_changed and current["source"] == "pluggy":
+            metadata = _load_meta(metadata_json)
+            metadata[_MANUAL_ASSET_CLASS_OVERRIDE_KEY] = asset_class
+            metadata_json = json.dumps(metadata, ensure_ascii=False)
+            metadata_changed = True
     ticker = current["ticker"]
     if "ticker" in updates:
         ticker = _ticker(updates["ticker"])
@@ -437,10 +475,23 @@ def update_asset(db: Database, asset_id: int, **updates: Any) -> dict[str, Any] 
     else:
         current_value = _number(current["current_value"]) or 0.0
     manual_adjust_sql = ""
-    if quantity_changed:
+    if quantity_changed or metadata_changed:
         manual_adjust_sql = ", manually_adjusted=1, manual_adjusted_at=datetime('now')"
+    metadata_sql = ", metadata_json=?" if metadata_changed else ""
 
     with db._cursor() as cur:  # type: ignore[attr-defined]
+        params: list[Any] = [
+            asset_class,
+            ticker,
+            name,
+            quantity,
+            manual_value,
+            _money(current_value),
+            price_source,
+        ]
+        if metadata_changed:
+            params.append(metadata_json)
+        params.append(asset_id)
         cur.execute(
             f"""
             UPDATE portfolio_assets
@@ -452,19 +503,11 @@ def update_asset(db: Database, asset_id: int, **updates: Any) -> dict[str, Any] 
                    current_value=?,
                    price_source=?,
                    updated_at=datetime('now')
+                   {metadata_sql}
                    {manual_adjust_sql}
              WHERE id=?
             """,
-            (
-                asset_class,
-                ticker,
-                name,
-                quantity,
-                manual_value,
-                _money(current_value),
-                price_source,
-                asset_id,
-            ),
+            params,
         )
     return get_asset(db, asset_id)
 

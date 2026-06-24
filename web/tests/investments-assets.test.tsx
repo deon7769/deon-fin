@@ -136,6 +136,7 @@ describe("investment asset form", () => {
     expect(editHtml).toContain("WEGE3");
     expect(editHtml).toContain("Remover");
     expect(editHtml).toContain("Atualizar e fechar");
+    expect(editHtml).toContain("Tipo alterado manualmente permanece no pr");
   });
 
   it("renders score answers inside the edit modal", () => {
