@@ -642,3 +642,84 @@ def test_legacy_dashboard_and_summary_untouched(client, tmp_db):
     assert {"transactions", "inflow", "outflow", "net", "by_category"}.issubset(
         summary.json().keys()
     )
+
+
+def test_dashboard_current_month_kpis_match_painel_summary_with_system_totals_policy(
+    client,
+    tmp_db,
+):
+    current_month = reference_month(date.today(), 1)
+    _seed_accounts(tmp_db)
+    tmp_db.upsert_account(
+        Account(
+            id="painel-excluded",
+            source="test",
+            institution="Banco Excluido",
+            name="Conta Excluida",
+            type="CHECKING",
+        )
+    )
+    tmp_db._conn.execute(
+        """
+        INSERT INTO account_total_settings (
+            account_id, include_balance, include_transactions
+        )
+        VALUES ('painel-excluded', 1, 0)
+        """
+    )
+    tmp_db._conn.commit()
+    _insert_tx(
+        tmp_db,
+        external_id="dashboard-parity-income",
+        posted_at=_date_for_month(current_month),
+        amount="1000.00",
+        description="Renda incluido",
+        category="Salario",
+        reference_month_value=current_month,
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="dashboard-parity-visible-card",
+        account_id="painel-card",
+        posted_at=_date_for_month(current_month),
+        amount="80.00",
+        description="Compra cartao visivel",
+        category="Lazer",
+        reference_month_value=current_month,
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="dashboard-parity-excluded-account",
+        account_id="painel-excluded",
+        posted_at=_date_for_month(current_month),
+        amount="-500.00",
+        description="Compra conta excluida",
+        category="Mercado",
+        reference_month_value=current_month,
+    )
+    _insert_tx(
+        tmp_db,
+        external_id="dashboard-parity-hidden",
+        account_id="painel-card",
+        posted_at=_date_for_month(current_month),
+        amount="120.00",
+        description="Compra oculta",
+        category="Lazer",
+        reference_month_value=current_month,
+        hidden=True,
+    )
+
+    painel = client.get(f"/api/painel/summary?month={current_month}").json()
+    dashboard = client.get("/api/dashboard?meses=1").json()
+
+    assert painel == {
+        "month": current_month,
+        "result": 920.0,
+        "income": 1000.0,
+        "expense": 80.0,
+        "accounts_balance": 0.0,
+        "accounts_balance_available": False,
+    }
+    assert dashboard["kpis"]["renda_media"] == painel["income"]
+    assert dashboard["kpis"]["gasto_medio"] == painel["expense"]
+    assert dashboard["kpis"]["saldo_medio"] == painel["result"]

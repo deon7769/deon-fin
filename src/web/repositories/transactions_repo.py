@@ -19,7 +19,7 @@ from ...agent.context import (
 from ...agent.buckets import CATEGORY_BUCKET_MAP, match_key_for
 from ...storage import Database, Transaction
 from ...storage.reference_month import reference_month
-from . import buckets_repo, profile_repo, savings_repo, tags_repo
+from . import buckets_repo, profile_repo, savings_repo, system_totals_repo, tags_repo
 
 
 class TransactionNotFoundError(ValueError):
@@ -582,10 +582,13 @@ def _compute_summary(
                a.type AS account_type
           FROM transactions t
           LEFT JOIN accounts a ON a.id = t.account_id
+          {system_totals_repo.account_transaction_policy_join("t", "summary_total_settings")}
          WHERE {where}
+           AND {system_totals_repo.account_transaction_policy_where("summary_total_settings")}
         """,
         params,
     ).fetchall()
+    rows = system_totals_repo.filter_rows_by_movement_policy(db, rows)
 
     income = 0.0
     expense = 0.0

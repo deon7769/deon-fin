@@ -46,7 +46,7 @@ from ..pluggy import PluggyAPIError, PluggyClient
 from ..storage import Database
 from .dependencies import get_db, get_pluggy
 from .errors import error_response, install_error_handlers
-from .repositories import profile_repo, transactions_repo
+from .repositories import profile_repo, system_totals_repo, transactions_repo
 from .routers import accounts, buckets, budget, invoices, maintenance, painel, portfolio, profile, savings, simulations, tags, transactions
 
 WEB_DIR = Path(__file__).resolve().parent
@@ -820,14 +820,33 @@ def create_app() -> FastAPI:
             since = _months_cutoff(date.today(), period_months)
         else:
             since = date.today() - timedelta(days=days or 30)
-        rows = db.list_transactions(since=since, limit=10_000)
+        rows = db._conn.execute(
+            f"""
+            SELECT t.id,
+                   t.account_id,
+                   t.posted_at,
+                   t.amount,
+                   t.description,
+                   t.raw_description,
+                   t.category,
+                   a.type AS account_type
+              FROM transactions t
+              LEFT JOIN accounts a ON a.id = t.account_id
+              {system_totals_repo.account_transaction_policy_join("t", "summary_total_settings")}
+             WHERE t.posted_at >= ?
+               AND COALESCE(t.hidden, 0) = 0
+               AND {system_totals_repo.account_transaction_policy_where("summary_total_settings")}
+             ORDER BY t.posted_at DESC, t.id
+             LIMIT 10000
+            """,
+            (since.isoformat(),),
+        ).fetchall()
+        rows = system_totals_repo.filter_rows_by_movement_policy(db, rows)
         accounts = db.list_accounts()
-        account_types = {row["id"]: row["type"] for row in accounts}
         owner_names = account_owner_aliases(accounts)
-        internal_transfer_income_ids = internal_transfer_credit_ids(rows, account_types=account_types)
+        internal_transfer_income_ids = internal_transfer_credit_ids(rows)
         internal_transfer_ids = internal_transfer_row_ids(
             rows,
-            account_types=account_types,
             owner_names=owner_names,
         )
 
@@ -835,7 +854,7 @@ def create_app() -> FastAPI:
         inflow = 0.0
         for r in rows:
             amount = float(r["amount"])
-            account_type = account_types.get(r["account_id"])
+            account_type = r["account_type"]
             category = r["category"] or "(sem categoria)"
 
             inflow += income_value(

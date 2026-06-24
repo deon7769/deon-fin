@@ -106,6 +106,43 @@ def test_get_transactions_shape_and_bad_params(client, tmp_db):
     assert invalid_source.json()["error"]["code"] == "validation_error"
 
 
+def test_get_transactions_summary_respects_account_total_policy(client, tmp_db):
+    _seed_account(tmp_db)
+    _seed_account(tmp_db, account_id="api-excluded")
+    _insert_tx(tmp_db, external_id="api-policy-included")
+    excluded = Transaction(
+        account_id="api-excluded",
+        posted_at=date(2026, 6, 20),
+        amount=Decimal("-100.00"),
+        description="Compra fora dos totais",
+        raw_description="COMPRA FORA DOS TOTAIS",
+        category="AlimentaÃ§Ã£o - Restaurante",
+        source="test",
+        external_id="api-policy-excluded",
+    )
+    tmp_db.insert_transactions([excluded])
+    tmp_db._conn.execute(
+        "UPDATE transactions SET reference_month='2026-06' WHERE id=?",
+        (excluded.id,),
+    )
+    tmp_db._conn.execute(
+        """
+        INSERT INTO account_total_settings (
+            account_id, include_balance, include_transactions
+        )
+        VALUES ('api-excluded', 1, 0)
+        """
+    )
+    tmp_db._conn.commit()
+
+    response = client.get("/api/transactions?month=2026-06&page=1&page_size=10")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert body["summary"] == {"income": 0.0, "expense": 42.5, "balance": -42.5}
+
+
 def test_get_transactions_rejects_ambiguous_period_filters(client, tmp_db):
     _seed_account(tmp_db)
     _insert_tx(tmp_db, external_id="api-period-contract-1")

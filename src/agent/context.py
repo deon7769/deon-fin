@@ -648,11 +648,24 @@ def build_financial_context(
     accounts = db.list_accounts()
     acct_type = {a["id"]: (a["type"] or "").upper() for a in accounts}
     owner_names = account_owner_aliases(accounts)
-    rows = db.list_transactions(limit=100_000)
-    internal_transfer_income_ids = internal_transfer_credit_ids(rows, account_types=acct_type)
+    from ..web.repositories import system_totals_repo
+
+    rows = db._conn.execute(
+        f"""
+        SELECT t.*, a.type AS account_type
+          FROM transactions t
+          LEFT JOIN accounts a ON a.id = t.account_id
+          {system_totals_repo.account_transaction_policy_join("t", "financial_context_totals")}
+         WHERE COALESCE(t.hidden, 0) = 0
+           AND {system_totals_repo.account_transaction_policy_where("financial_context_totals")}
+         ORDER BY t.posted_at DESC, t.id
+         LIMIT 100000
+        """
+    ).fetchall()
+    rows = system_totals_repo.filter_rows_by_movement_policy(db, rows)
+    internal_transfer_income_ids = internal_transfer_credit_ids(rows)
     internal_transfer_ids = internal_transfer_row_ids(
         rows,
-        account_types=acct_type,
         owner_names=owner_names,
     )
 
@@ -671,7 +684,7 @@ def build_financial_context(
         posted = r["posted_at"]
         amount = float(r["amount"])
         category = _category_name(r["category"])
-        account_type = acct_type.get(r["account_id"], "")
+        account_type = (r["account_type"] or acct_type.get(r["account_id"], "")).upper()
         is_credit = account_type in CREDIT_TYPES
 
         # Valor de consumo (positivo = gastou; negativo = estorno).

@@ -761,6 +761,68 @@ def test_summary_uses_canonical_financial_signs(client, tmp_db):
     assert by_category == {"Shopping": -250.0, "Groceries": -100.0}
 
 
+def test_summary_respects_visibility_and_account_total_policy(client, tmp_db):
+    posted = date.today() - timedelta(days=3)
+    tmp_db.upsert_account(Account(id="bank-included", source="test", name="Bank", type="BANK"))
+    tmp_db.upsert_account(Account(id="bank-excluded", source="test", name="Reserve", type="BANK"))
+    tmp_db.upsert_account(Account(id="card1", source="test", name="Card", type="CREDIT"))
+    tmp_db._conn.execute(
+        """
+        INSERT INTO account_total_settings (
+            account_id, include_balance, include_transactions
+        )
+        VALUES ('bank-excluded', 1, 0)
+        """
+    )
+    tmp_db.insert_transactions([
+        Transaction(
+            account_id="bank-included",
+            posted_at=posted,
+            amount=Decimal("1000.00"),
+            description="Salary",
+            source="test",
+            category="Salary",
+        ),
+        Transaction(
+            account_id="bank-excluded",
+            posted_at=posted,
+            amount=Decimal("-500.00"),
+            description="Excluded account groceries",
+            source="test",
+            category="Groceries",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=posted,
+            amount=Decimal("120.00"),
+            description="Hidden card purchase",
+            source="test",
+            category="Shopping",
+            external_id="hidden-card-purchase",
+        ),
+        Transaction(
+            account_id="card1",
+            posted_at=posted,
+            amount=Decimal("80.00"),
+            description="Visible card purchase",
+            source="test",
+            category="Shopping",
+        ),
+    ])
+    tmp_db._conn.execute(
+        "UPDATE transactions SET hidden=1 WHERE external_id='hidden-card-purchase'"
+    )
+    tmp_db._conn.commit()
+
+    s = client.get("/api/summary?days=30").json()
+
+    assert s["transactions"] == 2
+    assert s["inflow"] == 1000.0
+    assert s["outflow"] == -80.0
+    assert s["net"] == 920.0
+    assert s["by_category"] == [{"category": "Shopping", "amount": -80.0}]
+
+
 def test_summary_counts_external_pix_sent_as_outflow(client, tmp_db):
     posted = date.today() - timedelta(days=3)
     tmp_db.upsert_account(Account(id="bank1", source="test", name="Bank", type="BANK"))
