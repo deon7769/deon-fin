@@ -13,9 +13,13 @@ echo "root: $ROOT"
 
 if [ -f "$db_path" ]; then
   mkdir -p "$backup_dir"
-  backup_path="$backup_dir/financas.db.${timestamp}.bak"
-  cp -p "$db_path" "$backup_path"
-  echo "database backup: $backup_path"
+  for source_path in "$db_path" "$db_path-wal" "$db_path-shm"; do
+    if [ -f "$source_path" ]; then
+      backup_path="$backup_dir/$(basename "$source_path").${timestamp}.bak"
+      cp -p "$source_path" "$backup_path"
+      echo "database backup: $backup_path"
+    fi
+  done
 else
   echo "database backup: skipped, $db_path not found"
 fi

@@ -28,3 +28,12 @@ def test_deploy_frontend_smoke_checks_root_with_basic_auth_support():
     assert "/_next/" in script
     assert "frontend ok:" in script
     assert "frontend check failed after" in script
+
+
+def test_deploy_backup_includes_sqlite_sidecars():
+    script = Path("scripts/vps_deploy.sh").read_text(encoding="utf-8")
+
+    assert '"$db_path"' in script
+    assert '"$db_path-wal"' in script
+    assert '"$db_path-shm"' in script
+    assert "basename" in script

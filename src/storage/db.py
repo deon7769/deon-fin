@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
@@ -10,6 +11,8 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 from .migrations import apply_migrations
+
+SQLITE_BUSY_TIMEOUT_MS = 5000
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
@@ -102,30 +105,52 @@ class Transaction:
 
 
 class Database:
+    _write_locks_guard = threading.Lock()
+    _write_locks: dict[Path, Any] = {}
+
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._write_lock = self._lock_for_path(self.path.resolve())
         # check_same_thread=False: FastAPI's sync routes run on a starlette
         # threadpool, so a connection created elsewhere needs cross-thread use.
         # Safe here because each Database instance is used by one request at a
         # time (FastAPI creates a fresh one per request via get_db dependency).
         self._conn = sqlite3.connect(str(self.path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
-        self._conn.executescript(SCHEMA)
-        apply_migrations(self._conn)
-        self._conn.commit()
+        with self._write_lock:
+            self._configure_connection()
+            self._conn.executescript(SCHEMA)
+            apply_migrations(self._conn)
+            self._conn.commit()
+
+    @classmethod
+    def _lock_for_path(cls, path: Path) -> Any:
+        with cls._write_locks_guard:
+            lock = cls._write_locks.get(path)
+            if lock is None:
+                lock = threading.RLock()
+                cls._write_locks[path] = lock
+            return lock
+
+    def _configure_connection(self) -> None:
+        self._conn.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA foreign_keys=ON")
 
     @contextmanager
     def _cursor(self) -> Iterator[sqlite3.Cursor]:
-        cur = self._conn.cursor()
-        try:
-            yield cur
-            self._conn.commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-        finally:
-            cur.close()
+        with self._write_lock:
+            cur = self._conn.cursor()
+            try:
+                yield cur
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+            finally:
+                cur.close()
 
     def upsert_account(self, account: Account) -> None:
         import json
