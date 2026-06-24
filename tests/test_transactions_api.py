@@ -106,6 +106,48 @@ def test_get_transactions_shape_and_bad_params(client, tmp_db):
     assert invalid_source.json()["error"]["code"] == "validation_error"
 
 
+def test_get_transactions_rejects_ambiguous_period_filters(client, tmp_db):
+    _seed_account(tmp_db)
+    _insert_tx(tmp_db, external_id="api-period-contract-1")
+
+    mixed_period = client.get("/api/transactions?month=2026-06&from=2026-06-01&to=2026-06-30")
+    assert mixed_period.status_code == 422
+    assert mixed_period.json()["error"]["code"] == "validation_error"
+
+    partial_from = client.get("/api/transactions?from=2026-06-01")
+    assert partial_from.status_code == 422
+    assert partial_from.json()["error"]["code"] == "validation_error"
+
+    partial_to = client.get("/api/transactions?to=2026-06-30")
+    assert partial_to.status_code == 422
+    assert partial_to.json()["error"]["code"] == "validation_error"
+
+    inverted = client.get("/api/transactions?from=2026-06-30&to=2026-06-01")
+    assert inverted.status_code == 422
+    assert inverted.json()["error"]["code"] == "validation_error"
+
+
+def test_get_transactions_accepts_none_in_multivalue_filters(client, tmp_db):
+    _seed_account(tmp_db)
+    tx = _insert_tx(tmp_db, external_id="api-none-filter-1")
+
+    bucket_none = client.get("/api/transactions?bucket_ids=none")
+    assert bucket_none.status_code == 200
+    assert [item["id"] for item in bucket_none.json()["items"]] == [tx.id]
+
+    tag_none = client.get("/api/transactions?tag_ids=none")
+    assert tag_none.status_code == 200
+    assert [item["id"] for item in tag_none.json()["items"]] == [tx.id]
+
+    source_none = client.get("/api/transactions?bucket_source=none&tag_source=none")
+    assert source_none.status_code == 200
+    assert [item["id"] for item in source_none.json()["items"]] == [tx.id]
+
+    goal_none = client.get("/api/transactions?savings_goal_id=none")
+    assert goal_none.status_code == 200
+    assert [item["id"] for item in goal_none.json()["items"]] == [tx.id]
+
+
 def test_get_transactions_translates_pluggy_category_labels(client, tmp_db):
     _seed_account(tmp_db)
     tx = Transaction(

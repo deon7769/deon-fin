@@ -32,7 +32,7 @@ export type TransactionFilters = {
 };
 
 export type TransactionAdvancedFilterPatch = {
-  date?: string | null;
+  range?: TransactionDateRange | null;
   month?: string | null;
   type?: TransactionType | null;
   hidden?: TransactionHiddenFilter;

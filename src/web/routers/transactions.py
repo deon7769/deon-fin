@@ -222,11 +222,21 @@ def get_transactions(
     if min is not None and max is not None and min > max:
         raise HTTPException(status_code=422, detail="faixa de valor inválida")
 
+    parsed_month = _validate_year_month(month)
+    parsed_from = _parse_date(from_, field="from")
+    parsed_to = _parse_date(to, field="to")
+    if parsed_month and (parsed_from or parsed_to):
+        raise HTTPException(status_code=422, detail="periodo ambiguo")
+    if (parsed_from is None) != (parsed_to is None):
+        raise HTTPException(status_code=422, detail="periodo incompleto")
+    if parsed_from and parsed_to and parsed_from > parsed_to:
+        raise HTTPException(status_code=422, detail="periodo invalido")
+
     return transactions_repo.list_transactions(
         db,
-        month=_validate_year_month(month),
-        date_from=_parse_date(from_, field="from"),
-        date_to=_parse_date(to, field="to"),
+        month=parsed_month,
+        date_from=parsed_from,
+        date_to=parsed_to,
         q=q,
         type=type,
         amount_min=min,

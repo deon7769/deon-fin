@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { Filter, X } from "lucide-react";
+import { FilterMultiSelect, type FilterMultiSelectOption } from "@/components/ui/FilterMultiSelect";
 import { cn } from "@/lib/cn";
 import type {
   TransactionAdvancedFilterPatch,
@@ -23,8 +24,10 @@ type SavingsGoalFilterOption = {
 };
 
 type DraftState = {
-  date: string;
+  periodMode: "month" | "range";
   month: string;
+  rangeFrom: string;
+  rangeTo: string;
   amountMin: string;
   amountMax: string;
   type: TransactionType | "";
@@ -52,11 +55,11 @@ type TransactionAdvancedFiltersProps = {
 };
 
 function draftFromFilters(filters: TransactionFilters): DraftState {
-  const exactDate =
-    filters.range?.from && filters.range.from === filters.range.to ? filters.range.from : "";
   return {
-    date: exactDate,
+    periodMode: filters.range ? "range" : "month",
     month: filters.month ?? "",
+    rangeFrom: filters.range?.from ?? "",
+    rangeTo: filters.range?.to ?? "",
     amountMin: filters.amountMin === null || filters.amountMin === undefined ? "" : String(filters.amountMin),
     amountMax: filters.amountMax === null || filters.amountMax === undefined ? "" : String(filters.amountMax),
     type: filters.type ?? "",
@@ -81,33 +84,19 @@ function parseAmount(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function selectedValues(options: HTMLCollectionOf<HTMLOptionElement>): string[] {
-  return Array.from(options)
-    .filter((option) => option.selected)
-    .map((option) => option.value);
-}
-
-function parseNullableIds(values: string[]): Array<number | null> {
-  return values
-    .map((value) => (value === "none" ? null : Number(value)))
-    .filter((value): value is number | null => value === null || Number.isInteger(value));
-}
-
-function nullableIdValues(values: Array<number | null>): string[] {
-  return values.map((value) => (value === null ? "none" : String(value)));
-}
-
-function classificationSourceValues(values: string[]): TransactionClassificationSourceFilter[] {
-  return values.filter(
-    (value): value is TransactionClassificationSourceFilter =>
-      value === "manual" || value === "rule" || value === "auto" || value === "none",
-  );
-}
-
 function toggleNullableId(values: Array<number | null>, next: number | null): Array<number | null> {
   const exists = values.some((value) => value === next);
   return exists ? values.filter((value) => value !== next) : [...values, next];
 }
+
+const CLASSIFICATION_SOURCE_OPTIONS: Array<
+  FilterMultiSelectOption<TransactionClassificationSourceFilter>
+> = [
+  { value: "manual", label: "Manual" },
+  { value: "rule", label: "Regra" },
+  { value: "auto", label: "Automática" },
+  { value: "none", label: "Sem origem" },
+];
 
 function FieldGroup({
   title,
@@ -204,15 +193,46 @@ export function TransactionAdvancedFilters({
     () => [...buckets].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
     [buckets],
   );
+  const tagOptions = useMemo<Array<FilterMultiSelectOption<number | null>>>(
+    () => [
+      { value: null, label: "Sem tag" },
+      ...tags.map((tag) => ({
+        value: tag.id,
+        label: tag.name,
+        color: tag.color,
+        searchText: tag.bucket_name ?? "",
+      })),
+    ],
+    [tags],
+  );
+  const accountOptions = useMemo<Array<FilterMultiSelectOption<string>>>(
+    () => accounts.map((account) => ({ value: account.id, label: account.name })),
+    [accounts],
+  );
+  const savingsGoalOptions = useMemo<Array<FilterMultiSelectOption<number | null>>>(
+    () => [
+      { value: null, label: "Sem meta poupança" },
+      ...savingsGoals.map((goal) => ({ value: goal.id, label: goal.name })),
+    ],
+    [savingsGoals],
+  );
+  const rangeInvalid =
+    draft.periodMode === "range" &&
+    (!draft.rangeFrom || !draft.rangeTo || draft.rangeFrom > draft.rangeTo);
 
   if (!open) {
     return null;
   }
 
   const apply = () => {
+    const range =
+      draft.periodMode === "range" && !rangeInvalid
+        ? { from: draft.rangeFrom, to: draft.rangeTo }
+        : null;
+
     onApply({
-      date: draft.date || null,
-      month: draft.date ? null : draft.month || null,
+      range,
+      month: draft.periodMode === "month" ? draft.month || null : null,
       type: draft.type || null,
       hidden: draft.hidden,
       amountMin: parseAmount(draft.amountMin),
@@ -256,32 +276,74 @@ export function TransactionAdvancedFilters({
         </div>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
-          <FieldGroup title="Período" onClear={() => setDraft((value) => ({ ...value, date: "" }))}>
-            <input
-              type="date"
-              value={draft.date}
-              onChange={(event) =>
-                setDraft((value) => ({ ...value, date: event.target.value }))
-              }
-              className="h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
-              aria-label="Selecione uma data"
-            />
-          </FieldGroup>
-
           <FieldGroup
-            title="Mês de referência"
-            onClear={() => setDraft((value) => ({ ...value, month: "" }))}
+            title="Período"
+            onClear={() =>
+              setDraft((value) => ({
+                ...value,
+                periodMode: "month",
+                month: "",
+                rangeFrom: "",
+                rangeTo: "",
+              }))
+            }
           >
-            <input
-              type="month"
-              value={draft.month}
-              disabled={!!draft.date}
-              onChange={(event) =>
-                setDraft((value) => ({ ...value, month: event.target.value }))
-              }
-              className="h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-text outline-none disabled:opacity-50"
-              aria-label="Selecione um mês de referência"
-            />
+            <div className="grid grid-cols-2 gap-2">
+              <ToggleButton
+                selected={draft.periodMode === "month"}
+                onClick={() => setDraft((value) => ({ ...value, periodMode: "month" }))}
+              >
+                Mês de referência
+              </ToggleButton>
+              <ToggleButton
+                selected={draft.periodMode === "range"}
+                onClick={() => setDraft((value) => ({ ...value, periodMode: "range" }))}
+              >
+                Intervalo
+              </ToggleButton>
+            </div>
+
+            {draft.periodMode === "month" ? (
+              <input
+                type="month"
+                value={draft.month}
+                onChange={(event) =>
+                  setDraft((value) => ({ ...value, month: event.target.value }))
+                }
+                className="h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
+                aria-label="Selecione um mês de referência"
+              />
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <label className="space-y-1 text-xs font-medium text-muted">
+                  Data inicial
+                  <input
+                    type="date"
+                    value={draft.rangeFrom}
+                    onChange={(event) =>
+                      setDraft((value) => ({ ...value, rangeFrom: event.target.value }))
+                    }
+                    className="h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
+                  />
+                </label>
+                <label className="space-y-1 text-xs font-medium text-muted">
+                  Data final
+                  <input
+                    type="date"
+                    value={draft.rangeTo}
+                    onChange={(event) =>
+                      setDraft((value) => ({ ...value, rangeTo: event.target.value }))
+                    }
+                    className="h-10 w-full rounded-md border border-border bg-bg px-3 text-sm text-text outline-none"
+                  />
+                </label>
+                {rangeInvalid ? (
+                  <p className="col-span-2 text-xs text-negative">
+                    Informe data inicial e final em ordem cronológica.
+                  </p>
+                ) : null}
+              </div>
+            )}
           </FieldGroup>
 
           <FieldGroup
@@ -380,99 +442,58 @@ export function TransactionAdvancedFilters({
           </FieldGroup>
 
           <FieldGroup title="Tags" onClear={() => setDraft((value) => ({ ...value, tagIds: [] }))}>
-            <select
-              multiple
-              value={nullableIdValues(draft.tagIds)}
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  tagIds: parseNullableIds(selectedValues(event.currentTarget.selectedOptions)),
-                }))
-              }
-              className="min-h-24 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none"
-              aria-label="Selecione as tags"
-            >
-              <option value="none">Sem tag</option>
-              {tags.map((tag) => (
-                <option key={tag.id} value={tag.id}>
-                  {tag.name}
-                </option>
-              ))}
-            </select>
+            <FilterMultiSelect
+              label="Tag"
+              values={draft.tagIds}
+              options={tagOptions}
+              onChange={(tagIds) => setDraft((value) => ({ ...value, tagIds }))}
+              placeholder="Buscar em Tags"
+              searchPlaceholder="Buscar em Tags"
+            />
           </FieldGroup>
 
           <FieldGroup
             title="Origem da Meta"
             onClear={() => setDraft((value) => ({ ...value, bucketSources: [] }))}
           >
-            <select
-              multiple
-              value={draft.bucketSources}
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  bucketSources: classificationSourceValues(
-                    selectedValues(event.currentTarget.selectedOptions),
-                  ),
-                }))
+            <FilterMultiSelect
+              label="Origem da Meta"
+              values={draft.bucketSources}
+              options={CLASSIFICATION_SOURCE_OPTIONS}
+              onChange={(bucketSources) =>
+                setDraft((value) => ({ ...value, bucketSources }))
               }
-              className="min-h-24 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none"
-              aria-label="Selecione as origens da meta"
-            >
-              <option value="manual">Manual</option>
-              <option value="rule">Regra</option>
-              <option value="auto">Automática</option>
-              <option value="none">Sem origem</option>
-            </select>
+              placeholder="Buscar em Origem da Meta"
+              searchPlaceholder="Buscar em Origem da Meta"
+            />
           </FieldGroup>
 
           <FieldGroup
             title="Origem da Tag"
             onClear={() => setDraft((value) => ({ ...value, tagSources: [] }))}
           >
-            <select
-              multiple
-              value={draft.tagSources}
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  tagSources: classificationSourceValues(
-                    selectedValues(event.currentTarget.selectedOptions),
-                  ),
-                }))
-              }
-              className="min-h-24 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none"
-              aria-label="Selecione as origens da tag"
-            >
-              <option value="manual">Manual</option>
-              <option value="rule">Regra</option>
-              <option value="auto">Automática</option>
-              <option value="none">Sem origem</option>
-            </select>
+            <FilterMultiSelect
+              label="Origem da Tag"
+              values={draft.tagSources}
+              options={CLASSIFICATION_SOURCE_OPTIONS}
+              onChange={(tagSources) => setDraft((value) => ({ ...value, tagSources }))}
+              placeholder="Buscar em Origem da Tag"
+              searchPlaceholder="Buscar em Origem da Tag"
+            />
           </FieldGroup>
 
           <FieldGroup
             title="Contas"
             onClear={() => setDraft((value) => ({ ...value, accountIds: [] }))}
           >
-            <select
-              multiple
-              value={draft.accountIds}
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  accountIds: selectedValues(event.currentTarget.selectedOptions),
-                }))
-              }
-              className="min-h-24 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none"
-              aria-label="Selecione as contas"
-            >
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.name}
-                </option>
-              ))}
-            </select>
+            <FilterMultiSelect
+              label="Conta"
+              values={draft.accountIds}
+              options={accountOptions}
+              onChange={(accountIds) => setDraft((value) => ({ ...value, accountIds }))}
+              placeholder="Buscar em Contas"
+              searchPlaceholder="Buscar em Contas"
+            />
           </FieldGroup>
 
           <FieldGroup
@@ -539,27 +560,16 @@ export function TransactionAdvancedFilters({
             title="Metas de poupança"
             onClear={() => setDraft((value) => ({ ...value, savingsGoalIds: [] }))}
           >
-            <select
-              multiple
-              value={nullableIdValues(draft.savingsGoalIds)}
-              onChange={(event) =>
-                setDraft((value) => ({
-                  ...value,
-                  savingsGoalIds: parseNullableIds(
-                    selectedValues(event.currentTarget.selectedOptions),
-                  ),
-                }))
+            <FilterMultiSelect
+              label="Meta poupança"
+              values={draft.savingsGoalIds}
+              options={savingsGoalOptions}
+              onChange={(savingsGoalIds) =>
+                setDraft((value) => ({ ...value, savingsGoalIds }))
               }
-              className="min-h-20 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text outline-none"
-              aria-label="Selecione as metas de poupança"
-            >
-              <option value="none">Sem meta poupança</option>
-              {savingsGoals.map((goal) => (
-                <option key={goal.id} value={goal.id}>
-                  {goal.name}
-                </option>
-              ))}
-            </select>
+              placeholder="Buscar em Metas de poupança"
+              searchPlaceholder="Buscar em Metas de poupança"
+            />
           </FieldGroup>
         </div>
 
@@ -577,7 +587,8 @@ export function TransactionAdvancedFilters({
           <button
             type="button"
             onClick={apply}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:brightness-95"
+            disabled={rangeInvalid}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-accent px-4 text-sm font-semibold text-accentFg transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Filter size={16} aria-hidden />
             Aplicar Filtros

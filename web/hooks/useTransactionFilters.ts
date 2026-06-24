@@ -109,10 +109,10 @@ export function useTransactionFilters() {
       }
     };
 
-    if ("date" in patch || "month" in patch) {
-      if (patch.date) {
-        params.set("from", patch.date);
-        params.set("to", patch.date);
+    if ("range" in patch || "month" in patch) {
+      if (patch.range?.from && patch.range.to) {
+        params.set("from", patch.range.from);
+        params.set("to", patch.range.to);
         params.delete("month");
       } else {
         params.delete("from");
