@@ -121,7 +121,10 @@ requests, and static SPA assets to load. Other `/api/*` data endpoints require a
 valid `deon_session` cookie, and protected browser `GET`/`HEAD` routes redirect
 unauthenticated users to `/login`. The frontend build must also set
 `NEXT_PUBLIC_AUTH_ENABLED=true`, otherwise the static app will not participate in
-the login flow.
+the login flow. Mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`, and similar
+unsafe methods) are rejected with `403 invalid_origin` unless the `Origin` or
+`Referer` matches the request host/proxy origin or an explicit `CORS_ORIGINS`
+entry used for local development.
 
 ## SQLite migration dry run
 

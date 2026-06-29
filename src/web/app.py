@@ -10,6 +10,7 @@ import time as _time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -149,6 +150,53 @@ def _session_response_for_missing_auth(path: str, method: str) -> Response:
             "Sessão necessária",
         )
     return RedirectResponse("/login", status_code=303)
+
+
+def _session_requires_origin_check(method: str) -> bool:
+    return method.upper() not in {"GET", "HEAD", "OPTIONS", "TRACE"}
+
+
+def _normalized_origin(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        parsed = urlsplit(value.strip())
+    except ValueError:
+        return None
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def _request_base_origin(request: Request) -> str:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+    scheme = forwarded_proto or request.url.scheme
+    host = forwarded_host or request.headers.get("host") or request.url.netloc
+    return f"{scheme.lower()}://{host.lower()}"
+
+
+def _session_allowed_origins(request: Request) -> set[str]:
+    origins = {_request_base_origin(request)}
+    for configured in getattr(settings, "cors_origins", []) or []:
+        if configured == "*":
+            continue
+        origin = _normalized_origin(configured)
+        if origin:
+            origins.add(origin)
+    return origins
+
+
+def _session_origin_allowed(request: Request) -> bool:
+    origin = _normalized_origin(request.headers.get("origin"))
+    if origin:
+        return origin in _session_allowed_origins(request)
+
+    referer = _normalized_origin(request.headers.get("referer"))
+    if referer:
+        return referer in _session_allowed_origins(request)
+
+    return False
 
 
 def _session_from_request(request: Request) -> AuthSession | None:
@@ -727,6 +775,13 @@ def create_app() -> FastAPI:
                 if auth_session is None:
                     return _session_response_for_missing_auth(request.url.path, request.method)
                 request.state.auth_session = auth_session
+
+            if _session_requires_origin_check(request.method) and not _session_origin_allowed(request):
+                return error_response(
+                    403,
+                    "invalid_origin",
+                    "Origem da requisição inválida",
+                )
             return await call_next(request)
 
         pw = settings.app_password

@@ -236,3 +236,146 @@ def test_session_auth_allows_options_preflight(monkeypatch, tmp_db):
 
     assert response.status_code == 200
     assert calls == []
+
+
+def test_session_auth_rejects_unsafe_request_without_origin(monkeypatch, tmp_db):
+    def fake_session_from_request(request):
+        return AuthSession(
+            session_id="session-1",
+            user_id="user-1",
+            email="davi@example.com",
+            display_name="Davi",
+            family_id="family-1",
+            family_name="Familia Principal",
+            family_role="owner",
+        )
+
+    monkeypatch.setattr(
+        "src.web.app._session_from_request",
+        fake_session_from_request,
+        raising=False,
+    )
+    client = _client(monkeypatch, tmp_db, _settings(session_auth_enabled=True))
+
+    response = client.put(
+        "/api/profile",
+        cookies={SESSION_COOKIE_NAME: "raw-token"},
+        json={
+            "name": "Davi Alves",
+            "email": "davi@example.com",
+            "monthly_income": 1000,
+            "financial_month_start_day": 1,
+            "goals_text": "",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "invalid_origin"
+
+
+def test_session_auth_rejects_foreign_origin_for_unsafe_request(monkeypatch, tmp_db):
+    def fake_session_from_request(request):
+        return AuthSession(
+            session_id="session-1",
+            user_id="user-1",
+            email="davi@example.com",
+            display_name="Davi",
+            family_id="family-1",
+            family_name="Familia Principal",
+            family_role="owner",
+        )
+
+    monkeypatch.setattr(
+        "src.web.app._session_from_request",
+        fake_session_from_request,
+        raising=False,
+    )
+    client = _client(monkeypatch, tmp_db, _settings(session_auth_enabled=True))
+
+    response = client.put(
+        "/api/profile",
+        headers={"Origin": "https://evil.example"},
+        cookies={SESSION_COOKIE_NAME: "raw-token"},
+        json={
+            "name": "Davi Alves",
+            "email": "davi@example.com",
+            "monthly_income": 1000,
+            "financial_month_start_day": 1,
+            "goals_text": "",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "invalid_origin"
+
+
+def test_session_auth_allows_configured_origin_for_unsafe_request(monkeypatch, tmp_db):
+    def fake_session_from_request(request):
+        return AuthSession(
+            session_id="session-1",
+            user_id="user-1",
+            email="davi@example.com",
+            display_name="Davi",
+            family_id="family-1",
+            family_name="Familia Principal",
+            family_role="owner",
+        )
+
+    monkeypatch.setattr(
+        "src.web.app._session_from_request",
+        fake_session_from_request,
+        raising=False,
+    )
+    client = _client(monkeypatch, tmp_db, _settings(session_auth_enabled=True))
+
+    response = client.put(
+        "/api/profile",
+        headers={"Origin": "http://localhost:3000"},
+        cookies={SESSION_COOKIE_NAME: "raw-token"},
+        json={
+            "name": "Davi Alves",
+            "email": "davi@example.com",
+            "monthly_income": 1000,
+            "financial_month_start_day": 1,
+            "goals_text": "",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["saved"] is True
+
+
+def test_session_auth_allows_same_origin_referer_for_unsafe_request(monkeypatch, tmp_db):
+    def fake_session_from_request(request):
+        return AuthSession(
+            session_id="session-1",
+            user_id="user-1",
+            email="davi@example.com",
+            display_name="Davi",
+            family_id="family-1",
+            family_name="Familia Principal",
+            family_role="owner",
+        )
+
+    monkeypatch.setattr(
+        "src.web.app._session_from_request",
+        fake_session_from_request,
+        raising=False,
+    )
+    client = _client(monkeypatch, tmp_db, _settings(session_auth_enabled=True))
+
+    response = client.put(
+        "/api/profile",
+        headers={"Referer": "http://testserver/perfil"},
+        cookies={SESSION_COOKIE_NAME: "raw-token"},
+        json={
+            "name": "Davi Alves",
+            "email": "davi@example.com",
+            "monthly_income": 1000,
+            "financial_month_start_day": 1,
+            "goals_text": "",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["saved"] is True
