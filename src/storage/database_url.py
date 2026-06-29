@@ -50,10 +50,13 @@ def parse_database_url(raw: str, *, project_root: Path) -> ParsedDatabaseUrl:
         )
 
     if "://" not in value:
+        path = Path(value)
+        if not path.is_absolute():
+            path = project_root / path
         return ParsedDatabaseUrl(
             kind=DatabaseKind.SQLITE,
             raw=value,
-            sqlite_path=Path(value),
+            sqlite_path=path,
         )
 
     raise ValueError(f"Unsupported DATABASE_URL: {value}")
