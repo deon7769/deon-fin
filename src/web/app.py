@@ -10,6 +10,7 @@ import time as _time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from fastapi import BackgroundTasks, Body, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,14 +41,16 @@ from ..agent.tags import apply_tags_to_database
 from ..agent.simulator import simular_amortizacao, simular_compra
 from ..agent.cards import card_monthly_breakdown
 from ..agent import maintenance as mnt
+from ..auth.sessions import SESSION_COOKIE_NAME, AuthSession, current_session
 from ..config import settings
 from ..importers import sync_pluggy_item
 from ..pluggy import PluggyAPIError, PluggyClient
 from ..storage import Database
+from ..storage.postgres import connect_postgres
 from .dependencies import get_db, get_pluggy
 from .errors import error_response, install_error_handlers
 from .repositories import profile_repo, system_totals_repo, transactions_repo
-from .routers import accounts, buckets, budget, invoices, maintenance, painel, portfolio, profile, savings, simulations, tags, transactions
+from .routers import auth, accounts, buckets, budget, invoices, maintenance, painel, portfolio, profile, savings, simulations, tags, transactions
 
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
@@ -119,6 +122,95 @@ def _web_dist_dir() -> Path:
 def _legacy_ui_enabled() -> bool:
     value = os.environ.get("LEGACY_UI", "")
     return value.lower() in {"1", "true", "yes"}
+
+
+def _session_auth_enabled() -> bool:
+    return bool(getattr(settings, "session_auth_enabled", False))
+
+
+def _session_public_api_path(path: str) -> bool:
+    return path == "/api/health" or path.startswith("/api/auth/")
+
+
+def _session_public_path(path: str, method: str) -> bool:
+    if method == "OPTIONS":
+        return True
+    if _session_public_api_path(path):
+        return True
+    if path in {"/login", "/login/", "/favicon.ico", "/world.geo.json"}:
+        return True
+    return path.startswith("/_next/") or path.startswith("/static/")
+
+
+def _session_response_for_missing_auth(path: str, method: str) -> Response:
+    if path.startswith("/api/") or method not in {"GET", "HEAD"}:
+        return error_response(
+            401,
+            "session_required",
+            "Sessão necessária",
+        )
+    return RedirectResponse("/login", status_code=303)
+
+
+def _session_requires_origin_check(method: str) -> bool:
+    return method.upper() not in {"GET", "HEAD", "OPTIONS", "TRACE"}
+
+
+def _normalized_origin(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        parsed = urlsplit(value.strip())
+    except ValueError:
+        return None
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def _request_base_origin(request: Request) -> str:
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+    scheme = forwarded_proto or request.url.scheme
+    host = forwarded_host or request.headers.get("host") or request.url.netloc
+    return f"{scheme.lower()}://{host.lower()}"
+
+
+def _session_allowed_origins(request: Request) -> set[str]:
+    origins = {_request_base_origin(request)}
+    for configured in getattr(settings, "cors_origins", []) or []:
+        if configured == "*":
+            continue
+        origin = _normalized_origin(configured)
+        if origin:
+            origins.add(origin)
+    return origins
+
+
+def _session_origin_allowed(request: Request) -> bool:
+    origin = _normalized_origin(request.headers.get("origin"))
+    if origin:
+        return origin in _session_allowed_origins(request)
+
+    referer = _normalized_origin(request.headers.get("referer"))
+    if referer:
+        return referer in _session_allowed_origins(request)
+
+    return False
+
+
+def _session_from_request(request: Request) -> AuthSession | None:
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not token:
+        return None
+
+    pepper = getattr(settings, "auth_pepper", None)
+    if not pepper:
+        raise RuntimeError("AUTH_PEPPER is required for session authentication")
+
+    auth_database_url = getattr(settings, "auth_database_url", None) or settings.database_url
+    with connect_postgres(auth_database_url) as conn:
+        return current_session(conn, token, pepper=pepper)
 
 
 def _next_index_exists() -> bool:
@@ -652,6 +744,7 @@ def create_app() -> FastAPI:
     next_assets = _web_dist_dir() / "_next"
     if next_assets.exists():
         app.mount("/_next", StaticFiles(directory=str(next_assets)), name="next-assets")
+    app.include_router(auth.router)
     app.include_router(accounts.router)
     app.include_router(buckets.router)
     app.include_router(budget.router)
@@ -668,8 +761,32 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def _basic_auth(request: Request, call_next):
         """Protege tudo com Basic Auth quando APP_PASSWORD está definido."""
+        if _session_auth_enabled():
+            if not _session_public_path(request.url.path, request.method):
+                try:
+                    auth_session = _session_from_request(request)
+                except Exception:
+                    log.exception("Session authentication failed before route handling")
+                    return error_response(
+                        503,
+                        "session_auth_unavailable",
+                        "Autenticação por sessão indisponível",
+                    )
+
+                if auth_session is None:
+                    return _session_response_for_missing_auth(request.url.path, request.method)
+                request.state.auth_session = auth_session
+
+            if _session_requires_origin_check(request.method) and not _session_origin_allowed(request):
+                return error_response(
+                    403,
+                    "invalid_origin",
+                    "Origem da requisição inválida",
+                )
+            return await call_next(request)
+
         pw = settings.app_password
-        if pw and request.url.path != "/api/health":
+        if pw and request.url.path != "/api/health" and not request.url.path.startswith("/api/auth/"):
             header = request.headers.get("authorization", "")
             ok = False
             if header.startswith("Basic "):

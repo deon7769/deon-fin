@@ -1,4 +1,4 @@
-import type { ApiErrorShape } from "./types";
+import type { ApiDetailErrorShape, ApiErrorShape } from "./types";
 
 const DEFAULT_BASE_URL = "/api";
 const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_BASE_URL).replace(/\/$/, "");
@@ -61,10 +61,11 @@ async function apiFetch<T>(
 
   const data = await parseBody(response);
   if (!response.ok) {
-    const envelope = data as ApiErrorShape | null;
+    const envelope = data as (ApiErrorShape & ApiDetailErrorShape) | null;
+    const detail = typeof envelope?.detail === "string" ? envelope.detail : null;
     throw new ApiError(
       envelope?.error?.code ?? "http_error",
-      envelope?.error?.message ?? `Erro ${response.status}`,
+      envelope?.error?.message ?? detail ?? `Erro ${response.status}`,
       response.status,
     );
   }

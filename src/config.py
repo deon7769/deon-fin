@@ -19,6 +19,7 @@ class Settings:
     api_key: str | None
     use_sandbox: bool
     database_url: str
+    auth_database_url: str
     log_level: str
     # Análise por IA (multi-provedor)
     analyst_provider: str          # anthropic | openrouter | ollama | gemini | zai | openai
@@ -36,6 +37,8 @@ class Settings:
     # Login (Basic Auth) — se app_password vazio, autenticação fica DESLIGADA (uso local).
     app_user: str = "familia"
     app_password: str | None = None
+    auth_pepper: str | None = None
+    session_auth_enabled: bool = False
     cors_origins: list[str] | None = None
     quotes_provider: str = "brapi"
     brapi_token: str | None = None
@@ -126,12 +129,16 @@ def load_settings() -> Settings:
     except ValueError:
         analyst_max_tokens = 16000
 
+    database_url = os.environ.get("DATABASE_URL", "sqlite:///data/financas.db").strip() or "sqlite:///data/financas.db"
+    auth_database_url = (os.environ.get("AUTH_DATABASE_URL") or "").strip() or database_url
+
     return Settings(
         client_id=client_id,
         client_secret=client_secret,
         api_key=os.environ.get("PLUGGY_API_KEY") or None,
         use_sandbox=os.environ.get("PLUGGY_USE_SANDBOX", "true").lower() == "true",
-        database_url=os.environ.get("DATABASE_URL", "sqlite:///data/financas.db"),
+        database_url=database_url,
+        auth_database_url=auth_database_url,
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         analyst_provider=provider,
         analyst_model=analyst_model,
@@ -146,6 +153,11 @@ def load_settings() -> Settings:
         auto_sync_on_start=os.environ.get("AUTO_SYNC_ON_START", "true").lower() == "true",
         app_user=os.environ.get("APP_USER", "familia").strip() or "familia",
         app_password=(os.environ.get("APP_PASSWORD") or "").strip() or None,
+        auth_pepper=(os.environ.get("AUTH_PEPPER") or "").strip() or None,
+        session_auth_enabled=(
+            os.environ.get("AUTH_SESSION_ENABLED", "false").strip().lower()
+            in {"1", "true", "yes", "on"}
+        ),
         cors_origins=[
             origin.strip()
             for origin in os.environ.get(

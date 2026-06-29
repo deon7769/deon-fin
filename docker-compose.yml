@@ -9,6 +9,7 @@ services:
       - ./data:/app/data
     networks:
       - traefik_proxy
+      - deon_fin_internal
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_proxy"
@@ -21,6 +22,30 @@ services:
       - "traefik.http.routers.financas.service=financas"
       - "traefik.http.services.financas.loadbalancer.server.port=8000"
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: financas-postgres
+    restart: unless-stopped
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-deon_fin}
+      POSTGRES_USER: ${POSTGRES_USER:-deon_fin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - deon_fin_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
 networks:
   traefik_proxy:
     external: true
+  deon_fin_internal:
+    driver: bridge
