@@ -10,9 +10,11 @@ commands keep using SQLite while the active `DATABASE_URL` remains:
 DATABASE_URL=sqlite:///data/financas.db
 ```
 
-It also does not replace the current Basic Auth gate or enable HTTP login,
-sessions, or user-facing family switching yet. The PostgreSQL auth records are
-foundation data for the later cutover.
+It also does not replace the current Basic Auth gate or cut the whole app over
+to PostgreSQL yet. The app now exposes the first HTTP login/session foundation
+on `/api/auth/login`, `/api/auth/me`, and `/api/auth/logout` when
+`DATABASE_URL` points to PostgreSQL and `AUTH_PEPPER` is configured.
+User-facing family switching is still a later cutover step.
 
 ## Start local PostgreSQL
 
@@ -92,6 +94,25 @@ With `DATABASE_URL` pointed at PostgreSQL, this command:
 
 The command is idempotent for the configured admin email and family slug: running
 it again updates those foundation records instead of creating duplicates.
+
+## HTTP login/session foundation
+
+The session endpoints use the PostgreSQL auth tables created in this foundation:
+
+- `POST /api/auth/login`: validates the email/password pair, records login
+  attempts, applies the basic account/IP lockout rules, creates a server-side
+  session, and returns a `deon_session` HttpOnly cookie.
+- `GET /api/auth/me`: reads the `deon_session` cookie and returns the active
+  user/family context for valid, non-expired sessions.
+- `POST /api/auth/logout`: revokes the current server-side session and clears
+  the cookie.
+
+Set `AUTH_PEPPER` before enabling these endpoints outside tests. Raw session
+tokens, emails, IP addresses, and user agents are stored only as peppered
+SHA-256 HMAC hashes in the auth tables.
+
+Basic Auth still protects the rest of the app while `APP_PASSWORD` is set; only
+`/api/auth/*` and `/api/health` bypass that legacy gate.
 
 ## SQLite migration dry run
 

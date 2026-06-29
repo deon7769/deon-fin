@@ -8,6 +8,7 @@ from typing import Any
 import psycopg
 from alembic import command
 from alembic.config import Config
+from psycopg.rows import dict_row
 
 from .database_url import DatabaseKind, parse_database_url
 
@@ -37,7 +38,7 @@ def sqlalchemy_url(database_url: str) -> str:
 
 @contextmanager
 def connect_postgres(database_url: str) -> Iterator[psycopg.Connection[Any]]:
-    with psycopg.connect(require_postgres_dsn(database_url)) as conn:
+    with psycopg.connect(require_postgres_dsn(database_url), row_factory=dict_row) as conn:
         yield conn
 
 

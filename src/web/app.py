@@ -47,7 +47,7 @@ from ..storage import Database
 from .dependencies import get_db, get_pluggy
 from .errors import error_response, install_error_handlers
 from .repositories import profile_repo, system_totals_repo, transactions_repo
-from .routers import accounts, buckets, budget, invoices, maintenance, painel, portfolio, profile, savings, simulations, tags, transactions
+from .routers import auth, accounts, buckets, budget, invoices, maintenance, painel, portfolio, profile, savings, simulations, tags, transactions
 
 WEB_DIR = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
@@ -652,6 +652,7 @@ def create_app() -> FastAPI:
     next_assets = _web_dist_dir() / "_next"
     if next_assets.exists():
         app.mount("/_next", StaticFiles(directory=str(next_assets)), name="next-assets")
+    app.include_router(auth.router)
     app.include_router(accounts.router)
     app.include_router(buckets.router)
     app.include_router(budget.router)
@@ -669,7 +670,7 @@ def create_app() -> FastAPI:
     async def _basic_auth(request: Request, call_next):
         """Protege tudo com Basic Auth quando APP_PASSWORD está definido."""
         pw = settings.app_password
-        if pw and request.url.path != "/api/health":
+        if pw and request.url.path != "/api/health" and not request.url.path.startswith("/api/auth/"):
             header = request.headers.get("authorization", "")
             ok = False
             if header.startswith("Basic "):
