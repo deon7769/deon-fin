@@ -11,10 +11,12 @@ from .agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_
 from .agent.buckets import apply_buckets_to_database
 from .agent.context import account_owner_aliases, spending_value
 from .agent.tags import apply_tags_to_database
+from .auth.bootstrap import BootstrapInput, bootstrap_admin_family
 from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
 from .pluggy import PluggyClient
 from .storage import Database
+from .storage.postgres import connect_postgres, run_postgres_migrations
 from .web.repositories import buckets_repo, profile_repo, tags_repo, transactions_repo
 
 
@@ -218,6 +220,39 @@ def analyze(
         console.print(f"\n[red]{e}[/red]")
         raise typer.Exit(code=1)
     console.print()  # newline final
+
+
+@app.command("bootstrap-auth")
+def bootstrap_auth(
+    email: str = typer.Option(..., help="Email do primeiro administrador."),
+    display_name: str = typer.Option("Admin", help="Nome exibido para o administrador."),
+    family_name: str = typer.Option("Familia Principal", help="Nome da família inicial."),
+    family_slug: str = typer.Option("familia-principal", help="Slug único da família inicial."),
+    password: str = typer.Option(
+        ...,
+        prompt=True,
+        hide_input=True,
+        confirmation_prompt=True,
+        help="Senha inicial do administrador.",
+    ),
+) -> None:
+    """Cria ou atualiza o primeiro usuário owner e a família inicial no PostgreSQL."""
+    run_postgres_migrations(settings.database_url)
+    with connect_postgres(settings.database_url) as conn:
+        result = bootstrap_admin_family(
+            conn,
+            BootstrapInput(
+                email=email,
+                password=password,
+                display_name=display_name,
+                family_name=family_name,
+                family_slug=family_slug,
+            ),
+        )
+    console.print(
+        "[green]Bootstrap concluído:[/green] "
+        f"user={result.user_id} family={result.family_id} person={result.person_id}"
+    )
 
 
 @app.command()

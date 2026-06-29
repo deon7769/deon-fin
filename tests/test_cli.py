@@ -98,3 +98,57 @@ def test_categorize_command_fills_missing_reference_months(tmp_path, monkeypatch
     assert row["tag_source"] == "auto"
     assert tag["name"] == "Delivery"
     check.close()
+
+
+def test_bootstrap_auth_command_runs_migrations_and_bootstrap(monkeypatch):
+    calls = []
+
+    class FakeConnection:
+        pass
+
+    class FakeConnectionContext:
+        def __enter__(self):
+            return FakeConnection()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_run_migrations(database_url):
+        calls.append(("migrate", database_url))
+
+    def fake_connect(database_url):
+        calls.append(("connect", database_url))
+        return FakeConnectionContext()
+
+    def fake_bootstrap(conn, data):
+        calls.append(("bootstrap", data.email, data.family_slug))
+        return SimpleNamespace(user_id="user-1", family_id="family-1", person_id="person-1")
+
+    monkeypatch.setattr(cli, "settings", SimpleNamespace(database_url="postgresql://u:p@localhost/db"))
+    monkeypatch.setattr(cli, "run_postgres_migrations", fake_run_migrations)
+    monkeypatch.setattr(cli, "connect_postgres", fake_connect)
+    monkeypatch.setattr(cli, "bootstrap_admin_family", fake_bootstrap)
+
+    result = CliRunner().invoke(
+        cli.app,
+        [
+            "bootstrap-auth",
+            "--email",
+            "davi@example.com",
+            "--display-name",
+            "Davi",
+            "--family-name",
+            "Familia Principal",
+            "--family-slug",
+            "familia-principal",
+        ],
+        input="strong-password\nstrong-password\n",
+    )
+
+    assert result.exit_code == 0
+    assert "Bootstrap concluído" in result.output
+    assert calls == [
+        ("migrate", "postgresql://u:p@localhost/db"),
+        ("connect", "postgresql://u:p@localhost/db"),
+        ("bootstrap", "davi@example.com", "familia-principal"),
+    ]
