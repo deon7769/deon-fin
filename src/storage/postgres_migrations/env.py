@@ -6,16 +6,20 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-config = context.config
+config = getattr(context, "config", None)
 
-if config.config_file_name is not None:
+if config is not None and config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = None
 
 
 def _database_url() -> str:
-    value = os.environ.get("DATABASE_URL", "").strip()
+    value = ""
+    if config is not None:
+        value = (config.get_main_option("sqlalchemy.url") or "").strip()
+    if not value:
+        value = os.environ.get("DATABASE_URL", "").strip()
     if value.startswith("postgresql+psycopg://"):
         return value
     if value.startswith("postgresql://"):
@@ -37,6 +41,8 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
+    if config is None:
+        raise RuntimeError("Alembic config is required to run migrations")
     section = config.get_section(config.config_ini_section, {})
     section["sqlalchemy.url"] = _database_url()
     connectable = engine_from_config(
@@ -50,7 +56,8 @@ def run_migrations_online() -> None:
             context.run_migrations()
 
 
-if context.is_offline_mode():
-    run_migrations_offline()
-else:
-    run_migrations_online()
+if config is not None:
+    if context.is_offline_mode():
+        run_migrations_offline()
+    else:
+        run_migrations_online()

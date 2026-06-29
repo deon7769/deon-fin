@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +11,11 @@ from src.storage.postgres import (
     run_postgres_migrations,
     sqlalchemy_url,
 )
+
+
+def _load_migration_env():
+    sys.modules.pop("src.storage.postgres_migrations.env", None)
+    return importlib.import_module("src.storage.postgres_migrations.env")
 
 
 def test_require_postgres_dsn_accepts_postgresql_url():
@@ -84,3 +91,31 @@ def test_run_postgres_migrations_passes_revision_to_alembic(monkeypatch):
     run_postgres_migrations("postgresql://u:p@localhost/db", revision="base")
 
     assert any(call[0] == "upgrade" and call[1] == "base" for call in calls)
+
+
+def test_migration_env_database_url_prefers_configured_sqlalchemy_url(monkeypatch):
+    env = _load_migration_env()
+
+    class FakeConfig:
+        def get_main_option(self, key):
+            assert key == "sqlalchemy.url"
+            return "postgresql://cfg:p@localhost/config_db"
+
+    monkeypatch.setattr(env, "config", FakeConfig())
+    monkeypatch.setenv("DATABASE_URL", "postgresql://env:p@localhost/env_db")
+
+    assert env._database_url() == "postgresql+psycopg://cfg:p@localhost/config_db"
+
+
+def test_migration_env_database_url_falls_back_to_environment(monkeypatch):
+    env = _load_migration_env()
+
+    class FakeConfig:
+        def get_main_option(self, key):
+            assert key == "sqlalchemy.url"
+            return ""
+
+    monkeypatch.setattr(env, "config", FakeConfig())
+    monkeypatch.setenv("DATABASE_URL", "postgres://env:p@localhost/env_db")
+
+    assert env._database_url() == "postgresql+psycopg://env:p@localhost/env_db"
