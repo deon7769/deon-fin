@@ -40,10 +40,12 @@ from ..agent.tags import apply_tags_to_database
 from ..agent.simulator import simular_amortizacao, simular_compra
 from ..agent.cards import card_monthly_breakdown
 from ..agent import maintenance as mnt
+from ..auth.sessions import SESSION_COOKIE_NAME, AuthSession, current_session
 from ..config import settings
 from ..importers import sync_pluggy_item
 from ..pluggy import PluggyAPIError, PluggyClient
 from ..storage import Database
+from ..storage.postgres import connect_postgres
 from .dependencies import get_db, get_pluggy
 from .errors import error_response, install_error_handlers
 from .repositories import profile_repo, system_totals_repo, transactions_repo
@@ -119,6 +121,47 @@ def _web_dist_dir() -> Path:
 def _legacy_ui_enabled() -> bool:
     value = os.environ.get("LEGACY_UI", "")
     return value.lower() in {"1", "true", "yes"}
+
+
+def _session_auth_enabled() -> bool:
+    return bool(getattr(settings, "session_auth_enabled", False))
+
+
+def _session_public_api_path(path: str) -> bool:
+    return path == "/api/health" or path.startswith("/api/auth/")
+
+
+def _session_public_path(path: str, method: str) -> bool:
+    if method == "OPTIONS":
+        return True
+    if _session_public_api_path(path):
+        return True
+    if path in {"/login", "/login/", "/favicon.ico", "/world.geo.json"}:
+        return True
+    return path.startswith("/_next/") or path.startswith("/static/")
+
+
+def _session_response_for_missing_auth(path: str, method: str) -> Response:
+    if path.startswith("/api/") or method not in {"GET", "HEAD"}:
+        return error_response(
+            401,
+            "session_required",
+            "Sessão necessária",
+        )
+    return RedirectResponse("/login", status_code=303)
+
+
+def _session_from_request(request: Request) -> AuthSession | None:
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if not token:
+        return None
+
+    pepper = getattr(settings, "auth_pepper", None)
+    if not pepper:
+        raise RuntimeError("AUTH_PEPPER is required for session authentication")
+
+    with connect_postgres(settings.database_url) as conn:
+        return current_session(conn, token, pepper=pepper)
 
 
 def _next_index_exists() -> bool:
@@ -669,6 +712,23 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def _basic_auth(request: Request, call_next):
         """Protege tudo com Basic Auth quando APP_PASSWORD está definido."""
+        if _session_auth_enabled():
+            if not _session_public_path(request.url.path, request.method):
+                try:
+                    auth_session = _session_from_request(request)
+                except Exception:
+                    log.exception("Session authentication failed before route handling")
+                    return error_response(
+                        503,
+                        "session_auth_unavailable",
+                        "Autenticação por sessão indisponível",
+                    )
+
+                if auth_session is None:
+                    return _session_response_for_missing_auth(request.url.path, request.method)
+                request.state.auth_session = auth_session
+            return await call_next(request)
+
         pw = settings.app_password
         if pw and request.url.path != "/api/health" and not request.url.path.startswith("/api/auth/"):
             header = request.headers.get("authorization", "")

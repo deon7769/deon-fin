@@ -107,7 +107,7 @@ def test_me_endpoint_reads_session_cookie(monkeypatch):
     app = create_app()
     app.dependency_overrides[get_postgres_conn] = _override_postgres_conn
 
-    def fake_current_session(conn, token, *, pepper, now=None):
+    def fake_current_session(token, *, pepper, now=None):
         assert token == "raw-token"
         assert pepper == "pepper"
         return AuthSession(
@@ -124,7 +124,7 @@ def test_me_endpoint_reads_session_cookie(monkeypatch):
         "src.web.routers.auth.settings",
         SimpleNamespace(auth_pepper="pepper"),
     )
-    monkeypatch.setattr("src.web.routers.auth.current_session", fake_current_session)
+    monkeypatch.setattr("src.web.routers.auth._current_session_for_token", fake_current_session)
 
     client = TestClient(app)
     response = client.get("/api/auth/me", cookies={"deon_session": "raw-token"})
@@ -140,19 +140,19 @@ def test_logout_endpoint_revokes_session_and_clears_cookie(monkeypatch):
     app.dependency_overrides[get_postgres_conn] = _override_postgres_conn
     calls = []
 
-    def fake_revoke_session(conn, token, *, pepper, now=None):
-        calls.append((conn, token, pepper))
+    def fake_revoke_session(token, *, pepper, now=None):
+        calls.append((token, pepper))
 
     monkeypatch.setattr(
         "src.web.routers.auth.settings",
         SimpleNamespace(auth_pepper="pepper"),
     )
-    monkeypatch.setattr("src.web.routers.auth.revoke_session", fake_revoke_session)
+    monkeypatch.setattr("src.web.routers.auth._revoke_session_token", fake_revoke_session)
 
     client = TestClient(app)
     response = client.post("/api/auth/logout", cookies={"deon_session": "raw-token"})
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
-    assert calls and calls[0][1:] == ("raw-token", "pepper")
+    assert calls == [("raw-token", "pepper")]
     assert "deon_session=" in response.headers["set-cookie"]

@@ -17,6 +17,7 @@ from ...auth.sessions import (
     revoke_session,
 )
 from ...config import settings
+from ...storage.postgres import connect_postgres
 from ..dependencies import get_postgres_conn
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -70,10 +71,9 @@ def login(
 def logout(
     response: Response,
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
-    conn=Depends(get_postgres_conn),
 ) -> dict[str, bool]:
     if session_token:
-        revoke_session(conn, session_token, pepper=_require_auth_pepper(), now=datetime.now(UTC))
+        _revoke_session_token(session_token, pepper=_require_auth_pepper(), now=datetime.now(UTC))
     response.delete_cookie(SESSION_COOKIE_NAME, path="/", samesite="Lax")
     return {"ok": True}
 
@@ -81,11 +81,10 @@ def logout(
 @router.get("/me")
 def me(
     session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
-    conn=Depends(get_postgres_conn),
 ) -> dict[str, object]:
     if not session_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    session = current_session(conn, session_token, pepper=_require_auth_pepper(), now=datetime.now(UTC))
+    session = _current_session_for_token(session_token, pepper=_require_auth_pepper(), now=datetime.now(UTC))
     if session is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return {
@@ -108,6 +107,16 @@ def _require_auth_pepper() -> str:
     if not pepper:
         raise HTTPException(status_code=503, detail="AUTH_PEPPER is required for session authentication")
     return pepper
+
+
+def _current_session_for_token(session_token: str, *, pepper: str, now: datetime):
+    with connect_postgres(settings.database_url) as conn:
+        return current_session(conn, session_token, pepper=pepper, now=now)
+
+
+def _revoke_session_token(session_token: str, *, pepper: str, now: datetime) -> None:
+    with connect_postgres(settings.database_url) as conn:
+        revoke_session(conn, session_token, pepper=pepper, now=now)
 
 
 def _client_ip(request: Request) -> str:

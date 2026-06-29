@@ -37,6 +37,7 @@ class Settings:
     app_user: str = "familia"
     app_password: str | None = None
     auth_pepper: str | None = None
+    session_auth_enabled: bool = False
     cors_origins: list[str] | None = None
     quotes_provider: str = "brapi"
     brapi_token: str | None = None
@@ -148,6 +149,10 @@ def load_settings() -> Settings:
         app_user=os.environ.get("APP_USER", "familia").strip() or "familia",
         app_password=(os.environ.get("APP_PASSWORD") or "").strip() or None,
         auth_pepper=(os.environ.get("AUTH_PEPPER") or "").strip() or None,
+        session_auth_enabled=(
+            os.environ.get("AUTH_SESSION_ENABLED", "false").strip().lower()
+            in {"1", "true", "yes", "on"}
+        ),
         cors_origins=[
             origin.strip()
             for origin in os.environ.get(

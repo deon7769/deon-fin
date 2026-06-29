@@ -111,8 +111,17 @@ Set `AUTH_PEPPER` before enabling these endpoints outside tests. Raw session
 tokens, emails, IP addresses, and user agents are stored only as peppered
 SHA-256 HMAC hashes in the auth tables.
 
-Basic Auth still protects the rest of the app while `APP_PASSWORD` is set; only
-`/api/auth/*` and `/api/health` bypass that legacy gate.
+Backend session enforcement is controlled by `AUTH_SESSION_ENABLED`. Keep it
+`false` while the app remains on SQLite or while the frontend is built with
+`NEXT_PUBLIC_AUTH_ENABLED=false`.
+
+When `AUTH_SESSION_ENABLED=true`, Basic Auth is no longer used as the backend
+gate. The backend allows `/api/health`, `/api/auth/*`, `/login`, CORS preflight
+requests, and static SPA assets to load. Other `/api/*` data endpoints require a
+valid `deon_session` cookie, and protected browser `GET`/`HEAD` routes redirect
+unauthenticated users to `/login`. The frontend build must also set
+`NEXT_PUBLIC_AUTH_ENABLED=true`, otherwise the static app will not participate in
+the login flow.
 
 ## SQLite migration dry run
 

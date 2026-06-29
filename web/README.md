@@ -22,7 +22,7 @@ The app opens at `http://localhost:3000` and reads the API base URL from `NEXT_P
 
 The session login UI is controlled by `NEXT_PUBLIC_AUTH_ENABLED`. Keep it unset or `false`
 while the production app still uses the legacy Basic Auth gate. Set it to `true` only when the
-PostgreSQL auth/session cutover is being tested.
+PostgreSQL auth/session cutover is being tested with backend `AUTH_SESSION_ENABLED=true`.
 
 ## Production
 
