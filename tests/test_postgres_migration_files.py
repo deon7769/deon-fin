@@ -46,6 +46,7 @@ def test_foundation_migration_creates_required_indexes():
 
     for index in (
         "idx_family_members_user_family",
+        "ux_family_people_family_linked_user",
         "idx_provider_connections_family_provider_item",
         "idx_accounts_family_source_external",
         "idx_transactions_family_account_posted",
@@ -56,6 +57,15 @@ def test_foundation_migration_creates_required_indexes():
         "idx_sessions_token_hash",
     ):
         assert index in source
+
+
+def test_foundation_migration_enforces_unique_linked_family_people():
+    source = MIGRATION.read_text(encoding="utf-8")
+
+    assert "CREATE UNIQUE INDEX IF NOT EXISTS ux_family_people_family_linked_user" in source
+    assert "ON family_people (family_id, linked_user_id)" in source
+    assert "WHERE linked_user_id IS NOT NULL" in source
+    assert "DROP INDEX IF EXISTS ux_family_people_family_linked_user" in source
 
 
 def test_foundation_migration_uses_jsonb_and_citext():

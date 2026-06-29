@@ -48,6 +48,7 @@ def test_bootstrap_admin_family_creates_user_family_membership_and_person():
     )
 
     sql = "\n".join(statement for statement, _params in conn.cursor_obj.statements)
+    normalized_sql = " ".join(sql.split())
     assert result.user_id == "user-1"
     assert result.family_id == "family-1"
     assert result.person_id == "person-1"
@@ -58,6 +59,10 @@ def test_bootstrap_admin_family_creates_user_family_membership_and_person():
     assert "INSERT INTO family_members" in sql
     assert "INSERT INTO family_people" in sql
     assert "INSERT INTO user_security_state" in sql
+    assert (
+        "ON CONFLICT (family_id, linked_user_id) WHERE linked_user_id IS NOT NULL"
+        in normalized_sql
+    )
     assert conn.cursor_obj.statements[0][1]["email"] == "davi@example.com"
     assert conn.cursor_obj.statements[0][1]["password_hash"].startswith("$argon2")
 

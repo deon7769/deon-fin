@@ -179,40 +179,23 @@ def bootstrap_admin_family(conn: Connection, data: BootstrapInput) -> BootstrapR
 
     cursor.execute(
         """
-        WITH existing AS (
-            SELECT id
-            FROM family_people
-            WHERE family_id = %(family_id)s
-              AND linked_user_id = %(user_id)s
-            ORDER BY created_at
-            LIMIT 1
-        ),
-        updated AS (
-            UPDATE family_people
-            SET
-                display_name = %(display_name)s,
-                status = 'active',
-                updated_at = now()
-            WHERE id = (SELECT id FROM existing)
-            RETURNING id
-        ),
-        inserted AS (
-            INSERT INTO family_people (
-                family_id,
-                linked_user_id,
-                display_name
-            )
-            SELECT
-                %(family_id)s,
-                %(user_id)s,
-                %(display_name)s
-            WHERE NOT EXISTS (SELECT 1 FROM existing)
-            RETURNING id
+        INSERT INTO family_people (
+            family_id,
+            linked_user_id,
+            display_name
         )
-        SELECT id FROM updated
-        UNION ALL
-        SELECT id FROM inserted
-        LIMIT 1
+        VALUES (
+            %(family_id)s,
+            %(user_id)s,
+            %(display_name)s
+        )
+        ON CONFLICT (family_id, linked_user_id)
+            WHERE linked_user_id IS NOT NULL
+        DO UPDATE SET
+            display_name = excluded.display_name,
+            status = 'active',
+            updated_at = now()
+        RETURNING id
         """,
         {
             "family_id": family_id,

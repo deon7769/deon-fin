@@ -85,6 +85,11 @@ DDL = [
     )
     """,
     """
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_family_people_family_linked_user
+        ON family_people (family_id, linked_user_id)
+        WHERE linked_user_id IS NOT NULL
+    """,
+    """
     CREATE TABLE IF NOT EXISTS sessions (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -344,5 +349,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute("DROP INDEX IF EXISTS ux_family_people_family_linked_user")
     for table in DROP_TABLES:
         op.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
