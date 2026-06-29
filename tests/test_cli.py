@@ -10,6 +10,22 @@ from src import cli
 from src.storage import Account, Database, Transaction
 
 
+def test_pg_migration_dry_run_command_prints_counts(tmp_path, monkeypatch):
+    db_path = tmp_path / "legacy-cli.db"
+    db = Database(db_path)
+    db.upsert_account(Account(id="acc-1", source="csv"))
+    db.close()
+
+    monkeypatch.setattr(cli, "settings", SimpleNamespace(database_path=db_path))
+
+    result = CliRunner().invoke(cli.app, ["pg-migration-dry-run"])
+
+    assert result.exit_code == 0
+    assert "Família padrão" in result.output
+    assert "accounts" in result.output
+    assert "1" in result.output
+
+
 def test_recompute_reference_month_command_uses_profile_start_day(tmp_path, monkeypatch):
     db_path = tmp_path / "cli.db"
     db = Database(db_path)

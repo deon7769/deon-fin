@@ -16,6 +16,7 @@ from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
 from .pluggy import PluggyClient
 from .storage import Database
+from .storage.migrate_sqlite_to_postgres import collect_sqlite_migration_report
 from .storage.postgres import connect_postgres, run_postgres_migrations
 from .web.repositories import buckets_repo, profile_repo, tags_repo, transactions_repo
 
@@ -253,6 +254,25 @@ def bootstrap_auth(
         "[green]Bootstrap concluído:[/green] "
         f"user={result.user_id} family={result.family_id} person={result.person_id}"
     )
+
+
+@app.command("pg-migration-dry-run")
+def pg_migration_dry_run(
+    sqlite_path: Path | None = typer.Option(
+        None,
+        help="Caminho do SQLite legado. Usa settings.database_path quando omitido.",
+    ),
+    family_name: str = typer.Option("Familia Principal", help="Nome da família padrão da migração."),
+) -> None:
+    """Mostra contagens e mapeamentos da migração SQLite -> PostgreSQL sem escrever no destino."""
+    source_path = sqlite_path or settings.database_path
+    report = collect_sqlite_migration_report(source_path, default_family_name=family_name)
+    table = Table("Origem SQLite", "Destino PostgreSQL", "Linhas")
+    for source, count in report.counts.items():
+        table.add_row(source, report.target_tables[source], str(count))
+    console.print(f"[bold]Família padrão:[/bold] {report.default_family_name}")
+    console.print(f"[bold]SQLite:[/bold] {report.sqlite_path}")
+    console.print(table)
 
 
 @app.command()
