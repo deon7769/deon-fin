@@ -16,6 +16,7 @@ def _settings(*, session_auth_enabled: bool):
         auth_pepper="pepper",
         session_auth_enabled=session_auth_enabled,
         database_url="postgresql://deon_fin:test@postgres:5432/deon_fin",
+        auth_database_url="postgresql://deon_fin:test@postgres:5432/deon_fin",
         cors_origins=["http://localhost:3000"],
         auto_sync_on_start=False,
         auto_sync_minutes=0,
@@ -107,6 +108,46 @@ def test_session_auth_reports_configuration_error(monkeypatch, tmp_db):
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "session_auth_unavailable"
+
+
+def test_session_auth_uses_auth_database_url_when_main_database_stays_sqlite(monkeypatch, tmp_db):
+    settings = _settings(session_auth_enabled=True)
+    settings.database_url = "sqlite:///data/financas.db"
+    settings.auth_database_url = "postgresql://auth-user:secret@postgres:5432/auth_db"
+    calls = []
+
+    class FakePostgresContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_connect_postgres(database_url):
+        calls.append(database_url)
+        return FakePostgresContext()
+
+    def fake_current_session(conn, token, *, pepper, now=None):
+        assert token == "raw-token"
+        assert pepper == "pepper"
+        return AuthSession(
+            session_id="session-1",
+            user_id="user-1",
+            email="davi@example.com",
+            display_name="Davi",
+            family_id="family-1",
+            family_name="Familia Principal",
+            family_role="owner",
+        )
+
+    monkeypatch.setattr("src.web.app.connect_postgres", fake_connect_postgres)
+    monkeypatch.setattr("src.web.app.current_session", fake_current_session)
+    client = _client(monkeypatch, tmp_db, settings)
+
+    response = client.get("/api/profile", cookies={SESSION_COOKIE_NAME: "raw-token"})
+
+    assert response.status_code == 200
+    assert calls == ["postgresql://auth-user:secret@postgres:5432/auth_db"]
 
 
 def test_session_auth_allows_login_page_without_legacy_basic_auth(

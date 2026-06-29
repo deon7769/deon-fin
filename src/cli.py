@@ -34,6 +34,10 @@ def _db() -> Database:
     return Database(settings.database_path)
 
 
+def _auth_database_url() -> str:
+    return getattr(settings, "auth_database_url", None) or settings.database_url
+
+
 @app.command()
 def connectors(sandbox: bool = True, country: str = "BR") -> None:
     """Lista conectores disponíveis no Pluggy."""
@@ -238,8 +242,9 @@ def bootstrap_auth(
     ),
 ) -> None:
     """Cria ou atualiza o primeiro usuário owner e a família inicial no PostgreSQL."""
-    run_postgres_migrations(settings.database_url)
-    with connect_postgres(settings.database_url) as conn:
+    auth_database_url = _auth_database_url()
+    run_postgres_migrations(auth_database_url)
+    with connect_postgres(auth_database_url) as conn:
         result = bootstrap_admin_family(
             conn,
             BootstrapInput(

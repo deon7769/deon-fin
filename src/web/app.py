@@ -208,7 +208,8 @@ def _session_from_request(request: Request) -> AuthSession | None:
     if not pepper:
         raise RuntimeError("AUTH_PEPPER is required for session authentication")
 
-    with connect_postgres(settings.database_url) as conn:
+    auth_database_url = getattr(settings, "auth_database_url", None) or settings.database_url
+    with connect_postgres(auth_database_url) as conn:
         return current_session(conn, token, pepper=pepper)
 
 

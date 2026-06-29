@@ -19,6 +19,7 @@ class Settings:
     api_key: str | None
     use_sandbox: bool
     database_url: str
+    auth_database_url: str
     log_level: str
     # Análise por IA (multi-provedor)
     analyst_provider: str          # anthropic | openrouter | ollama | gemini | zai | openai
@@ -128,12 +129,16 @@ def load_settings() -> Settings:
     except ValueError:
         analyst_max_tokens = 16000
 
+    database_url = os.environ.get("DATABASE_URL", "sqlite:///data/financas.db").strip() or "sqlite:///data/financas.db"
+    auth_database_url = (os.environ.get("AUTH_DATABASE_URL") or "").strip() or database_url
+
     return Settings(
         client_id=client_id,
         client_secret=client_secret,
         api_key=os.environ.get("PLUGGY_API_KEY") or None,
         use_sandbox=os.environ.get("PLUGGY_USE_SANDBOX", "true").lower() == "true",
-        database_url=os.environ.get("DATABASE_URL", "sqlite:///data/financas.db"),
+        database_url=database_url,
+        auth_database_url=auth_database_url,
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         analyst_provider=provider,
         analyst_model=analyst_model,

@@ -10,10 +10,10 @@ commands keep using SQLite while the active `DATABASE_URL` remains:
 DATABASE_URL=sqlite:///data/financas.db
 ```
 
-It also does not replace the current Basic Auth gate or cut the whole app over
-to PostgreSQL yet. The app now exposes the first HTTP login/session foundation
-on `/api/auth/login`, `/api/auth/me`, and `/api/auth/logout` when
-`DATABASE_URL` points to PostgreSQL and `AUTH_PEPPER` is configured.
+It also does not cut financial data over to PostgreSQL yet. The app now exposes
+the first HTTP login/session foundation on `/api/auth/login`, `/api/auth/me`,
+and `/api/auth/logout` when `AUTH_DATABASE_URL` points to PostgreSQL and
+`AUTH_PEPPER` is configured.
 User-facing family switching is still a later cutover step.
 
 ## Start local PostgreSQL
@@ -50,17 +50,16 @@ after adding a temporary port mapping, SSH tunnel, or other explicit exposure:
 postgresql://deon_fin:<real-password>@localhost:5432/deon_fin
 ```
 
-## Point one command at PostgreSQL
+## Point auth commands at PostgreSQL
 
-Keep `.env` on SQLite until the cutover is intentional. To point a single
-host-side command at PostgreSQL, override `DATABASE_URL` only in that shell.
-This example assumes the database is reachable from the host on
-`localhost:5432`:
+Keep `DATABASE_URL` on SQLite until the financial-data cutover is intentional.
+To point auth/session commands at PostgreSQL, set `AUTH_DATABASE_URL`. This
+example assumes the database is reachable from the host on `localhost:5432`:
 
 ```powershell
-$env:DATABASE_URL = "postgresql://deon_fin:<real-password>@localhost:5432/deon_fin"
+$env:AUTH_DATABASE_URL = "postgresql://deon_fin:<real-password>@localhost:5432/deon_fin"
 python -m src.cli bootstrap-auth --email admin@example.com --display-name Admin
-Remove-Item Env:\DATABASE_URL
+Remove-Item Env:\AUTH_DATABASE_URL
 ```
 
 If the database is only reachable on the Compose network, run the command from a
@@ -68,7 +67,7 @@ Compose service and use the `postgres` hostname:
 
 ```bash
 docker compose --profile postgres run --rm \
-  -e DATABASE_URL="postgresql://deon_fin:<real-password>@postgres:5432/deon_fin" \
+  -e AUTH_DATABASE_URL="postgresql://deon_fin:<real-password>@postgres:5432/deon_fin" \
   financas-agent \
   python -m src.cli bootstrap-auth --email admin@example.com --display-name Admin
 ```
@@ -83,7 +82,7 @@ Run:
 python -m src.cli bootstrap-auth --email admin@example.com --display-name Admin
 ```
 
-With `DATABASE_URL` pointed at PostgreSQL, this command:
+With `AUTH_DATABASE_URL` pointed at PostgreSQL, this command:
 
 - runs the PostgreSQL Alembic migrations first;
 - hashes the provided password with Argon2id;
@@ -112,8 +111,8 @@ tokens, emails, IP addresses, and user agents are stored only as peppered
 SHA-256 HMAC hashes in the auth tables.
 
 Backend session enforcement is controlled by `AUTH_SESSION_ENABLED`. Keep it
-`false` while the app remains on SQLite or while the frontend is built with
-`NEXT_PUBLIC_AUTH_ENABLED=false`.
+`false` while `AUTH_DATABASE_URL` is unset, while `AUTH_PEPPER` is unset, or
+while the frontend is built with `NEXT_PUBLIC_AUTH_ENABLED=false`.
 
 When `AUTH_SESSION_ENABLED=true`, Basic Auth is no longer used as the backend
 gate. The backend allows `/api/health`, `/api/auth/*`, `/login`, CORS preflight
@@ -159,7 +158,7 @@ Before any production cutover work:
 2. Set a production-grade `POSTGRES_PASSWORD` in the real `.env`.
 3. Start PostgreSQL with `docker compose --profile postgres up -d postgres`.
 4. Run and save `python -m src.cli pg-migration-dry-run --sqlite-path data/financas.db`.
-5. Point only the bootstrap command at PostgreSQL and run
+5. Set `AUTH_DATABASE_URL` to PostgreSQL and run
    `python -m src.cli bootstrap-auth --email admin@example.com --display-name Admin`.
 6. Keep the SQLite backup and original SQLite database as rollback artifacts
    until the full cutover and smoke tests have passed.

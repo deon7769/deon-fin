@@ -85,4 +85,5 @@ def test_env_example_documents_postgres_without_switching_default_database():
     assert "DATABASE_URL=sqlite:///data/financas.db" in env_example
     assert "POSTGRES_DB=deon_fin" in env_example
     assert "AUTH_PEPPER=" in env_example
+    assert "AUTH_DATABASE_URL=" in env_example
     assert "AUTH_SESSION_ENABLED=false" in env_example

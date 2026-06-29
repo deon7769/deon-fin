@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from src.auth.sessions import AuthSession, LoginResult
 from src.web.app import create_app
 from src.web.dependencies import get_postgres_conn
+from src.web.routers import auth as auth_router
 
 
 class FakeAuthConnection:
@@ -156,3 +157,47 @@ def test_logout_endpoint_revokes_session_and_clears_cookie(monkeypatch):
     assert response.json() == {"ok": True}
     assert calls == [("raw-token", "pepper")]
     assert "deon_session=" in response.headers["set-cookie"]
+
+
+def test_auth_session_helpers_use_auth_database_url(monkeypatch):
+    calls = []
+
+    class FakePostgresContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_connect_postgres(database_url):
+        calls.append(("connect", database_url))
+        return FakePostgresContext()
+
+    def fake_current_session(conn, token, *, pepper, now=None):
+        calls.append(("current", token, pepper))
+        return None
+
+    def fake_revoke_session(conn, token, *, pepper, now=None):
+        calls.append(("revoke", token, pepper))
+
+    monkeypatch.setattr(
+        auth_router,
+        "settings",
+        SimpleNamespace(
+            database_url="sqlite:///data/financas.db",
+            auth_database_url="postgresql://auth-user:secret@postgres:5432/auth_db",
+        ),
+    )
+    monkeypatch.setattr(auth_router, "connect_postgres", fake_connect_postgres)
+    monkeypatch.setattr(auth_router, "current_session", fake_current_session)
+    monkeypatch.setattr(auth_router, "revoke_session", fake_revoke_session)
+
+    auth_router._current_session_for_token("raw-token", pepper="pepper", now=datetime.now(UTC))
+    auth_router._revoke_session_token("raw-token", pepper="pepper", now=datetime.now(UTC))
+
+    assert calls == [
+        ("connect", "postgresql://auth-user:secret@postgres:5432/auth_db"),
+        ("current", "raw-token", "pepper"),
+        ("connect", "postgresql://auth-user:secret@postgres:5432/auth_db"),
+        ("revoke", "raw-token", "pepper"),
+    ]

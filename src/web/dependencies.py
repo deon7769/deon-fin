@@ -28,10 +28,10 @@ def get_pluggy() -> Generator[PluggyClient, None, None]:
 
 def get_postgres_conn():
     try:
-        with connect_postgres(settings.database_url) as conn:
+        with connect_postgres(settings.auth_database_url) as conn:
             yield conn
     except ValueError as exc:
         raise HTTPException(
             status_code=503,
-            detail="PostgreSQL DATABASE_URL required for session authentication",
+            detail="PostgreSQL AUTH_DATABASE_URL required for session authentication",
         ) from exc

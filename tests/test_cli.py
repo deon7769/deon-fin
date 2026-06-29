@@ -176,7 +176,14 @@ def test_bootstrap_auth_command_runs_migrations_and_bootstrap(monkeypatch):
         calls.append(("bootstrap", data.email, data.family_slug))
         return SimpleNamespace(user_id="user-1", family_id="family-1", person_id="person-1")
 
-    monkeypatch.setattr(cli, "settings", SimpleNamespace(database_url="postgresql://u:p@localhost/db"))
+    monkeypatch.setattr(
+        cli,
+        "settings",
+        SimpleNamespace(
+            database_url="sqlite:///data/financas.db",
+            auth_database_url="postgresql://u:p@localhost/auth_db",
+        ),
+    )
     monkeypatch.setattr(cli, "run_postgres_migrations", fake_run_migrations)
     monkeypatch.setattr(cli, "connect_postgres", fake_connect)
     monkeypatch.setattr(cli, "bootstrap_admin_family", fake_bootstrap)
@@ -200,7 +207,7 @@ def test_bootstrap_auth_command_runs_migrations_and_bootstrap(monkeypatch):
     assert result.exit_code == 0
     assert "Bootstrap concluído" in result.output
     assert calls == [
-        ("migrate", "postgresql://u:p@localhost/db"),
-        ("connect", "postgresql://u:p@localhost/db"),
+        ("migrate", "postgresql://u:p@localhost/auth_db"),
+        ("connect", "postgresql://u:p@localhost/auth_db"),
         ("bootstrap", "davi@example.com", "familia-principal"),
     ]

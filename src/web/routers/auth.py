@@ -109,13 +109,17 @@ def _require_auth_pepper() -> str:
     return pepper
 
 
+def _auth_database_url() -> str:
+    return getattr(settings, "auth_database_url", None) or settings.database_url
+
+
 def _current_session_for_token(session_token: str, *, pepper: str, now: datetime):
-    with connect_postgres(settings.database_url) as conn:
+    with connect_postgres(_auth_database_url()) as conn:
         return current_session(conn, session_token, pepper=pepper, now=now)
 
 
 def _revoke_session_token(session_token: str, *, pepper: str, now: datetime) -> None:
-    with connect_postgres(settings.database_url) as conn:
+    with connect_postgres(_auth_database_url()) as conn:
         revoke_session(conn, session_token, pepper=pepper, now=now)
 
 
