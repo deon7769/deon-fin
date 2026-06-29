@@ -31,6 +31,13 @@ TARGET_TABLES = {
     "profile": "family_profiles",
 }
 
+IGNORED_LEGACY_TABLES = {
+    "savings_goals_import_state": (
+        "Marcador de importacao deve ser reconciliado manualmente na migracao completa."
+    ),
+    "quote_cache": "Cache de cotacoes reconstruivel no PostgreSQL.",
+}
+
 
 @dataclass(frozen=True)
 class SQLiteMigrationReport:
@@ -38,6 +45,8 @@ class SQLiteMigrationReport:
     default_family_name: str
     counts: dict[str, int]
     target_tables: dict[str, str]
+    ignored_counts: dict[str, int]
+    ignored_tables: dict[str, str]
 
 
 def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
@@ -46,6 +55,12 @@ def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
         (table,),
     ).fetchone()
     return row is not None
+
+
+def _count_table_rows(conn: sqlite3.Connection, table: str) -> int:
+    if not _table_exists(conn, table):
+        return 0
+    return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
 
 
 def collect_sqlite_migration_report(
@@ -58,17 +73,19 @@ def collect_sqlite_migration_report(
         raise FileNotFoundError(path)
 
     counts: dict[str, int] = {}
+    ignored_counts: dict[str, int] = {}
     sqlite_uri = f"{path.resolve().as_uri()}?mode=ro"
     with sqlite3.connect(sqlite_uri, uri=True) as conn:
         for table in LEGACY_TABLES:
-            if _table_exists(conn, table):
-                counts[table] = int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
-            else:
-                counts[table] = 0
+            counts[table] = _count_table_rows(conn, table)
+        for table in IGNORED_LEGACY_TABLES:
+            ignored_counts[table] = _count_table_rows(conn, table)
 
     return SQLiteMigrationReport(
         sqlite_path=path,
         default_family_name=default_family_name,
         counts=counts,
         target_tables={table: TARGET_TABLES.get(table, table) for table in LEGACY_TABLES},
+        ignored_counts=ignored_counts,
+        ignored_tables=IGNORED_LEGACY_TABLES,
     )

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import sqlite3
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
@@ -10,11 +12,28 @@ from src import cli
 from src.storage import Account, Database, Transaction
 
 
+def _output_line_has_count(output: str, label: str, count: int) -> bool:
+    return any(
+        label in line and re.search(rf"\b{count}\b", line)
+        for line in output.splitlines()
+    )
+
+
 def test_pg_migration_dry_run_command_prints_counts(tmp_path, monkeypatch):
     db_path = tmp_path / "legacy-cli.db"
     db = Database(db_path)
     db.upsert_account(Account(id="acc-1", source="csv"))
+    db.upsert_pluggy_item("item-1", connector_id=1, connector_name="Banco", status="UPDATED")
     db.close()
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO quote_cache (symbol, asset_class, price, fetched_at)
+        VALUES ('AAPL', 'stock', 10.0, '2026-06-01T00:00:00')
+        """
+    )
+    conn.commit()
+    conn.close()
 
     monkeypatch.setattr(cli, "settings", SimpleNamespace(database_path=db_path))
 
@@ -23,7 +42,24 @@ def test_pg_migration_dry_run_command_prints_counts(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert "Família padrão" in result.output
     assert "accounts" in result.output
-    assert "1" in result.output
+    assert "provider_connections" in result.output
+    assert _output_line_has_count(result.output, "accounts", 1)
+    assert _output_line_has_count(result.output, "pluggy_items", 1)
+    assert "Tabelas sem destino nesta fundação" in result.output
+    assert _output_line_has_count(result.output, "quote_cache", 1)
+    assert "reconstru" in result.output.lower()
+
+
+def test_pg_migration_dry_run_command_prints_friendly_missing_file_error(tmp_path, monkeypatch):
+    db_path = tmp_path / "missing-cli.db"
+
+    monkeypatch.setattr(cli, "settings", SimpleNamespace(database_path=db_path))
+
+    result = CliRunner().invoke(cli.app, ["pg-migration-dry-run"])
+
+    assert result.exit_code == 1
+    assert f"SQLite não encontrado: {db_path}" in result.output
+    assert "Traceback" not in result.output
 
 
 def test_recompute_reference_month_command_uses_profile_start_day(tmp_path, monkeypatch):

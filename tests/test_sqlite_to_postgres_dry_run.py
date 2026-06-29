@@ -55,6 +55,31 @@ def test_collect_sqlite_migration_report_counts_missing_legacy_tables_as_zero(tm
     for table in LEGACY_TABLES:
         if table != "accounts":
             assert report.counts[table] == 0
+    assert report.ignored_counts == {
+        "savings_goals_import_state": 0,
+        "quote_cache": 0,
+    }
+
+
+def test_collect_sqlite_migration_report_counts_ignored_tables_with_reasons(tmp_path):
+    db_path = tmp_path / "ignored.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE savings_goals_import_state (id TEXT PRIMARY KEY)")
+    conn.execute("CREATE TABLE quote_cache (symbol TEXT PRIMARY KEY)")
+    conn.execute("INSERT INTO savings_goals_import_state (id) VALUES ('state-1')")
+    conn.execute("INSERT INTO quote_cache (symbol) VALUES ('AAPL')")
+    conn.execute("INSERT INTO quote_cache (symbol) VALUES ('MSFT')")
+    conn.commit()
+    conn.close()
+
+    report = collect_sqlite_migration_report(db_path)
+
+    assert "savings_goals_import_state" not in report.counts
+    assert "quote_cache" not in report.counts
+    assert report.ignored_counts["savings_goals_import_state"] == 1
+    assert report.ignored_counts["quote_cache"] == 2
+    assert "reconcili" in report.ignored_tables["savings_goals_import_state"].lower()
+    assert "reconstru" in report.ignored_tables["quote_cache"].lower()
 
 
 def test_collect_sqlite_migration_report_missing_file_raises(tmp_path):

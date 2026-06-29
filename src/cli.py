@@ -266,13 +266,28 @@ def pg_migration_dry_run(
 ) -> None:
     """Mostra contagens e mapeamentos da migração SQLite -> PostgreSQL sem escrever no destino."""
     source_path = sqlite_path or settings.database_path
-    report = collect_sqlite_migration_report(source_path, default_family_name=family_name)
+    try:
+        report = collect_sqlite_migration_report(source_path, default_family_name=family_name)
+    except FileNotFoundError:
+        console.print(f"[red]SQLite não encontrado: {source_path}[/red]", soft_wrap=True)
+        raise typer.Exit(code=1)
+
     table = Table("Origem SQLite", "Destino PostgreSQL", "Linhas")
     for source, count in report.counts.items():
         table.add_row(source, report.target_tables[source], str(count))
     console.print(f"[bold]Família padrão:[/bold] {report.default_family_name}")
     console.print(f"[bold]SQLite:[/bold] {report.sqlite_path}")
     console.print(table)
+    if report.ignored_counts:
+        ignored_table = Table(
+            "Origem SQLite",
+            "Linhas",
+            "Motivo",
+            title="Tabelas sem destino nesta fundação",
+        )
+        for source, count in report.ignored_counts.items():
+            ignored_table.add_row(source, str(count), report.ignored_tables[source])
+        console.print(ignored_table)
 
 
 @app.command()
