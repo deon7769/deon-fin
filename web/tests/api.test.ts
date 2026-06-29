@@ -76,4 +76,19 @@ describe("api client", () => {
       status: 404,
     });
   });
+
+  it("uses FastAPI detail messages when no error envelope exists", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(response(401, { detail: "Not authenticated" })),
+    );
+
+    const { api } = await import("@/lib/api");
+
+    await expect(api.get("/auth/me")).rejects.toMatchObject({
+      code: "http_error",
+      message: "Not authenticated",
+      status: 401,
+    });
+  });
 });

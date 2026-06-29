@@ -20,11 +20,18 @@ npm run dev
 
 The app opens at `http://localhost:3000` and reads the API base URL from `NEXT_PUBLIC_API_URL`.
 
+The session login UI is controlled by `NEXT_PUBLIC_AUTH_ENABLED`. Keep it unset or `false`
+while the production app still uses the legacy Basic Auth gate. Set it to `true` only when the
+PostgreSQL auth/session cutover is being tested.
+
 ## Production
 
 `next build` exports static files to `web/out`. The project Dockerfile copies that export to
 `/app/web_dist`, and FastAPI serves it at `/` with the API under `/api`. The legacy Pluggy UI remains
 available at `/legacy`.
+
+Because this is a static export, `NEXT_PUBLIC_AUTH_ENABLED` is baked into the generated frontend at
+build time.
 
 ## Checks
 

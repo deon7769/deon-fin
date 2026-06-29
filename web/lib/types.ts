@@ -5,6 +5,39 @@ export type ApiErrorShape = {
   };
 };
 
+export type ApiDetailErrorShape = {
+  detail?: string;
+};
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  display_name: string | null;
+};
+
+export type AuthFamily = {
+  id: string;
+  name: string;
+  role: string;
+};
+
+export type AuthSession = {
+  authenticated: true;
+  user: AuthUser;
+  family: AuthFamily;
+  session?: {
+    id: string;
+    expires_at: string;
+  };
+};
+
+export type LoginRequest = {
+  email: string;
+  password: string;
+};
+
+export type LoginResponse = AuthSession;
+
 export type Page<T> = {
   items: T[];
   page: number;
