@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from argon2 import PasswordHasher
-from argon2.exceptions import InvalidHashError, VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 
 _PASSWORD_HASHER = PasswordHasher(
     time_cost=3,
@@ -29,5 +29,5 @@ def verify_password(password: str, password_hash: str | None) -> bool:
 
     try:
         return _PASSWORD_HASHER.verify(password_hash, password)
-    except (InvalidHashError, VerifyMismatchError):
+    except (InvalidHashError, VerificationError, VerifyMismatchError):
         return False

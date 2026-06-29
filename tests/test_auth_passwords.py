@@ -16,7 +16,8 @@ def test_normalize_email_collapses_internal_whitespace():
 def test_hash_password_uses_argon2_and_verifies():
     encoded = hash_password("correct horse battery staple")
 
-    assert encoded.startswith("$argon2")
+    assert encoded.startswith("$argon2id$")
+    assert "$m=65536,t=3,p=2$" in encoded
     assert verify_password("correct horse battery staple", encoded)
     assert not verify_password("wrong password", encoded)
 
@@ -42,3 +43,9 @@ def test_verify_password_returns_false_for_missing_inputs(
 
 def test_verify_password_returns_false_for_invalid_hash():
     assert not verify_password("x", "not-a-real-hash")
+
+
+def test_verify_password_returns_false_for_malformed_argon2_hash():
+    malformed_hash = "$argon2id$v=19$m=65536,t=3,p=2$bad$bad"
+
+    assert not verify_password("x", malformed_hash)
