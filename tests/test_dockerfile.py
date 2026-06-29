@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import yaml
+
 
 def test_dockerfile_builds_next_export_in_node_stage():
     dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
@@ -35,13 +37,25 @@ def test_requirements_include_postgres_migration_and_password_dependencies():
 
 
 def test_compose_declares_optional_postgres_profile():
-    compose = Path("docker-compose.yml").read_text(encoding="utf-8")
+    compose = yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
 
-    assert "postgres:" in compose
-    assert "profiles:" in compose
-    assert '"postgres"' in compose
-    assert "postgres_data:" in compose
-    assert "deon_fin_internal:" in compose
+    services = compose["services"]
+    postgres = services["postgres"]
+    financas_agent = services["financas-agent"]
+
+    assert postgres["profiles"] == ["postgres"]
+    assert postgres["image"] == "postgres:16-alpine"
+    assert postgres["networks"] == ["deon_fin_internal"]
+    assert "healthcheck" in postgres
+    assert "postgres_data" in compose["volumes"]
+    assert "deon_fin_internal" in compose["networks"]
+    assert "traefik_proxy" in financas_agent["networks"]
+    assert "deon_fin_internal" in financas_agent["networks"]
+    assert "traefik.docker.network=traefik_proxy" in financas_agent["labels"]
+    assert (
+        ":?POSTGRES_PASSWORD is required"
+        in postgres["environment"]["POSTGRES_PASSWORD"]
+    )
 
 
 def test_env_example_documents_postgres_without_switching_default_database():
