@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 
@@ -37,7 +41,8 @@ def test_requirements_include_postgres_migration_and_password_dependencies():
 
 
 def test_compose_declares_optional_postgres_profile():
-    compose = yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
+    compose_text = Path("docker-compose.yml").read_text(encoding="utf-8")
+    compose = yaml.safe_load(compose_text)
 
     services = compose["services"]
     postgres = services["postgres"]
@@ -52,10 +57,26 @@ def test_compose_declares_optional_postgres_profile():
     assert "traefik_proxy" in financas_agent["networks"]
     assert "deon_fin_internal" in financas_agent["networks"]
     assert "traefik.docker.network=traefik_proxy" in financas_agent["labels"]
-    assert (
-        ":?POSTGRES_PASSWORD is required"
-        in postgres["environment"]["POSTGRES_PASSWORD"]
+    assert postgres["environment"]["POSTGRES_PASSWORD"] == "${POSTGRES_PASSWORD:-}"
+    assert "change-me-before-production" not in compose_text
+    assert ":?POSTGRES_PASSWORD is required" not in compose_text
+
+
+def test_compose_default_config_does_not_require_postgres_password():
+    if shutil.which("docker") is None:
+        pytest.skip("docker CLI not available")
+    env = os.environ.copy()
+    env.pop("POSTGRES_PASSWORD", None)
+    result = subprocess.run(
+        ["docker", "compose", "config", "--services"],
+        cwd=Path.cwd(),
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    assert result.returncode == 0, result.stderr
+    assert "financas-agent" in result.stdout
 
 
 def test_env_example_documents_postgres_without_switching_default_database():
