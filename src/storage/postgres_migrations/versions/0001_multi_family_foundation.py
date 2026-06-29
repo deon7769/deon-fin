@@ -209,6 +209,48 @@ DDL = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS tags (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        family_id uuid NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+        name text NOT NULL,
+        color text,
+        created_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (family_id, name),
+        UNIQUE (family_id, id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS budget_buckets (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        family_id uuid NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+        key text NOT NULL,
+        name text NOT NULL,
+        color text,
+        planned_kind text,
+        planned_value numeric(14,2),
+        sort_order integer NOT NULL DEFAULT 0,
+        is_system boolean NOT NULL DEFAULT false,
+        UNIQUE (family_id, key),
+        UNIQUE (family_id, id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS savings_goals (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        family_id uuid NOT NULL REFERENCES families(id) ON DELETE CASCADE,
+        name text NOT NULL,
+        target_amount numeric(14,2) NOT NULL,
+        term_months integer,
+        saved_amount numeric(14,2) NOT NULL DEFAULT 0,
+        priority integer NOT NULL DEFAULT 0,
+        status text NOT NULL DEFAULT 'active',
+        created_at timestamptz NOT NULL DEFAULT now(),
+        updated_at timestamptz NOT NULL DEFAULT now(),
+        UNIQUE (family_id, id)
+    )
+    """,
+    # Legacy imported transaction IDs remain deterministic text for deduplication.
+    """
     CREATE TABLE IF NOT EXISTS transactions (
         id text PRIMARY KEY,
         family_id uuid NOT NULL REFERENCES families(id) ON DELETE CASCADE,
@@ -233,7 +275,10 @@ DDL = [
         merchant_key text,
         source text NOT NULL,
         metadata_json jsonb NOT NULL DEFAULT '{}'::jsonb,
-        created_at timestamptz NOT NULL DEFAULT now()
+        created_at timestamptz NOT NULL DEFAULT now(),
+        FOREIGN KEY (family_id, tag_id) REFERENCES tags(family_id, id),
+        FOREIGN KEY (family_id, bucket_id) REFERENCES budget_buckets(family_id, id),
+        FOREIGN KEY (family_id, savings_goal_id) REFERENCES savings_goals(family_id, id)
     )
     """,
     """
@@ -276,6 +321,9 @@ DDL = [
 DROP_TABLES = [
     "transaction_links",
     "transactions",
+    "savings_goals",
+    "budget_buckets",
+    "tags",
     "account_people",
     "accounts",
     "provider_connections",

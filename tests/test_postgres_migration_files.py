@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -30,6 +32,9 @@ def test_foundation_migration_creates_required_tables():
         "provider_connections",
         "accounts",
         "account_people",
+        "tags",
+        "budget_buckets",
+        "savings_goals",
         "transactions",
         "transaction_links",
     ):
@@ -59,3 +64,32 @@ def test_foundation_migration_uses_jsonb_and_citext():
     assert "CREATE EXTENSION IF NOT EXISTS citext" in source
     assert "jsonb" in source
     assert "citext" in source
+
+
+def test_foundation_migration_enforces_family_scoped_transaction_refs():
+    source = MIGRATION.read_text(encoding="utf-8")
+
+    for foreign_key in (
+        "FOREIGN KEY (family_id, tag_id) REFERENCES tags(family_id, id)",
+        "FOREIGN KEY (family_id, bucket_id) REFERENCES budget_buckets(family_id, id)",
+        "FOREIGN KEY (family_id, savings_goal_id) REFERENCES savings_goals(family_id, id)",
+    ):
+        assert foreign_key in source
+
+
+def test_alembic_heads_finds_foundation_revision():
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "heads"],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "0001_multi_family_foundation" in result.stdout
+
+
+def test_transactions_keep_legacy_text_primary_key():
+    source = MIGRATION.read_text(encoding="utf-8")
+
+    assert "id text PRIMARY KEY" in source
