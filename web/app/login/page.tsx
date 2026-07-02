@@ -3,42 +3,30 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
-import { ApiError } from "@/lib/api";
+import { redirectAfterLogin, submitLogin } from "@/lib/login-flow";
 import { useAuth } from "@/providers/AuthProvider";
 import type { LoginRequest } from "@/lib/types";
 
-function loginErrorMessage(error: unknown) {
-  if (error instanceof ApiError && error.status === 401) {
-    return "E-mail ou senha invalidos.";
-  }
-  return error instanceof Error ? error.message : "Nao foi possivel entrar.";
-}
-
 export default function LoginPage() {
   const auth = useAuth();
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!auth.enabled || auth.status === "authenticated") {
-      router.replace("/");
+      redirectAfterLogin();
     }
-  }, [auth.enabled, auth.status, router]);
+  }, [auth.enabled, auth.status]);
 
   async function submit(input: LoginRequest) {
-    setPending(true);
-    setError(null);
-    try {
-      await auth.login(input);
-      router.replace("/");
-    } catch (loginError) {
-      setError(loginErrorMessage(loginError));
-    } finally {
-      setPending(false);
-    }
+    await submitLogin({
+      input,
+      login: auth.login,
+      redirect: redirectAfterLogin,
+      setPending,
+      setError,
+    });
   }
 
   return (
@@ -58,7 +46,7 @@ export default function LoginPage() {
 
         <p className="mt-5 text-center text-xs text-muted">
           Fluxo de sessao em implantacao.{" "}
-          <Link href="/" className="font-medium text-accent hover:underline">
+          <Link href="/" prefetch={false} className="font-medium text-accent hover:underline">
             Voltar ao painel
           </Link>
         </p>
