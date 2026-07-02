@@ -16,6 +16,8 @@ def test_dockerfile_builds_next_export_in_node_stage():
     assert "COPY web/package*.json ./" in dockerfile
     assert "RUN npm ci" in dockerfile
     assert "ENV NEXT_PUBLIC_API_URL=/api" in dockerfile
+    assert "ARG NEXT_PUBLIC_AUTH_ENABLED=false" in dockerfile
+    assert "ENV NEXT_PUBLIC_AUTH_ENABLED=$NEXT_PUBLIC_AUTH_ENABLED" in dockerfile
     assert "RUN npm run build" in dockerfile
     assert "COPY alembic.ini ./alembic.ini" in dockerfile
     assert "COPY --from=web /web/out ./web_dist" in dockerfile
@@ -48,7 +50,10 @@ def test_compose_declares_optional_postgres_profile():
     services = compose["services"]
     postgres = services["postgres"]
     financas_agent = services["financas-agent"]
+    build = financas_agent["build"]
 
+    assert build["context"] == "."
+    assert build["args"]["NEXT_PUBLIC_AUTH_ENABLED"] == "${NEXT_PUBLIC_AUTH_ENABLED:-false}"
     assert postgres["profiles"] == ["postgres"]
     assert postgres["image"] == "postgres:16-alpine"
     assert postgres["networks"] == ["deon_fin_internal"]
@@ -88,3 +93,4 @@ def test_env_example_documents_postgres_without_switching_default_database():
     assert "AUTH_PEPPER=" in env_example
     assert "AUTH_DATABASE_URL=" in env_example
     assert "AUTH_SESSION_ENABLED=false" in env_example
+    assert "NEXT_PUBLIC_AUTH_ENABLED=false" in env_example

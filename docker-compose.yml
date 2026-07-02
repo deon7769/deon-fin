@@ -1,6 +1,9 @@
 services:
   financas-agent:
-    build: .
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_AUTH_ENABLED: ${NEXT_PUBLIC_AUTH_ENABLED:-false}
     image: financas-agent:local
     container_name: financas-agent
     restart: unless-stopped
