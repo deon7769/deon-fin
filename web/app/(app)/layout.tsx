@@ -1,20 +1,18 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { Sidebar } from "@/components/layout/Sidebar";
-import { shouldRedirectToLogin } from "@/lib/auth";
+import { redirectToLogin, shouldRedirectToLogin } from "@/lib/auth";
 import { useAuth } from "@/providers/AuthProvider";
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const auth = useAuth();
-  const router = useRouter();
 
   useEffect(() => {
     if (shouldRedirectToLogin({ enabled: auth.enabled, status: auth.status })) {
-      router.replace("/login");
+      redirectToLogin();
     }
-  }, [auth.enabled, auth.status, router]);
+  }, [auth.enabled, auth.status]);
 
   if (auth.enabled && auth.status === "loading") {
     return (

@@ -98,6 +98,15 @@ describe("auth client", () => {
     expect(hasSessionMarkerCookie("theme=dark")).toBe(false);
   });
 
+  it("uses a full-page navigation when the auth guard sends the user to login", async () => {
+    const assign = vi.fn();
+    const { redirectToLogin } = await import("@/lib/auth");
+
+    redirectToLogin("/login", { assign });
+
+    expect(assign).toHaveBeenCalledWith("/login");
+  });
+
   it("returns null when the current session endpoint responds unauthorized", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(401, { detail: "Not authenticated" })));
 

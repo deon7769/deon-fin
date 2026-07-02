@@ -12,6 +12,10 @@ export type AuthStatus = "disabled" | "loading" | "authenticated" | "unauthentic
 const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
 export const SESSION_MARKER_COOKIE = "deon_session_present";
 
+type NavigationTarget = {
+  assign: (url: string) => void;
+};
+
 export function isAuthEnabled() {
   return ENABLED_VALUES.has((process.env.NEXT_PUBLIC_AUTH_ENABLED ?? "").trim().toLowerCase());
 }
@@ -28,6 +32,18 @@ export function shouldRedirectToLogin({
   status: AuthStatus;
 }) {
   return enabled && status === "unauthenticated";
+}
+
+export function redirectToLogin(url = "/login", target?: NavigationTarget) {
+  const destination =
+    target ??
+    (typeof window === "undefined"
+      ? null
+      : {
+          assign: window.location.assign.bind(window.location),
+        });
+
+  destination?.assign(url);
 }
 
 export function shouldProbeCurrentSession({
