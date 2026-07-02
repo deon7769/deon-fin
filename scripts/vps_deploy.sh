@@ -25,7 +25,7 @@ else
 fi
 
 echo "== pytest =="
-.venv/bin/python -m pytest -q
+AUTH_SESSION_ENABLED=false NEXT_PUBLIC_AUTH_ENABLED=false .venv/bin/python -m pytest -q
 
 echo "== docker compose build =="
 docker compose build financas-agent
