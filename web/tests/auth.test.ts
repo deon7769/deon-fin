@@ -102,4 +102,30 @@ describe("auth client", () => {
       expect.objectContaining({ method: "POST", credentials: "include" }),
     );
   });
+
+  it("updates account credentials with normalized email", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(200, sessionPayload));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { updateAccount } = await import("@/lib/auth");
+    const result = await updateAccount({
+      email: " Novo@Example.COM ",
+      current_password: "senha atual",
+      new_password: "senha nova forte",
+    });
+
+    expect(result.user.email).toBe("davi@example.com");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/auth/me",
+      expect.objectContaining({
+        method: "PATCH",
+        credentials: "include",
+        body: JSON.stringify({
+          email: "novo@example.com",
+          current_password: "senha atual",
+          new_password: "senha nova forte",
+        }),
+      }),
+    );
+  });
 });

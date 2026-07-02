@@ -5,6 +5,13 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
+from ...auth.account import (
+    AccountUpdateInput,
+    AccountUpdateResult,
+    DuplicateEmail,
+    InvalidCurrentPassword,
+    update_auth_account,
+)
 from ...auth.sessions import (
     SESSION_COOKIE_NAME,
     InvalidLogin,
@@ -26,6 +33,12 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 class LoginRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=1024)
+
+
+class AccountUpdateRequest(BaseModel):
+    email: str | None = Field(default=None, min_length=3, max_length=320)
+    current_password: str = Field(min_length=1, max_length=1024)
+    new_password: str | None = Field(default=None, min_length=8, max_length=1024)
 
 
 @router.post("/login")
@@ -102,6 +115,45 @@ def me(
     }
 
 
+@router.patch("/me")
+def update_me(
+    payload: AccountUpdateRequest,
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> dict[str, object]:
+    if payload.email is None and payload.new_password is None:
+        raise HTTPException(status_code=400, detail="Informe um novo e-mail ou uma nova senha")
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    pepper = _require_auth_pepper()
+    session = _current_session_for_token(session_token, pepper=pepper, now=datetime.now(UTC))
+    if session is None:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        account = _update_account_credentials(session.user_id, payload, now=datetime.now(UTC))
+    except InvalidCurrentPassword as exc:
+        raise HTTPException(status_code=403, detail="Senha atual invalida") from exc
+    except DuplicateEmail as exc:
+        raise HTTPException(status_code=409, detail="Este e-mail ja esta em uso") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {
+        "authenticated": True,
+        "user": {
+            "id": account.user_id,
+            "email": account.email,
+            "display_name": account.display_name,
+        },
+        "family": {
+            "id": session.family_id,
+            "name": session.family_name,
+            "role": session.family_role,
+        },
+    }
+
+
 def _require_auth_pepper() -> str:
     pepper = settings.auth_pepper
     if not pepper:
@@ -121,6 +173,25 @@ def _current_session_for_token(session_token: str, *, pepper: str, now: datetime
 def _revoke_session_token(session_token: str, *, pepper: str, now: datetime) -> None:
     with connect_postgres(_auth_database_url()) as conn:
         revoke_session(conn, session_token, pepper=pepper, now=now)
+
+
+def _update_account_credentials(
+    user_id: str,
+    payload: AccountUpdateRequest,
+    *,
+    now: datetime,
+) -> AccountUpdateResult:
+    with connect_postgres(_auth_database_url()) as conn:
+        return update_auth_account(
+            conn,
+            AccountUpdateInput(
+                user_id=user_id,
+                current_password=payload.current_password,
+                email=payload.email,
+                new_password=payload.new_password,
+                now=now,
+            ),
+        )
 
 
 def _client_ip(request: Request) -> str:

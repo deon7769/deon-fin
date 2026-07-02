@@ -1,5 +1,11 @@
 import { ApiError, api } from "./api";
-import type { AuthSession, LoginRequest, LoginResponse } from "./types";
+import type {
+  AccountUpdateInput,
+  AccountUpdateResponse,
+  AuthSession,
+  LoginRequest,
+  LoginResponse,
+} from "./types";
 
 export type AuthStatus = "disabled" | "loading" | "authenticated" | "unauthenticated";
 
@@ -43,4 +49,12 @@ export async function getCurrentSession(): Promise<AuthSession | null> {
 
 export async function logout(): Promise<{ ok: boolean }> {
   return api.post<{ ok: boolean }>("/auth/logout");
+}
+
+export async function updateAccount(input: AccountUpdateInput): Promise<AccountUpdateResponse> {
+  return api.patch<AccountUpdateResponse>("/auth/me", {
+    email: input.email === undefined ? undefined : normalizeLoginEmail(input.email),
+    current_password: input.current_password,
+    new_password: input.new_password,
+  });
 }

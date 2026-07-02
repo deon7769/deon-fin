@@ -38,6 +38,14 @@ export type LoginRequest = {
 
 export type LoginResponse = AuthSession;
 
+export type AccountUpdateInput = {
+  email?: string;
+  current_password: string;
+  new_password?: string;
+};
+
+export type AccountUpdateResponse = AuthSession;
+
 export type Page<T> = {
   items: T[];
   page: number;

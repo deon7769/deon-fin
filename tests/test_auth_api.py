@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from src.auth.account import AccountUpdateResult
 from src.auth.sessions import AuthSession, LoginResult
 from src.web.app import create_app
 from src.web.dependencies import get_postgres_conn
@@ -134,6 +135,56 @@ def test_me_endpoint_reads_session_cookie(monkeypatch):
     assert response.json()["authenticated"] is True
     assert response.json()["user"]["id"] == "user-1"
     assert response.json()["family"]["role"] == "owner"
+
+
+def test_update_account_endpoint_uses_session_and_returns_updated_user(monkeypatch):
+    app = create_app()
+    app.dependency_overrides[get_postgres_conn] = _override_postgres_conn
+    calls = []
+
+    def fake_current_session(token, *, pepper, now=None):
+        assert token == "raw-token"
+        assert pepper == "pepper"
+        return AuthSession(
+            session_id="session-1",
+            user_id="user-1",
+            email="davi@example.com",
+            display_name="Davi",
+            family_id="family-1",
+            family_name="Familia Principal",
+            family_role="owner",
+        )
+
+    def fake_update_account(user_id, payload, *, now=None):
+        calls.append((user_id, payload.email, payload.current_password, payload.new_password))
+        return AccountUpdateResult(
+            user_id="user-1",
+            email="novo@example.com",
+            display_name="Davi",
+        )
+
+    monkeypatch.setattr(
+        "src.web.routers.auth.settings",
+        SimpleNamespace(auth_pepper="pepper"),
+    )
+    monkeypatch.setattr("src.web.routers.auth._current_session_for_token", fake_current_session)
+    monkeypatch.setattr("src.web.routers.auth._update_account_credentials", fake_update_account)
+
+    client = TestClient(app)
+    response = client.patch(
+        "/api/auth/me",
+        cookies={"deon_session": "raw-token"},
+        json={
+            "email": " Novo@Example.COM ",
+            "current_password": "senha atual",
+            "new_password": "senha nova forte",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "novo@example.com"
+    assert response.json()["family"]["id"] == "family-1"
+    assert calls == [("user-1", " Novo@Example.COM ", "senha atual", "senha nova forte")]
 
 
 def test_logout_endpoint_revokes_session_and_clears_cookie(monkeypatch):

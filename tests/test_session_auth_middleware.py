@@ -170,6 +170,46 @@ def test_session_auth_allows_login_page_without_legacy_basic_auth(
     assert "login marker" in response.text
 
 
+def test_session_auth_allows_login_export_data_without_session(
+    monkeypatch,
+    tmp_path,
+    tmp_db,
+):
+    calls = []
+
+    def fail_if_called(request):
+        calls.append(request.url.path)
+        return None
+
+    web_dist = tmp_path / "web_dist"
+    login_dir = web_dist / "login"
+    metas_dir = web_dist / "metas"
+    login_dir.mkdir(parents=True)
+    metas_dir.mkdir(parents=True)
+    (web_dist / "index.html").write_text("<html>app shell</html>", encoding="utf-8")
+    (login_dir / "index.html").write_text("<html>login marker</html>", encoding="utf-8")
+    (login_dir / "index.txt").write_text("login route data", encoding="utf-8")
+    (metas_dir / "index.txt").write_text("protected route data", encoding="utf-8")
+    monkeypatch.setenv("WEB_DIST_DIR", str(web_dist))
+    monkeypatch.setattr(
+        "src.web.app._session_from_request",
+        fail_if_called,
+        raising=False,
+    )
+    client = _client(monkeypatch, tmp_db, _settings(session_auth_enabled=True))
+
+    public_response = client.get("/login/index.txt?month=2026-06", follow_redirects=False)
+    assert calls == []
+
+    protected_response = client.get("/metas/index.txt?month=2026-06", follow_redirects=False)
+
+    assert public_response.status_code == 200
+    assert public_response.text == "login route data"
+    assert protected_response.status_code in {303, 307}
+    assert protected_response.headers["location"] == "/login"
+    assert calls == ["/metas/index.txt"]
+
+
 def test_session_auth_redirects_protected_html_to_login(monkeypatch, tmp_path, tmp_db):
     web_dist = tmp_path / "web_dist"
     web_dist.mkdir()

@@ -132,12 +132,21 @@ def _session_public_api_path(path: str) -> bool:
     return path == "/api/health" or path.startswith("/api/auth/")
 
 
+def _session_public_login_export_path(path: str) -> bool:
+    if not path.startswith("/login/"):
+        return False
+    candidate = _safe_web_dist_path(path.lstrip("/"))
+    return bool(candidate and candidate.is_file())
+
+
 def _session_public_path(path: str, method: str) -> bool:
     if method == "OPTIONS":
         return True
     if _session_public_api_path(path):
         return True
     if path in {"/login", "/login/", "/favicon.ico", "/world.geo.json"}:
+        return True
+    if method in {"GET", "HEAD"} and _session_public_login_export_path(path):
         return True
     return path.startswith("/_next/") or path.startswith("/static/")
 
