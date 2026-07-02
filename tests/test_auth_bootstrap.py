@@ -6,9 +6,9 @@ from src.auth.bootstrap import BootstrapInput, bootstrap_admin_family
 
 
 class FakeCursor:
-    def __init__(self):
+    def __init__(self, results=None):
         self.statements = []
-        self.results = [
+        self.results = results or [
             ("user-1",),
             ("family-1",),
             ("person-1",),
@@ -23,8 +23,8 @@ class FakeCursor:
 
 
 class FakeConnection:
-    def __init__(self):
-        self.cursor_obj = FakeCursor()
+    def __init__(self, results=None):
+        self.cursor_obj = FakeCursor(results)
         self.committed = False
 
     def cursor(self):
@@ -65,6 +65,32 @@ def test_bootstrap_admin_family_creates_user_family_membership_and_person():
     )
     assert conn.cursor_obj.statements[0][1]["email"] == "davi@example.com"
     assert conn.cursor_obj.statements[0][1]["password_hash"].startswith("$argon2")
+
+
+def test_bootstrap_admin_family_accepts_dict_rows_from_postgres_connection():
+    conn = FakeConnection(
+        [
+            {"id": "user-1"},
+            {"id": "family-1"},
+            {"id": "person-1"},
+        ]
+    )
+
+    result = bootstrap_admin_family(
+        conn,
+        BootstrapInput(
+            email="davi@example.com",
+            password="correct horse battery staple",
+            display_name="Davi",
+            family_name="Familia Principal",
+            family_slug="familia-principal",
+        ),
+    )
+
+    assert result.user_id == "user-1"
+    assert result.family_id == "family-1"
+    assert result.person_id == "person-1"
+    assert conn.committed
 
 
 def test_bootstrap_admin_family_rejects_empty_normalized_email_without_commit():

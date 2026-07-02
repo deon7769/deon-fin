@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -10,7 +11,7 @@ class Cursor(Protocol):
     def execute(self, sql: str, params: dict[str, Any] | None = None) -> Any:
         ...
 
-    def fetchone(self) -> tuple[Any, ...] | None:
+    def fetchone(self) -> tuple[Any, ...] | Mapping[str, Any] | None:
         ...
 
 
@@ -42,6 +43,8 @@ def _returned_id(cursor: Cursor, label: str) -> str:
     row = cursor.fetchone()
     if row is None:
         raise RuntimeError(f"Bootstrap failed to return {label} id")
+    if isinstance(row, Mapping):
+        return str(row["id"])
     return str(row[0])
 
 
