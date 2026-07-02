@@ -9,11 +9,16 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import {
+  clearSessionMarker,
   getCurrentSession,
+  hasSessionMarkerCookie,
   isAuthEnabled,
   login as requestLogin,
   logout as requestLogout,
+  markSessionPresent,
+  shouldProbeCurrentSession,
   type AuthStatus,
 } from "@/lib/auth";
 import type { AuthFamily, AuthSession, AuthUser, LoginRequest } from "@/lib/types";
@@ -38,6 +43,7 @@ function errorMessage(error: unknown) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const enabled = isAuthEnabled();
+  const pathname = usePathname();
   const [session, setSession] = useState<AuthSession | null>(null);
   const [status, setStatus] = useState<AuthStatus>(() => (enabled ? "loading" : "disabled"));
   const [error, setError] = useState<string | null>(null);
@@ -50,9 +56,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
+    if (
+      !shouldProbeCurrentSession({
+        enabled,
+        pathname,
+        hasSessionMarker: hasSessionMarkerCookie(),
+      })
+    ) {
+      setSession(null);
+      setStatus("unauthenticated");
+      setError(null);
+      return null;
+    }
+
     setStatus("loading");
     try {
       const nextSession = await getCurrentSession();
+      if (nextSession) {
+        markSessionPresent();
+      } else {
+        clearSessionMarker();
+      }
       setSession(nextSession);
       setStatus(nextSession ? "authenticated" : "unauthenticated");
       setError(null);
@@ -63,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(errorMessage(refreshError));
       return null;
     }
-  }, [enabled]);
+  }, [enabled, pathname]);
 
   useEffect(() => {
     let active = true;
@@ -74,10 +98,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
     }
 
+    if (
+      !shouldProbeCurrentSession({
+        enabled,
+        pathname,
+        hasSessionMarker: hasSessionMarkerCookie(),
+      })
+    ) {
+      queueMicrotask(() => {
+        if (!active) {
+          return;
+        }
+        setSession(null);
+        setStatus("unauthenticated");
+        setError(null);
+      });
+      return () => {
+        active = false;
+      };
+    }
+
     void getCurrentSession()
       .then((nextSession) => {
         if (!active) {
           return;
+        }
+        if (nextSession) {
+          markSessionPresent();
+        } else {
+          clearSessionMarker();
         }
         setSession(nextSession);
         setStatus(nextSession ? "authenticated" : "unauthenticated");
@@ -95,10 +144,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [enabled]);
+  }, [enabled, pathname]);
 
   const login = useCallback(async (input: LoginRequest) => {
     const nextSession = await requestLogin(input);
+    markSessionPresent();
     setSession(nextSession);
     setStatus("authenticated");
     setError(null);
@@ -111,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await requestLogout();
       }
     } finally {
+      clearSessionMarker();
       setSession(null);
       setStatus(enabled ? "unauthenticated" : "disabled");
     }

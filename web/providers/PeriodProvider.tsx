@@ -11,13 +11,17 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useFinancialMonthStartDayState } from "@/hooks/useFinancialMonthStartDay";
+import {
+  shouldLoadFinancialMonthStartDay,
+  useFinancialMonthStartDayState,
+} from "@/hooks/useFinancialMonthStartDay";
 import {
   currentReferenceMonth,
   isISODate,
   isYearMonth,
   type DateRange,
 } from "@/lib/period";
+import { useOptionalAuth } from "./AuthProvider";
 
 export type PeriodMode = "month" | "range";
 
@@ -89,10 +93,18 @@ function storeMonth(ym: string) {
 }
 
 export function PeriodProvider({ children }: { children: ReactNode }) {
+  const auth = useOptionalAuth();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { startDay, settled: startDaySettled } = useFinancialMonthStartDayState();
+  const profileStartDayEnabled = shouldLoadFinancialMonthStartDay({
+    authEnabled: Boolean(auth?.enabled),
+    authStatus: auth?.status ?? "disabled",
+  });
+  const periodUrlWritesEnabled = pathname !== "/login" && profileStartDayEnabled;
+  const { startDay, settled: startDaySettled } = useFinancialMonthStartDayState({
+    enabled: profileStartDayEnabled,
+  });
   const storedMonth = useSyncExternalStore(subscribeStoredMonth, readStoredMonthSnapshot, () => null);
   const [manualMonth, setManualMonth] = useState<string | null>(null);
 
@@ -108,6 +120,10 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
 
   const writeUrl = useCallback(
     (next: { month?: string; range?: DateRange | null }) => {
+      if (!periodUrlWritesEnabled) {
+        return;
+      }
+
       const params = new URLSearchParams(searchParams.toString());
       if (next.range) {
         params.delete("month");
@@ -124,10 +140,14 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
-    [pathname, router, searchParams],
+    [pathname, periodUrlWritesEnabled, router, searchParams],
   );
 
   useEffect(() => {
+    if (!periodUrlWritesEnabled) {
+      return;
+    }
+
     if (range || urlMonth) {
       return;
     }
@@ -137,7 +157,16 @@ export function PeriodProvider({ children }: { children: ReactNode }) {
     }
 
     writeUrl({ month, range: null });
-  }, [manualMonth, month, range, startDaySettled, storedMonth, urlMonth, writeUrl]);
+  }, [
+    manualMonth,
+    month,
+    periodUrlWritesEnabled,
+    range,
+    startDaySettled,
+    storedMonth,
+    urlMonth,
+    writeUrl,
+  ]);
 
   const setMonth = useCallback(
     (ym: string) => {

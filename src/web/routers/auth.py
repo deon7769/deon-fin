@@ -28,6 +28,7 @@ from ...storage.postgres import connect_postgres
 from ..dependencies import get_postgres_conn
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+SESSION_MARKER_COOKIE_NAME = "deon_session_present"
 
 
 class LoginRequest(BaseModel):
@@ -77,6 +78,14 @@ def login(
         expires=result.expires_at,
         path="/",
     )
+    response.set_cookie(
+        SESSION_MARKER_COOKIE_NAME,
+        "1",
+        secure=_cookie_secure(request),
+        samesite="Lax",
+        expires=result.expires_at,
+        path="/",
+    )
     return _login_payload(result)
 
 
@@ -88,6 +97,7 @@ def logout(
     if session_token:
         _revoke_session_token(session_token, pepper=_require_auth_pepper(), now=datetime.now(UTC))
     response.delete_cookie(SESSION_COOKIE_NAME, path="/", samesite="Lax")
+    response.delete_cookie(SESSION_MARKER_COOKIE_NAME, path="/", samesite="Lax")
     return {"ok": True}
 
 

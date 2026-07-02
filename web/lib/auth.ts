@@ -10,6 +10,7 @@ import type {
 export type AuthStatus = "disabled" | "loading" | "authenticated" | "unauthenticated";
 
 const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
+export const SESSION_MARKER_COOKIE = "deon_session_present";
 
 export function isAuthEnabled() {
   return ENABLED_VALUES.has((process.env.NEXT_PUBLIC_AUTH_ENABLED ?? "").trim().toLowerCase());
@@ -27,6 +28,42 @@ export function shouldRedirectToLogin({
   status: AuthStatus;
 }) {
   return enabled && status === "unauthenticated";
+}
+
+export function shouldProbeCurrentSession({
+  enabled,
+  pathname,
+  hasSessionMarker,
+}: {
+  enabled: boolean;
+  pathname: string | null;
+  hasSessionMarker: boolean;
+}) {
+  if (!enabled) {
+    return false;
+  }
+  return pathname !== "/login" || hasSessionMarker;
+}
+
+export function hasSessionMarkerCookie(cookieHeader?: string) {
+  const source =
+    cookieHeader ??
+    (typeof document === "undefined" ? "" : document.cookie);
+  return source.split(";").some((part) => part.trim() === `${SESSION_MARKER_COOKIE}=1`);
+}
+
+export function markSessionPresent() {
+  if (typeof document === "undefined") {
+    return;
+  }
+  document.cookie = `${SESSION_MARKER_COOKIE}=1; path=/; SameSite=Lax`;
+}
+
+export function clearSessionMarker() {
+  if (typeof document === "undefined") {
+    return;
+  }
+  document.cookie = `${SESSION_MARKER_COOKIE}=; path=/; Max-Age=0; SameSite=Lax`;
 }
 
 export async function login(input: LoginRequest): Promise<LoginResponse> {

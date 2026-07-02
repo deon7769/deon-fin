@@ -35,13 +35,36 @@ describe("auth client", () => {
   });
 
   it("keeps session auth disabled unless explicitly enabled", async () => {
-    const { isAuthEnabled, shouldRedirectToLogin } = await import("@/lib/auth");
+    const { isAuthEnabled, shouldProbeCurrentSession, shouldRedirectToLogin } = await import(
+      "@/lib/auth"
+    );
 
     expect(isAuthEnabled()).toBe(false);
     expect(shouldRedirectToLogin({ enabled: false, status: "disabled" })).toBe(false);
     expect(shouldRedirectToLogin({ enabled: true, status: "loading" })).toBe(false);
     expect(shouldRedirectToLogin({ enabled: true, status: "authenticated" })).toBe(false);
     expect(shouldRedirectToLogin({ enabled: true, status: "unauthenticated" })).toBe(true);
+    expect(
+      shouldProbeCurrentSession({
+        enabled: true,
+        pathname: "/login",
+        hasSessionMarker: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldProbeCurrentSession({
+        enabled: true,
+        pathname: "/login",
+        hasSessionMarker: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldProbeCurrentSession({
+        enabled: true,
+        pathname: "/perfil",
+        hasSessionMarker: false,
+      }),
+    ).toBe(true);
 
     process.env.NEXT_PUBLIC_AUTH_ENABLED = "true";
     expect(isAuthEnabled()).toBe(true);
@@ -66,6 +89,13 @@ describe("auth client", () => {
         body: JSON.stringify({ email: "davi@example.com", password: "secret" }),
       }),
     );
+  });
+
+  it("reads the non-sensitive session marker cookie", async () => {
+    const { hasSessionMarkerCookie } = await import("@/lib/auth");
+
+    expect(hasSessionMarkerCookie("theme=dark; deon_session_present=1")).toBe(true);
+    expect(hasSessionMarkerCookie("theme=dark")).toBe(false);
   });
 
   it("returns null when the current session endpoint responds unauthorized", async () => {

@@ -58,6 +58,7 @@ def test_login_endpoint_sets_httponly_session_cookie(monkeypatch):
     assert response.json()["family"]["id"] == "family-1"
     cookie = response.headers["set-cookie"]
     assert "deon_session=raw-token" in cookie
+    assert "deon_session_present=1" in cookie
     assert "HttpOnly" in cookie
     assert "SameSite=Lax" in cookie
 
@@ -207,7 +208,9 @@ def test_logout_endpoint_revokes_session_and_clears_cookie(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     assert calls == [("raw-token", "pepper")]
-    assert "deon_session=" in response.headers["set-cookie"]
+    cookie = response.headers["set-cookie"]
+    assert "deon_session=" in cookie
+    assert "deon_session_present=" in cookie
 
 
 def test_auth_session_helpers_use_auth_database_url(monkeypatch):
