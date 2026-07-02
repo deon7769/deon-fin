@@ -90,12 +90,16 @@ def update_auth_account(conn: ConnectionLike, data: AccountUpdateInput) -> Accou
         cursor.execute(
             """
             UPDATE user_identities
-            SET provider_subject = %(email)s,
-                provider_email = %(email)s
+            SET provider_subject = %(provider_subject)s,
+                provider_email = %(provider_email)s
             WHERE user_id = %(user_id)s
               AND provider = 'local'
             """,
-            {"user_id": data.user_id, "email": str(updated["email"])},
+            {
+                "user_id": data.user_id,
+                "provider_subject": str(updated["email"]),
+                "provider_email": str(updated["email"]),
+            },
         )
         cursor.execute(
             """

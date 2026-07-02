@@ -43,6 +43,12 @@ class PostgreSQLTypeCheckingCursor(FakeCursor):
             and "%(password_hash)s::text IS NULL" not in sql
         ):
             raise RuntimeError("could not determine data type of parameter")
+        if (
+            "UPDATE user_identities" in sql
+            and "provider_subject = %(email)s" in sql
+            and "provider_email = %(email)s" in sql
+        ):
+            raise RuntimeError("inconsistent types deduced for parameter")
         return super().execute(sql, params)
 
 
@@ -99,7 +105,8 @@ def test_update_auth_account_changes_email_and_password_atomically():
     assert user_update["password_hash"] != "senha nova forte"
     assert verify_password("senha nova forte", user_update["password_hash"])
     assert user_update["now"] == now
-    assert identity_update["email"] == "novo@example.com"
+    assert identity_update["provider_subject"] == "novo@example.com"
+    assert identity_update["provider_email"] == "novo@example.com"
     assert "UPDATE user_security_state" in sql
     assert conn.committed
 
