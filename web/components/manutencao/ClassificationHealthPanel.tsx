@@ -10,8 +10,10 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SectionCard } from "@/components/ui/SectionCard";
 import { TagSelect } from "@/components/ui/TagSelect";
 import {
+  classificationBulkApplyFeedback,
   classificationCoverage,
   classificationIssueRows,
+  classificationSuggestionImpactLabel,
   type ClassificationIssueRow,
 } from "@/lib/maintenance";
 import type {
@@ -201,7 +203,7 @@ function ClassificationSuggestions({
                   <p className="mt-1 truncate text-xs text-muted">{item.raw_category}</p>
                 </div>
                 <div className="text-right text-xs text-muted">
-                  <p>{item.transaction_count} lançamento(s)</p>
+                  <p>{classificationSuggestionImpactLabel(item)}</p>
                   <MoneyText value={item.total_abs} className="font-semibold text-text" />
                 </div>
               </div>
@@ -322,7 +324,7 @@ export function ClassificationHealthPanel({
     setStatus("Aplicando em massa...");
     try {
       const result = await onApplyBulk(request);
-      setStatus(`${result.updated} lançamento(s) atualizado(s).`);
+      setStatus(classificationBulkApplyFeedback(result));
       setPreview(null);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Falha ao aplicar em massa.");

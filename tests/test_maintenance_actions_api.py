@@ -291,6 +291,74 @@ def test_maintenance_apply_classification_returns_affected_count_and_ids(client,
     assert set(audit["metadata"]["affected_transaction_ids"]) == {first.id, second.id}
 
 
+def test_maintenance_apply_bucket_classification_returns_affected_count_and_preserves_manual_bucket(
+    client,
+    tmp_db,
+):
+    _seed_account(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    buckets = buckets_repo.list_buckets(tmp_db)
+    target_bucket = buckets[0]
+    manual_bucket = buckets[1]
+    first = _insert_tx(
+        tmp_db,
+        external_id="maint-apply-bucket-1",
+        description="Academia Teste",
+        category="Sports",
+    )
+    second = _insert_tx(
+        tmp_db,
+        external_id="maint-apply-bucket-2",
+        description="Academia Teste",
+        category="Sports",
+    )
+    manual = _insert_tx(
+        tmp_db,
+        external_id="maint-apply-bucket-3",
+        description="Academia Teste",
+        category="Sports",
+    )
+    tmp_db._conn.execute(
+        "UPDATE transactions SET bucket_id=?, bucket_source='manual' WHERE id=?",
+        (manual_bucket["id"], manual.id),
+    )
+    tmp_db._conn.commit()
+
+    response = client.post(
+        "/api/maintenance/classification/apply",
+        json={
+            "kind": "bucket",
+            "transaction_id": first.id,
+            "target_id": target_bucket["id"],
+            "apply_to_similar": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "bucket"
+    assert body["target_id"] == target_bucket["id"]
+    assert body["target_name"] == target_bucket["name"]
+    assert body["affected_count"] == 2
+    assert body["similar_affected"] == 1
+    assert set(body["affected_transaction_ids"]) == {first.id, second.id}
+    rows = {
+        row["id"]: (row["bucket_id"], row["bucket_source"])
+        for row in tmp_db._conn.execute(
+            "SELECT id, bucket_id, bucket_source FROM transactions"
+        )
+    }
+    assert rows[first.id] == (target_bucket["id"], "manual")
+    assert rows[second.id] == (target_bucket["id"], "rule")
+    assert rows[manual.id] == (manual_bucket["id"], "manual")
+
+    audit = client.get("/api/maintenance/classification/audit").json()["items"][0]
+    assert audit["action"] == "similar_apply"
+    assert audit["kind"] == "bucket"
+    assert audit["affected_count"] == 2
+    assert set(audit["metadata"]["affected_transaction_ids"]) == {first.id, second.id}
+
+
 def test_maintenance_bulk_preview_validates_target(client, tmp_db):
     _seed_account(tmp_db)
     _insert_tx(tmp_db, external_id="maint-bulk-invalid")
