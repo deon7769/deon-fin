@@ -101,8 +101,8 @@ def bootstrap_admin_family(conn: Connection, data: BootstrapInput) -> BootstrapR
         VALUES (
             %(user_id)s,
             'local',
-            %(email)s,
-            %(email)s
+            %(provider_subject)s,
+            %(provider_email)s
         )
         ON CONFLICT (provider, provider_subject)
             WHERE provider_subject IS NOT NULL
@@ -110,7 +110,11 @@ def bootstrap_admin_family(conn: Connection, data: BootstrapInput) -> BootstrapR
             user_id = EXCLUDED.user_id,
             provider_email = EXCLUDED.provider_email
         """,
-        {"user_id": user_id, "email": email},
+        {
+            "user_id": user_id,
+            "provider_subject": email,
+            "provider_email": email,
+        },
     )
 
     cursor.execute(

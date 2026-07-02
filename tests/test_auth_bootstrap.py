@@ -63,6 +63,9 @@ def test_bootstrap_admin_family_creates_user_family_membership_and_person():
         "ON CONFLICT (family_id, linked_user_id) WHERE linked_user_id IS NOT NULL"
         in normalized_sql
     )
+    identity_params = conn.cursor_obj.statements[1][1]
+    assert identity_params["provider_subject"] == "davi@example.com"
+    assert identity_params["provider_email"] == "davi@example.com"
     assert conn.cursor_obj.statements[0][1]["email"] == "davi@example.com"
     assert conn.cursor_obj.statements[0][1]["password_hash"].startswith("$argon2")
 
