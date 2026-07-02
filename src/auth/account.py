@@ -68,7 +68,7 @@ def update_auth_account(conn: ConnectionLike, data: AccountUpdateInput) -> Accou
             SET email = %(email)s,
                 password_hash = COALESCE(%(password_hash)s, password_hash),
                 password_changed_at = CASE
-                    WHEN %(password_hash)s IS NULL THEN password_changed_at
+                    WHEN %(password_hash)s::text IS NULL THEN password_changed_at
                     ELSE %(now)s
                 END,
                 updated_at = %(now)s
