@@ -370,6 +370,17 @@ describe("maintenance helpers", () => {
         createElement(ClassificationHealthPanel, {
           data: sample,
           month: "2026-06",
+          onApplySuggestion: async () => ({
+            kind: "tag" as const,
+            raw_category: "Digital services",
+            target_id: 3,
+            target_name: "Servi\u00e7os digitais",
+            month: "2026-06",
+            preview_total: 2,
+            updated: 2,
+            not_found: [],
+            created_target: true,
+          }),
           suggestions: {
             month: "2026-06",
             total: 1,
@@ -422,6 +433,8 @@ describe("maintenance helpers", () => {
     expect(html).toContain("2 lan\u00e7amento(s)");
     expect(html).toContain("2 sem Tag");
     expect(html).toContain("2 sem Meta");
+    expect(html).toContain("Aplicar Tag");
+    expect(html).toContain("Aplicar Meta");
     expect(html).toContain("OpenAI ChatGPT");
   });
 

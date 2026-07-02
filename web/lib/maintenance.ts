@@ -1,6 +1,7 @@
 import type {
   MaintenanceClassificationBulkApplyResponse,
   MaintenanceClassificationSuggestion,
+  MaintenanceClassificationSuggestionApplyResponse,
   MaintenanceFamilyProfile,
   MaintenanceOverrides,
   MaintenanceResponse,
@@ -332,6 +333,17 @@ export function classificationBulkApplyFeedback(
   const suffix = notFound ? ` ${notFound} não encontrado(s).` : "";
 
   return `${kind} ${result.target_name} aplicada em ${result.updated} de ${result.preview_total} lançamento(s).${suffix}`;
+}
+
+export function classificationSuggestionApplyFeedback(
+  result: MaintenanceClassificationSuggestionApplyResponse,
+): string {
+  const kind = result.kind === "bucket" ? "Meta" : "Tag";
+  const created = result.created_target ? " criada e" : "";
+  const notFound = result.not_found.length;
+  const suffix = notFound ? ` ${notFound} não encontrado(s).` : "";
+
+  return `${kind} ${result.target_name}${created} aplicada em ${result.updated} de ${result.preview_total} lançamento(s).${suffix}`;
 }
 
 export function classificationSuggestionImpactLabel(

@@ -32,6 +32,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useBuckets } from "@/hooks/useBuckets";
 import {
   useApplyMaintenanceClassificationBulk,
+  useApplyMaintenanceClassificationSuggestion,
   useMaintenance,
   useMaintenanceClassificationAudit,
   useMaintenanceClassificationRules,
@@ -219,6 +220,7 @@ export default function ManutencaoPage() {
   const reprocessClassification = useReprocessMaintenanceClassification();
   const previewClassificationBulk = usePreviewMaintenanceClassificationBulk();
   const applyClassificationBulk = useApplyMaintenanceClassificationBulk();
+  const applyClassificationSuggestion = useApplyMaintenanceClassificationSuggestion();
   const [editorOverride, setEditorOverride] = useState<{
     dataUpdatedAt: number;
     value: MaintenanceEditorState;
@@ -392,6 +394,7 @@ export default function ManutencaoPage() {
               reprocessing={reprocessClassification.isPending}
               previewing={previewClassificationBulk.isPending}
               applying={applyClassificationBulk.isPending}
+              applyingSuggestion={applyClassificationSuggestion.isPending}
               suggestions={classificationSuggestions.data}
               suggestionsLoading={classificationSuggestions.isLoading}
               suggestionsError={classificationSuggestions.error}
@@ -400,6 +403,11 @@ export default function ManutencaoPage() {
               onApplyBulk={async (payload) => {
                 const result = await applyClassificationBulk.mutateAsync(payload);
                 await maintenance.refetch();
+                return result;
+              }}
+              onApplySuggestion={async (payload) => {
+                const result = await applyClassificationSuggestion.mutateAsync(payload);
+                await Promise.all([maintenance.refetch(), classificationSuggestions.refetch()]);
                 return result;
               }}
             />

@@ -750,6 +750,18 @@ export type MaintenanceClassificationBulkApplyResponse = {
   not_found: string[];
 };
 
+export type MaintenanceClassificationSuggestionApplyRequest = {
+  kind: MaintenanceClassificationBulkKind;
+  raw_category: string;
+  month?: string | null;
+};
+
+export type MaintenanceClassificationSuggestionApplyResponse =
+  MaintenanceClassificationBulkApplyResponse & {
+    raw_category: string;
+    created_target: boolean;
+  };
+
 export type MaintenanceClassificationSuggestionTag = {
   id: number | null;
   name: string;

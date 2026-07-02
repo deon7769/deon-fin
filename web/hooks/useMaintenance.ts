@@ -12,6 +12,8 @@ import type {
   MaintenanceClassificationRulePatch,
   MaintenanceClassificationReprocessResponse,
   MaintenanceClassificationRulesResponse,
+  MaintenanceClassificationSuggestionApplyRequest,
+  MaintenanceClassificationSuggestionApplyResponse,
   MaintenanceClassificationSuggestionsResponse,
   MaintenanceResponse,
   MaintenanceSystemTotalsPayload,
@@ -102,6 +104,21 @@ export function useApplyMaintenanceClassificationBulk() {
     mutationFn: (payload: MaintenanceClassificationBulkRequest) =>
       api.post<MaintenanceClassificationBulkApplyResponse>(
         "/maintenance/classification/bulk-apply",
+        payload,
+      ),
+    onSuccess: () => {
+      invalidateClassificationData(queryClient);
+    },
+  });
+}
+
+export function useApplyMaintenanceClassificationSuggestion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: MaintenanceClassificationSuggestionApplyRequest) =>
+      api.post<MaintenanceClassificationSuggestionApplyResponse>(
+        "/maintenance/classification/suggestions/apply",
         payload,
       ),
     onSuccess: () => {

@@ -46,6 +46,12 @@ class ClassificationBulkRequest(BaseModel):
     month: str | None = None
 
 
+class ClassificationSuggestionApplyRequest(BaseModel):
+    kind: Literal["tag", "bucket"]
+    raw_category: str
+    month: str | None = None
+
+
 class ClassificationRulePatch(BaseModel):
     kind: Literal["tag", "bucket"]
     match_key: str
@@ -243,6 +249,10 @@ def _classification_candidates(
     return items
 
 
+def _category_group_key(value: Any) -> str:
+    return str(value or "(sem categoria)").strip().lower()
+
+
 def _bucket_suggestion(bucket: dict[str, Any] | None, bucket_key: str | None) -> dict[str, Any] | None:
     if bucket is None:
         if not bucket_key:
@@ -389,6 +399,122 @@ def _bulk_preview_response(
     }
 
 
+def _suggestion_apply_candidates(
+    db: Database,
+    *,
+    kind: Literal["tag", "bucket"],
+    month: str | None,
+    raw_category: str,
+) -> tuple[str, list[dict[str, Any]]]:
+    category = str(raw_category or "").strip()
+    if not category:
+        raise HTTPException(status_code=422, detail="raw_category obrigat\u00f3ria")
+    candidates = [
+        item
+        for item in _classification_candidates(db, kind=kind, month=month)
+        if _category_group_key(item.get("category")) == category.lower()
+    ]
+    if not candidates:
+        raise HTTPException(status_code=404, detail="nenhum lan\u00e7amento pendente para a sugest\u00e3o")
+    return category, candidates
+
+
+def _suggestion_bucket(
+    db: Database,
+    sample: dict[str, Any],
+    cat_map: dict[str, str],
+    buckets_by_key: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    category_key = str(sample.get("category") or "").strip().lower()
+    bucket_key = CATEGORY_BUCKET_MAP.get(category_key)
+    tag = _suggested_tag(db, sample, cat_map, buckets_by_key)
+    if bucket_key is None and tag is not None:
+        bucket_key = tag.get("bucket_key")
+    return _bucket_suggestion(buckets_by_key.get(bucket_key or ""), bucket_key)
+
+
+def _suggestion_apply_target(
+    db: Database,
+    *,
+    kind: Literal["tag", "bucket"],
+    sample: dict[str, Any],
+) -> tuple[int, str, bool]:
+    buckets_repo.seed_buckets(db)
+    tags_repo.seed_tags_if_empty(db)
+    cat_map = mnt.load_overrides()["categorias_pt"]
+    buckets_by_key = {bucket["key"]: bucket for bucket in buckets_repo.list_buckets(db)}
+
+    if kind == "tag":
+        tag = _suggested_tag(db, sample, cat_map, buckets_by_key)
+        if tag is None or not tag.get("name"):
+            raise HTTPException(status_code=422, detail="sem Tag sugerida para esta categoria")
+        try:
+            row, created = tags_repo.get_or_create_tag(
+                db,
+                name=str(tag["name"]),
+                color=tag.get("color"),
+                bucket_id=tag.get("bucket_id"),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return int(row["id"]), str(row["name"]), bool(created)
+
+    bucket = _suggestion_bucket(db, sample, cat_map, buckets_by_key)
+    if bucket is None or bucket.get("id") is None:
+        raise HTTPException(status_code=422, detail="sem Meta sugerida para esta categoria")
+    return int(bucket["id"]), str(bucket["name"]), False
+
+
+def _apply_classification_suggestion_response(
+    db: Database,
+    body: ClassificationSuggestionApplyRequest,
+) -> dict[str, Any]:
+    month = _validate_year_month(body.month)
+    raw_category, candidates = _suggestion_apply_candidates(
+        db,
+        kind=body.kind,
+        month=month,
+        raw_category=body.raw_category,
+    )
+    target_id, target_name, created_target = _suggestion_apply_target(
+        db,
+        kind=body.kind,
+        sample=candidates[0],
+    )
+    ids = [item["id"] for item in candidates]
+    patch = {"tag_id": target_id} if body.kind == "tag" else {"bucket_id": target_id}
+    result = transactions_repo.bulk_update_transactions(db, ids, **patch)
+    not_found = [str(item) for item in result["not_found"]]
+    affected_transaction_ids = [transaction_id for transaction_id in ids if transaction_id not in not_found]
+    classification_audit_repo.record(
+        db,
+        action="suggestion_apply",
+        kind=body.kind,
+        target_id=target_id,
+        target_name=target_name,
+        affected_count=int(result["updated"]),
+        preview_total=len(ids),
+        metadata={
+            "month": month,
+            "raw_category": raw_category,
+            "created_target": created_target,
+            "affected_transaction_ids": affected_transaction_ids,
+            "not_found": not_found,
+        },
+    )
+    return {
+        "kind": body.kind,
+        "raw_category": raw_category,
+        "target_id": target_id,
+        "target_name": target_name,
+        "month": month,
+        "preview_total": len(ids),
+        "updated": int(result["updated"]),
+        "not_found": not_found,
+        "created_target": created_target,
+    }
+
+
 @router.get("/system-totals")
 def get_system_totals(db: Database = Depends(get_db)) -> dict:
     return system_totals_repo.list_settings(db)
@@ -441,6 +567,14 @@ def list_classification_suggestions(
     db: Database = Depends(get_db),
 ) -> dict:
     return _classification_suggestions_response(db, month)
+
+
+@router.post("/classification/suggestions/apply")
+def apply_classification_suggestion(
+    body: ClassificationSuggestionApplyRequest,
+    db: Database = Depends(get_db),
+) -> dict:
+    return _apply_classification_suggestion_response(db, body)
 
 
 @router.post("/classification/bulk-apply")

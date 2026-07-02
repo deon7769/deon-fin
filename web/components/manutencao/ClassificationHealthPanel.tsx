@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, RefreshCw, Tags } from "lucide-react";
+import { AlertTriangle, RefreshCw, Tags, Target } from "lucide-react";
 import { BucketSelect } from "@/components/ui/BucketSelect";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -13,6 +13,7 @@ import {
   classificationBulkApplyFeedback,
   classificationCoverage,
   classificationIssueRows,
+  classificationSuggestionApplyFeedback,
   classificationSuggestionImpactLabel,
   type ClassificationIssueRow,
 } from "@/lib/maintenance";
@@ -24,6 +25,8 @@ import type {
   MaintenanceClassificationBulkRequest,
   MaintenanceClassificationPolicyIssue,
   MaintenanceClassificationReprocessResponse,
+  MaintenanceClassificationSuggestionApplyRequest,
+  MaintenanceClassificationSuggestionApplyResponse,
   MaintenanceClassificationSuggestionsResponse,
   MaintenanceResponse,
   Tag,
@@ -37,6 +40,7 @@ type ClassificationHealthPanelProps = {
   reprocessing?: boolean;
   previewing?: boolean;
   applying?: boolean;
+  applyingSuggestion?: boolean;
   suggestions?: MaintenanceClassificationSuggestionsResponse;
   suggestionsLoading?: boolean;
   suggestionsError?: unknown;
@@ -47,6 +51,9 @@ type ClassificationHealthPanelProps = {
   onApplyBulk?: (
     payload: MaintenanceClassificationBulkRequest,
   ) => Promise<MaintenanceClassificationBulkApplyResponse>;
+  onApplySuggestion?: (
+    payload: MaintenanceClassificationSuggestionApplyRequest,
+  ) => Promise<MaintenanceClassificationSuggestionApplyResponse>;
 };
 
 const issueColumns: DataTableColumn<ClassificationIssueRow>[] = [
@@ -166,10 +173,18 @@ function ClassificationSuggestions({
   data,
   loading,
   error,
+  month,
+  applying = false,
+  onApplySuggestion,
 }: {
   data?: MaintenanceClassificationSuggestionsResponse;
   loading?: boolean;
   error?: unknown;
+  month?: string | null;
+  applying?: boolean;
+  onApplySuggestion?: (
+    payload: MaintenanceClassificationSuggestionApplyRequest,
+  ) => Promise<void>;
 }) {
   const items = data?.items ?? [];
 
@@ -215,6 +230,28 @@ function ClassificationSuggestions({
                     {colorDot(item.suggested_tag?.color)}
                     <span className="truncate">{item.suggested_tag?.name ?? "Sem sugestão"}</span>
                   </p>
+                  {onApplySuggestion ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void onApplySuggestion({
+                          kind: "tag",
+                          raw_category: item.raw_category,
+                          month,
+                        })
+                      }
+                      disabled={applying || !item.suggested_tag?.name}
+                      title={
+                        item.suggested_tag?.name
+                          ? "Aplicar Tag sugerida neste grupo"
+                          : "Sem Tag sugerida"
+                      }
+                      className="mt-2 inline-flex h-8 w-full items-center justify-center gap-2 rounded-md bg-accent px-2 text-xs font-semibold text-accentFg transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Tags size={14} aria-hidden />
+                      Aplicar Tag
+                    </button>
+                  ) : null}
                 </div>
                 <div className="rounded-md border border-border bg-surface px-3 py-2">
                   <p className="text-xs font-medium text-muted">Meta sugerida</p>
@@ -222,6 +259,28 @@ function ClassificationSuggestions({
                     {colorDot(item.suggested_bucket?.color)}
                     <span className="truncate">{item.suggested_bucket?.name ?? "Sem sugestão"}</span>
                   </p>
+                  {onApplySuggestion ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void onApplySuggestion({
+                          kind: "bucket",
+                          raw_category: item.raw_category,
+                          month,
+                        })
+                      }
+                      disabled={applying || !item.suggested_bucket?.id}
+                      title={
+                        item.suggested_bucket?.id
+                          ? "Aplicar Meta sugerida neste grupo"
+                          : "Sem Meta sugerida"
+                      }
+                      className="mt-2 inline-flex h-8 w-full items-center justify-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-2 text-xs font-semibold text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Target size={14} aria-hidden />
+                      Aplicar Meta
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -254,12 +313,14 @@ export function ClassificationHealthPanel({
   reprocessing = false,
   previewing = false,
   applying = false,
+  applyingSuggestion = false,
   suggestions,
   suggestionsLoading = false,
   suggestionsError,
   onReprocess,
   onPreviewBulk,
   onApplyBulk,
+  onApplySuggestion,
 }: ClassificationHealthPanelProps) {
   const coverage = classificationCoverage(data);
   const missingTag = classificationIssueRows(data, "missing_tag");
@@ -328,6 +389,20 @@ export function ClassificationHealthPanel({
       setPreview(null);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Falha ao aplicar em massa.");
+    }
+  };
+
+  const handleApplySuggestion = async (
+    request: MaintenanceClassificationSuggestionApplyRequest,
+  ) => {
+    if (!onApplySuggestion) return;
+    setStatus("Aplicando sugestão...");
+    setPreview(null);
+    try {
+      const result = await onApplySuggestion(request);
+      setStatus(classificationSuggestionApplyFeedback(result));
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Falha ao aplicar sugestão.");
     }
   };
 
@@ -460,6 +535,9 @@ export function ClassificationHealthPanel({
           data={suggestions}
           loading={suggestionsLoading}
           error={suggestionsError}
+          month={month}
+          applying={applyingSuggestion}
+          onApplySuggestion={onApplySuggestion ? handleApplySuggestion : undefined}
         />
 
         <div className="grid gap-4 md:grid-cols-2">
