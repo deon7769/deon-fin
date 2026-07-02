@@ -648,7 +648,8 @@ def test_dashboard_current_month_kpis_match_painel_summary_with_system_totals_po
     client,
     tmp_db,
 ):
-    current_month = reference_month(date.today(), 1)
+    today = date.today()
+    current_month = reference_month(today, 1)
     _seed_accounts(tmp_db)
     tmp_db.upsert_account(
         Account(
@@ -671,7 +672,7 @@ def test_dashboard_current_month_kpis_match_painel_summary_with_system_totals_po
     _insert_tx(
         tmp_db,
         external_id="dashboard-parity-income",
-        posted_at=_date_for_month(current_month),
+        posted_at=today,
         amount="1000.00",
         description="Renda incluido",
         category="Salario",
@@ -681,7 +682,7 @@ def test_dashboard_current_month_kpis_match_painel_summary_with_system_totals_po
         tmp_db,
         external_id="dashboard-parity-visible-card",
         account_id="painel-card",
-        posted_at=_date_for_month(current_month),
+        posted_at=today,
         amount="80.00",
         description="Compra cartao visivel",
         category="Lazer",
@@ -691,7 +692,7 @@ def test_dashboard_current_month_kpis_match_painel_summary_with_system_totals_po
         tmp_db,
         external_id="dashboard-parity-excluded-account",
         account_id="painel-excluded",
-        posted_at=_date_for_month(current_month),
+        posted_at=today,
         amount="-500.00",
         description="Compra conta excluida",
         category="Mercado",
@@ -701,7 +702,7 @@ def test_dashboard_current_month_kpis_match_painel_summary_with_system_totals_po
         tmp_db,
         external_id="dashboard-parity-hidden",
         account_id="painel-card",
-        posted_at=_date_for_month(current_month),
+        posted_at=today,
         amount="120.00",
         description="Compra oculta",
         category="Lazer",

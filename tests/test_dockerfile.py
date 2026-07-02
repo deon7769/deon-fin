@@ -17,6 +17,7 @@ def test_dockerfile_builds_next_export_in_node_stage():
     assert "RUN npm ci" in dockerfile
     assert "ENV NEXT_PUBLIC_API_URL=/api" in dockerfile
     assert "RUN npm run build" in dockerfile
+    assert "COPY alembic.ini ./alembic.ini" in dockerfile
     assert "COPY --from=web /web/out ./web_dist" in dockerfile
 
 
