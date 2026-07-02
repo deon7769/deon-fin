@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Any
 
 from ..agent.cards import CREDIT_TYPES
 from ..pluggy import PluggyClient
 from ..storage import Account, Database, Transaction
+from ..time_utils import utc_now_iso
 from ..web.repositories import accounts_repo
 from .base import ImportResult
 from .pluggy_investments import sync_pluggy_investments
@@ -27,10 +28,11 @@ def sync_pluggy_item(
     Erros em uma conta não interrompem a sincronização das outras.
     """
     results: list[ImportResult] = []
+    synced_at = utc_now_iso()
     accounts = client.list_accounts(item_id)
     for acc in accounts:
         try:
-            results.append(_sync_account(client, db, acc, since=since))
+            results.append(_sync_account(client, db, acc, since=since, synced_at=synced_at))
         except Exception:
             log.exception("falha ao sincronizar conta %s do item %s", acc.get("id"), item_id)
     if hasattr(client, "list_investments"):
@@ -47,6 +49,7 @@ def _sync_account(
     acc: dict,
     *,
     since: date | None,
+    synced_at: str,
 ) -> ImportResult:
     acc_id = f"pluggy:{acc['id']}"
     bank_data = acc.get("bankData") or {}
@@ -64,7 +67,7 @@ def _sync_account(
     )
     if item_id:
         accounts_repo.set_account_item(db, acc_id, str(item_id))
-    _upsert_account_balance(db, acc_id, acc)
+    _upsert_account_balance(db, acc_id, acc, synced_at=synced_at)
 
     txs: list[Transaction] = []
     for tx in client.list_transactions(
@@ -110,7 +113,13 @@ def _last4(*values: Any) -> str | None:
     return None
 
 
-def _upsert_account_balance(db: Database, account_id: str, acc: dict[str, Any]) -> None:
+def _upsert_account_balance(
+    db: Database,
+    account_id: str,
+    acc: dict[str, Any],
+    *,
+    synced_at: str,
+) -> None:
     item_id = acc.get("itemId")
     item = db.get_pluggy_item(str(item_id)) if item_id else None
     account_type = (acc.get("type") or "").upper()
@@ -134,10 +143,6 @@ def _upsert_account_balance(db: Database, account_id: str, acc: dict[str, Any]) 
         available=available if is_credit else None,
         brand=credit_data.get("brand") or credit_data.get("network"),
         last4=_last4(acc.get("number"), credit_data.get("last4"), credit_data.get("number")),
-        last_sync_at=(
-            item["last_synced_at"]
-            if item is not None and item["last_synced_at"]
-            else datetime.now().isoformat(timespec="seconds")
-        ),
+        last_sync_at=synced_at,
         sync_status=item["status"] if item is not None and item["status"] else "UPDATED",
     )

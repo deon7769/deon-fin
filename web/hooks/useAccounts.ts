@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { accountsRefetchInterval } from "@/lib/accounts";
 import type {
   AccountCredentialsResponse,
   AccountDeleteResponse,
@@ -27,6 +28,7 @@ export function useAccounts() {
   return useQuery({
     queryKey: ["accounts", month],
     queryFn: ({ signal }) => api.get<AccountsResponse>("/accounts", { month }, signal),
+    refetchInterval: (query) => accountsRefetchInterval(query.state.data),
     staleTime: 30_000,
   });
 }

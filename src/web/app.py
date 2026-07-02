@@ -43,10 +43,11 @@ from ..agent.cards import card_monthly_breakdown
 from ..agent import maintenance as mnt
 from ..auth.sessions import SESSION_COOKIE_NAME, AuthSession, current_session
 from ..config import settings
-from ..importers import sync_pluggy_item
+from ..importers import ImportResult, sync_pluggy_item
 from ..pluggy import PluggyAPIError, PluggyClient
 from ..storage import Database
 from ..storage.postgres import connect_postgres
+from ..time_utils import utc_now_iso
 from .dependencies import get_db, get_pluggy
 from .errors import error_response, install_error_handlers
 from .repositories import profile_repo, system_totals_repo, transactions_repo
@@ -647,19 +648,27 @@ def _fill_missing_reference_months(db: Database) -> int:
 
 def _background_sync(item_id: str, days: int) -> None:
     """Roda em thread pool do FastAPI (BackgroundTasks) — não bloqueia request."""
+    if not _sync_state["running"]:
+        _begin_sync(f"Sincronizando {item_id}...")
     db = Database(settings.database_path)
     pc = PluggyClient(settings.client_id, settings.client_secret)
+    result = "sincronizacao finalizada sem resultado"
     try:
         since = date.today() - timedelta(days=days)
-        sync_pluggy_item(pc, db, item_id, since=since)
+        results = sync_pluggy_item(pc, db, item_id, since=since)
         Categorizer().apply_to_database(db)
         apply_buckets_to_database(db)
         apply_tags_to_database(db)
         _fill_missing_reference_months(db)
         db.upsert_pluggy_item(item_id, mark_synced=True)
+        result = _sync_result_summary(results)
+    except Exception as exc:
+        result = f"falha: {exc}"
+        log.exception("sync falhou para item %s", item_id)
     finally:
         pc.close()
         db.close()
+        _finish_sync(result)
 
 
 # ---------------------------------------------------------------- auto-sync
@@ -674,13 +683,42 @@ _sync_state: dict[str, Any] = {
 _sync_lock = threading.Lock()
 
 
+def _begin_sync(label: str) -> bool:
+    with _sync_lock:
+        if _sync_state["running"]:
+            return False
+        _sync_state["running"] = True
+        _sync_state["last_started"] = utc_now_iso()
+        _sync_state["last_finished"] = None
+        _sync_state["last_result"] = label
+        return True
+
+
+def _finish_sync(result: str) -> None:
+    with _sync_lock:
+        _sync_state["running"] = False
+        _sync_state["last_finished"] = utc_now_iso()
+        _sync_state["last_result"] = result
+
+
+def _sync_result_summary(results: list[ImportResult]) -> str:
+    total_read = sum(result.total_read for result in results)
+    inserted = sum(result.inserted for result in results)
+    skipped = sum(result.skipped_duplicates for result in results)
+    accounts = len(results)
+    return (
+        f"{accounts} conta(s): {inserted} nova(s), "
+        f"{skipped} duplicada(s), {total_read} lida(s)"
+    )
+
+
 def _sync_all_items(days: int) -> str:
     """Sincroniza TODOS os itens Pluggy conhecidos. Retorna um resumo."""
     with _sync_lock:
         if _sync_state["running"]:
             return "já em andamento"
         _sync_state["running"] = True
-        _sync_state["last_started"] = datetime.now().isoformat(timespec="seconds")
+        _sync_state["last_started"] = utc_now_iso()
     ok = err = 0
     errors: list[str] = []
     db = Database(settings.database_path)
@@ -714,7 +752,7 @@ def _sync_all_items(days: int) -> str:
         db.close()
         with _sync_lock:
             _sync_state["running"] = False
-            _sync_state["last_finished"] = datetime.now().isoformat(timespec="seconds")
+            _sync_state["last_finished"] = utc_now_iso()
             _sync_state["last_result"] = result
     return result
 
@@ -917,6 +955,8 @@ def create_app() -> FastAPI:
         if not db.get_pluggy_item(item_id):
             raise HTTPException(status_code=404, detail="item desconhecido localmente")
         days = _normalized_days(body.days)
+        if not _begin_sync(f"Sincronizando {item_id}..."):
+            return {"item_id": item_id, "sync_scheduled": False, "detail": "jÃ¡ em andamento", "days": days}
         bg.add_task(_background_sync, item_id, days)
         return {"item_id": item_id, "sync_scheduled": True, "days": days}
 

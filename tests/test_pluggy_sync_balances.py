@@ -84,7 +84,7 @@ def test_sync_pluggy_item_populates_account_balances(tmp_db: Database):
     assert bank_balance["used"] is None
     assert bank_balance["available"] is None
     assert bank_balance["sync_status"] == "UPDATED"
-    assert bank_balance["last_sync_at"] is not None
+    assert bank_balance["last_sync_at"].endswith("Z")
 
     assert card_balance["balance"] is None
     assert card_balance["credit_limit"] == 4000.0

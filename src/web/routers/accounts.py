@@ -62,7 +62,7 @@ def sync_account(
 
     item_id = _item_or_404(db, account_id)
     days = web_app._normalized_days(body.days if body else None)
-    if web_app._sync_state["running"]:
+    if not web_app._begin_sync(f"Sincronizando {item_id}..."):
         return {
             "account_id": account_id,
             "item_id": item_id,
