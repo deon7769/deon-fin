@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from .family_guard import enforce_sqlite_single_family_mode
 from .passwords import hash_password, normalize_email
 
 
@@ -30,6 +31,7 @@ class BootstrapInput:
     display_name: str
     family_name: str
     family_slug: str
+    financial_database_url: str | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,13 @@ def bootstrap_admin_family(conn: Connection, data: BootstrapInput) -> BootstrapR
         raise ValueError("Admin password must not be empty")
 
     cursor = conn.cursor()
+    if data.financial_database_url:
+        enforce_sqlite_single_family_mode(
+            conn,
+            financial_database_url=data.financial_database_url,
+            requested_family_slug=data.family_slug,
+        )
+
     cursor.execute(
         """
         INSERT INTO users (

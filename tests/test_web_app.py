@@ -56,6 +56,16 @@ def test_health(client):
     assert client.get("/api/health").json() == {"status": "ok"}
 
 
+def test_sync_item_reports_running_state_with_utf8_message(client, tmp_db, monkeypatch):
+    tmp_db.upsert_pluggy_item("item-1", connector_id=1, connector_name="Banco", status="UPDATED")
+    monkeypatch.setattr("src.web.app._begin_sync", lambda message: False)
+
+    response = client.post("/api/items/item-1/sync", json={"days": 30})
+
+    assert response.status_code == 200
+    assert response.json()["detail"] == "já em andamento"
+
+
 def test_cors_headers_allow_next_dev_origin(client):
     r = client.get("/api/health", headers={"Origin": "http://localhost:3000"})
 

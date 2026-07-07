@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from src.auth.bootstrap import BootstrapInput, bootstrap_admin_family
+from src.auth.family_guard import MultiFamilySQLiteGuardError
 
 
 class FakeCursor:
@@ -132,3 +133,27 @@ def test_bootstrap_admin_family_rejects_empty_password_without_commit():
 
     assert not conn.committed
     assert conn.cursor_obj.statements == []
+
+
+def test_bootstrap_admin_family_blocks_second_family_when_financial_data_is_sqlite():
+    conn = FakeConnection(
+        [
+            {"active_family_count": 1},
+            {"conflicting_family_count": 1},
+        ]
+    )
+
+    with pytest.raises(MultiFamilySQLiteGuardError, match="SQLite"):
+        bootstrap_admin_family(
+            conn,
+            BootstrapInput(
+                email="davi@example.com",
+                password="correct horse battery staple",
+                display_name="Davi",
+                family_name="Outra Familia",
+                family_slug="outra-familia",
+                financial_database_url="sqlite:///data/financas.db",
+            ),
+        )
+
+    assert not conn.committed

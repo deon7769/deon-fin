@@ -253,6 +253,7 @@ def bootstrap_auth(
                 display_name=display_name,
                 family_name=family_name,
                 family_slug=family_slug,
+                financial_database_url=settings.database_url,
             ),
         )
     console.print(

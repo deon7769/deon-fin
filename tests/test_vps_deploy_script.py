@@ -39,6 +39,29 @@ def test_deploy_backup_includes_sqlite_sidecars():
     assert "basename" in script
 
 
+def test_deploy_prunes_old_sqlite_backups_after_backup():
+    script = Path("scripts/vps_deploy.sh").read_text(encoding="utf-8")
+
+    assert "BACKUP_KEEP_RECENT=" in script
+    assert "rotate_sqlite_backups()" in script
+    assert "find \"$backup_dir\" -maxdepth 1 -type f -name \"$pattern\"" in script
+    assert "tail -n +\"$((BACKUP_KEEP_RECENT + 1))\"" in script
+    assert "rm -f -- \"$old_backup\"" in script
+    assert 'rotate_backups "financas.db.*.bak"' in script
+    assert 'rotate_backups "financas.db-wal.*.bak"' in script
+    assert 'rotate_backups "financas.db-shm.*.bak"' in script
+
+
+def test_deploy_repairs_data_ownership_for_non_root_container():
+    script = Path("scripts/vps_deploy.sh").read_text(encoding="utf-8")
+
+    assert "ensure_data_ownership()" in script
+    assert 'APP_UID="${APP_UID:-1000}"' in script
+    assert 'APP_GID="${APP_GID:-1000}"' in script
+    assert 'sudo chown -R "$APP_UID:$APP_GID" "$ROOT/data"' in script
+    assert "ensure_data_ownership" in script.split('echo "== pytest =="', 1)[0]
+
+
 def test_deploy_pytest_runs_with_auth_cutover_flags_disabled():
     script = Path("scripts/vps_deploy.sh").read_text(encoding="utf-8")
 

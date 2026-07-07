@@ -31,3 +31,12 @@ def test_auth_database_url_can_point_to_postgres_while_main_database_stays_sqlit
 
     assert settings.database_url == "sqlite:///data/financas.db"
     assert settings.auth_database_url == "postgresql://deon_fin:secret@postgres:5432/deon_fin"
+
+
+def test_trusted_proxy_ips_are_parsed_from_env(monkeypatch):
+    _base_env(monkeypatch)
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "127.0.0.1, 172.20.0.5 ,,")
+
+    settings = load_settings()
+
+    assert settings.trusted_proxy_ips == ["127.0.0.1", "172.20.0.5"]

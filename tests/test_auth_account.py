@@ -111,6 +111,71 @@ def test_update_auth_account_changes_email_and_password_atomically():
     assert conn.committed
 
 
+def test_update_auth_account_revokes_existing_sessions_when_password_changes():
+    conn = FakeConnection(
+        [
+            {
+                "id": "user-1",
+                "email": "davi@example.com",
+                "display_name": "Davi",
+                "password_hash": hash_password("senha atual"),
+            },
+            {
+                "id": "user-1",
+                "email": "davi@example.com",
+                "display_name": "Davi",
+            },
+        ],
+    )
+    now = datetime(2026, 7, 7, 10, 30, tzinfo=UTC)
+
+    update_auth_account(
+        conn,
+        AccountUpdateInput(
+            user_id="user-1",
+            current_password="senha atual",
+            new_password="senha nova forte",
+            now=now,
+        ),
+    )
+
+    session_update = next(
+        (params for statement, params in conn.cursor_obj.statements if "UPDATE sessions" in statement),
+        None,
+    )
+    assert session_update == {"user_id": "user-1", "now": now}
+
+
+def test_update_auth_account_keeps_sessions_active_when_only_email_changes():
+    conn = FakeConnection(
+        [
+            {
+                "id": "user-1",
+                "email": "antigo@example.com",
+                "display_name": "Davi",
+                "password_hash": hash_password("senha atual"),
+            },
+            {
+                "id": "user-1",
+                "email": "novo@example.com",
+                "display_name": "Davi",
+            },
+        ],
+    )
+
+    update_auth_account(
+        conn,
+        AccountUpdateInput(
+            user_id="user-1",
+            current_password="senha atual",
+            email="novo@example.com",
+        ),
+    )
+
+    sql = "\n".join(statement for statement, _params in conn.cursor_obj.statements)
+    assert "UPDATE sessions" not in sql
+
+
 def test_update_auth_account_changes_email_only_without_ambiguous_null_password_param():
     conn = PostgreSQLTypeCheckingConnection(
         [

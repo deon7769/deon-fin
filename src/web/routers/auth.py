@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
@@ -12,6 +13,7 @@ from ...auth.account import (
     InvalidCurrentPassword,
     update_auth_account,
 )
+from ...auth.family_guard import MultiFamilySQLiteGuardError, enforce_sqlite_single_family_mode
 from ...auth.sessions import (
     SESSION_COOKIE_NAME,
     InvalidLogin,
@@ -51,6 +53,10 @@ def login(
 ) -> dict[str, object]:
     pepper = _require_auth_pepper()
     try:
+        enforce_sqlite_single_family_mode(
+            conn,
+            financial_database_url=getattr(settings, "database_url", ""),
+        )
         result = authenticate_login(
             conn,
             LoginInput(
@@ -68,6 +74,8 @@ def login(
         raise HTTPException(status_code=429, detail=str(exc)) from exc
     except LoginForbidden as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except MultiFamilySQLiteGuardError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     response.set_cookie(
         SESSION_COOKIE_NAME,
@@ -205,12 +213,25 @@ def _update_account_credentials(
 
 
 def _client_ip(request: Request) -> str:
+    client_host = request.client.host if request.client else ""
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
+    if forwarded and _trusted_proxy_client(client_host):
         return forwarded.split(",", 1)[0].strip()
-    if request.client:
-        return request.client.host
-    return ""
+    return client_host
+
+
+def _trusted_proxy_client(client_host: str) -> bool:
+    if not client_host:
+        return False
+    for trusted in getattr(settings, "trusted_proxy_ips", []) or []:
+        if trusted == client_host:
+            return True
+        try:
+            if ipaddress.ip_address(client_host) in ipaddress.ip_network(trusted, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
 
 
 def _cookie_secure(request: Request) -> bool:

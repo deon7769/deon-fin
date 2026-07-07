@@ -7,6 +7,48 @@ cd "$ROOT"
 timestamp="$(date +%Y%m%d-%H%M%S)"
 db_path="$ROOT/data/financas.db"
 backup_dir="$ROOT/data/backups"
+BACKUP_KEEP_RECENT="${BACKUP_KEEP_RECENT:-14}"
+APP_UID="${APP_UID:-1000}"
+APP_GID="${APP_GID:-1000}"
+
+rotate_backups() {
+  local pattern="$1"
+  if [ ! -d "$backup_dir" ]; then
+    return
+  fi
+  mapfile -t old_backups < <(
+    find "$backup_dir" -maxdepth 1 -type f -name "$pattern" -printf '%T@\t%p\n' \
+      | sort -rn \
+      | tail -n +"$((BACKUP_KEEP_RECENT + 1))" \
+      | cut -f2-
+  )
+  for old_backup in "${old_backups[@]}"; do
+    rm -f -- "$old_backup"
+    echo "backup pruned: $old_backup"
+  done
+}
+
+rotate_sqlite_backups() {
+  rotate_backups "financas.db.*.bak"
+  rotate_backups "financas.db-wal.*.bak"
+  rotate_backups "financas.db-shm.*.bak"
+}
+
+ensure_data_ownership() {
+  if [ ! -d "$ROOT/data" ]; then
+    return
+  fi
+  if [ "$(id -u)" -eq 0 ]; then
+    chown -R "$APP_UID:$APP_GID" "$ROOT/data"
+    return
+  fi
+  if command -v sudo >/dev/null 2>&1; then
+    sudo chown -R "$APP_UID:$APP_GID" "$ROOT/data"
+    return
+  fi
+  echo "sudo not available; cannot repair data ownership for non-root container" >&2
+  exit 1
+}
 
 echo "== Deon Fin VPS deploy ${timestamp} =="
 echo "root: $ROOT"
@@ -20,9 +62,12 @@ if [ -f "$db_path" ]; then
       echo "database backup: $backup_path"
     fi
   done
+  rotate_sqlite_backups
 else
   echo "database backup: skipped, $db_path not found"
 fi
+
+ensure_data_ownership
 
 echo "== pytest =="
 AUTH_SESSION_ENABLED=false NEXT_PUBLIC_AUTH_ENABLED=false .venv/bin/python -m pytest -q

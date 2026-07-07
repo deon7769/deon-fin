@@ -4,6 +4,8 @@ services:
       context: .
       args:
         NEXT_PUBLIC_AUTH_ENABLED: ${NEXT_PUBLIC_AUTH_ENABLED:-false}
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
     image: financas-agent:local
     container_name: financas-agent
     restart: unless-stopped

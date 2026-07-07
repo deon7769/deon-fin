@@ -39,6 +39,7 @@ class Settings:
     app_password: str | None = None
     auth_pepper: str | None = None
     session_auth_enabled: bool = False
+    trusted_proxy_ips: list[str] | None = None
     cors_origins: list[str] | None = None
     quotes_provider: str = "brapi"
     brapi_token: str | None = None
@@ -158,6 +159,11 @@ def load_settings() -> Settings:
             os.environ.get("AUTH_SESSION_ENABLED", "false").strip().lower()
             in {"1", "true", "yes", "on"}
         ),
+        trusted_proxy_ips=[
+            ip.strip()
+            for ip in os.environ.get("TRUSTED_PROXY_IPS", "").split(",")
+            if ip.strip()
+        ],
         cors_origins=[
             origin.strip()
             for origin in os.environ.get(

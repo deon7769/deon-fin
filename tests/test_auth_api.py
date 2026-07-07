@@ -63,6 +63,130 @@ def test_login_endpoint_sets_httponly_session_cookie(monkeypatch):
     assert "SameSite=Lax" in cookie
 
 
+def test_login_endpoint_blocks_multi_family_session_mode_while_financial_data_is_sqlite(monkeypatch):
+    app = create_app()
+    app.dependency_overrides[get_postgres_conn] = _override_postgres_conn
+
+    def fake_authenticate(conn, data):
+        return LoginResult(
+            session_id="session-1",
+            session_token="raw-token",
+            user_id="user-1",
+            email=data.email,
+            display_name="Davi",
+            family_id="family-2",
+            family_name="Outra Familia",
+            family_role="owner",
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+        )
+
+    def fake_guard(conn, *, financial_database_url, requested_family_slug=None):
+        assert financial_database_url == "sqlite:///data/financas.db"
+        raise auth_router.MultiFamilySQLiteGuardError(
+            "Modo multi-familia bloqueado enquanto os dados financeiros usam SQLite."
+        )
+
+    monkeypatch.setattr(
+        "src.web.routers.auth.settings",
+        SimpleNamespace(
+            auth_pepper="pepper",
+            database_url="sqlite:///data/financas.db",
+            auth_database_url="postgresql://u:p@localhost/auth_db",
+        ),
+    )
+    monkeypatch.setattr("src.web.routers.auth.authenticate_login", fake_authenticate)
+    monkeypatch.setattr("src.web.routers.auth.enforce_sqlite_single_family_mode", fake_guard)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "davi@example.com", "password": "secret"},
+    )
+
+    assert response.status_code == 503
+    assert "SQLite" in response.json()["error"]["message"]
+
+
+def test_login_endpoint_ignores_forwarded_for_from_untrusted_client(monkeypatch):
+    app = create_app()
+    app.dependency_overrides[get_postgres_conn] = _override_postgres_conn
+    seen = []
+
+    def fake_authenticate(conn, data):
+        seen.append(data.ip_address)
+        return LoginResult(
+            session_id="session-1",
+            session_token="raw-token",
+            user_id="user-1",
+            email=data.email,
+            display_name="Davi",
+            family_id="family-1",
+            family_name="Familia Principal",
+            family_role="owner",
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+        )
+
+    monkeypatch.setattr(
+        "src.web.routers.auth.settings",
+        SimpleNamespace(
+            auth_pepper="pepper",
+            database_url="postgresql://u:p@localhost/auth_db",
+            trusted_proxy_ips=[],
+        ),
+    )
+    monkeypatch.setattr("src.web.routers.auth.authenticate_login", fake_authenticate)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/auth/login",
+        headers={"X-Forwarded-For": "203.0.113.10"},
+        json={"email": "davi@example.com", "password": "secret"},
+    )
+
+    assert response.status_code == 200
+    assert seen == ["testclient"]
+
+
+def test_login_endpoint_trusts_forwarded_for_from_configured_proxy(monkeypatch):
+    app = create_app()
+    app.dependency_overrides[get_postgres_conn] = _override_postgres_conn
+    seen = []
+
+    def fake_authenticate(conn, data):
+        seen.append(data.ip_address)
+        return LoginResult(
+            session_id="session-1",
+            session_token="raw-token",
+            user_id="user-1",
+            email=data.email,
+            display_name="Davi",
+            family_id="family-1",
+            family_name="Familia Principal",
+            family_role="owner",
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+        )
+
+    monkeypatch.setattr(
+        "src.web.routers.auth.settings",
+        SimpleNamespace(
+            auth_pepper="pepper",
+            database_url="postgresql://u:p@localhost/auth_db",
+            trusted_proxy_ips=["testclient"],
+        ),
+    )
+    monkeypatch.setattr("src.web.routers.auth.authenticate_login", fake_authenticate)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/auth/login",
+        headers={"X-Forwarded-For": "203.0.113.10, 198.51.100.7"},
+        json={"email": "davi@example.com", "password": "secret"},
+    )
+
+    assert response.status_code == 200
+    assert seen == ["203.0.113.10"]
+
+
 def test_auth_login_bypasses_legacy_basic_auth(monkeypatch):
     monkeypatch.setattr(
         "src.web.app.settings",

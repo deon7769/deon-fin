@@ -129,6 +129,15 @@ def _session_auth_enabled() -> bool:
     return bool(getattr(settings, "session_auth_enabled", False))
 
 
+def _warn_if_no_auth_configured() -> None:
+    if _session_auth_enabled() or settings.app_password:
+        return
+    log.warning(
+        "Aplicação sem autenticação ativa: AUTH_SESSION_ENABLED=false e APP_PASSWORD vazio; "
+        "confie apenas em controles de rede enquanto este modo estiver ativo."
+    )
+
+
 def _session_public_api_path(path: str) -> bool:
     return path == "/api/health" or path.startswith("/api/auth/")
 
@@ -858,6 +867,7 @@ def create_app() -> FastAPI:
         # Não roda sob pytest (evita chamadas de rede ao Pluggy nos testes).
         if os.environ.get("PYTEST_CURRENT_TEST"):
             return
+        _warn_if_no_auth_configured()
         # Sincroniza o Pluggy ao abrir o app + agenda re-sync periódico.
         if settings.auto_sync_on_start or settings.auto_sync_minutes > 0:
             _start_auto_sync()
@@ -956,7 +966,7 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="item desconhecido localmente")
         days = _normalized_days(body.days)
         if not _begin_sync(f"Sincronizando {item_id}..."):
-            return {"item_id": item_id, "sync_scheduled": False, "detail": "jÃ¡ em andamento", "days": days}
+            return {"item_id": item_id, "sync_scheduled": False, "detail": "já em andamento", "days": days}
         bg.add_task(_background_sync, item_id, days)
         return {"item_id": item_id, "sync_scheduled": True, "days": days}
 

@@ -112,6 +112,17 @@ def update_auth_account(conn: ConnectionLike, data: AccountUpdateInput) -> Accou
             """,
             {"user_id": data.user_id, "now": now},
         )
+        if password_hash is not None:
+            cursor.execute(
+                """
+                UPDATE sessions
+                SET revoked_at = %(now)s,
+                    updated_at = %(now)s
+                WHERE user_id = %(user_id)s
+                  AND revoked_at IS NULL
+                """,
+                {"user_id": data.user_id, "now": now},
+            )
     except Exception as exc:
         if _is_unique_violation(exc):
             raise DuplicateEmail("Email already in use") from exc

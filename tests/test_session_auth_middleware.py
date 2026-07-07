@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import base64
+import logging
 from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
 from src.auth.sessions import SESSION_COOKIE_NAME, AuthSession
+from src.web import app as web_app
 from src.web.app import create_app, get_db, get_pluggy
 
 
@@ -57,6 +59,32 @@ def test_legacy_basic_auth_remains_default_when_session_auth_is_disabled(monkeyp
     assert denied.headers["www-authenticate"] == 'Basic realm="Raio-X Financeiro"'
     assert denied.json()["error"]["code"] == "unauthorized"
     assert allowed.status_code == 200
+
+
+def test_startup_warns_when_no_auth_is_configured(monkeypatch, caplog):
+    monkeypatch.setattr(
+        web_app,
+        "settings",
+        SimpleNamespace(session_auth_enabled=False, app_password=None),
+    )
+    caplog.set_level(logging.WARNING, logger="src.web.app")
+
+    web_app._warn_if_no_auth_configured()
+
+    assert "sem autenticação" in caplog.text
+
+
+def test_startup_auth_warning_stays_quiet_when_session_auth_is_enabled(monkeypatch, caplog):
+    monkeypatch.setattr(
+        web_app,
+        "settings",
+        SimpleNamespace(session_auth_enabled=True, app_password=None),
+    )
+    caplog.set_level(logging.WARNING, logger="src.web.app")
+
+    web_app._warn_if_no_auth_configured()
+
+    assert caplog.text == ""
 
 
 def test_session_auth_requires_valid_cookie_for_data_apis(monkeypatch, tmp_db):

@@ -23,6 +23,16 @@ def test_dockerfile_builds_next_export_in_node_stage():
     assert "COPY --from=web /web/out ./web_dist" in dockerfile
 
 
+def test_dockerfile_runs_application_as_non_root_user():
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+
+    assert "ARG APP_UID=1000" in dockerfile
+    assert "ARG APP_GID=1000" in dockerfile
+    assert "useradd" in dockerfile
+    assert "chown -R app:app /app" in dockerfile
+    assert "USER app" in dockerfile
+
+
 def test_dockerignore_excludes_local_build_and_secret_artifacts():
     dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
 
@@ -54,6 +64,8 @@ def test_compose_declares_optional_postgres_profile():
 
     assert build["context"] == "."
     assert build["args"]["NEXT_PUBLIC_AUTH_ENABLED"] == "${NEXT_PUBLIC_AUTH_ENABLED:-false}"
+    assert build["args"]["APP_UID"] == "${APP_UID:-1000}"
+    assert build["args"]["APP_GID"] == "${APP_GID:-1000}"
     assert postgres["profiles"] == ["postgres"]
     assert postgres["image"] == "postgres:16-alpine"
     assert postgres["networks"] == ["deon_fin_internal"]
@@ -89,8 +101,11 @@ def test_env_example_documents_postgres_without_switching_default_database():
     env_example = Path(".env.example").read_text(encoding="utf-8")
 
     assert "DATABASE_URL=sqlite:///data/financas.db" in env_example
+    assert "TRUSTED_PROXY_IPS=" in env_example
     assert "POSTGRES_DB=deon_fin" in env_example
     assert "AUTH_PEPPER=" in env_example
     assert "AUTH_DATABASE_URL=" in env_example
     assert "AUTH_SESSION_ENABLED=false" in env_example
     assert "NEXT_PUBLIC_AUTH_ENABLED=false" in env_example
+    assert "APP_UID=1000" in env_example
+    assert "APP_GID=1000" in env_example
