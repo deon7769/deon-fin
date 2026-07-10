@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -50,6 +51,25 @@ ensure_data_ownership() {
   exit 1
 }
 
+ensure_private_permissions() {
+  local data_dir="$ROOT/data"
+  local private_dir
+
+  if [ -f "$ROOT/.env" ]; then
+    chmod 600 "$ROOT/.env"
+  fi
+
+  for private_dir in "$data_dir" "$backup_dir" "$backup_dir/env" "$data_dir/secrets"; do
+    if [ -d "$private_dir" ]; then
+      chmod 700 "$private_dir"
+    fi
+  done
+
+  if [ -d "$data_dir" ]; then
+    find "$data_dir" -type f -exec chmod 600 {} +
+  fi
+}
+
 echo "== Deon Fin VPS deploy ${timestamp} =="
 echo "root: $ROOT"
 
@@ -68,6 +88,7 @@ else
 fi
 
 ensure_data_ownership
+ensure_private_permissions
 
 echo "== pytest =="
 AUTH_SESSION_ENABLED=false NEXT_PUBLIC_AUTH_ENABLED=false .venv/bin/python -m pytest -q

@@ -68,3 +68,17 @@ def test_deploy_pytest_runs_with_auth_cutover_flags_disabled():
     assert "AUTH_SESSION_ENABLED=false" in script
     assert "NEXT_PUBLIC_AUTH_ENABLED=false" in script
     assert "AUTH_SESSION_ENABLED=false NEXT_PUBLIC_AUTH_ENABLED=false .venv/bin/python -m pytest -q" in script
+
+
+def test_deploy_enforces_private_data_and_backup_permissions():
+    script = Path("scripts/vps_deploy.sh").read_text(encoding="utf-8")
+
+    assert "umask 077" in script
+    assert "ensure_private_permissions()" in script
+    assert 'chmod 600 "$ROOT/.env"' in script
+    assert 'chmod 700 "$private_dir"' in script
+    assert 'find "$data_dir" -type f -exec chmod 600 {} +' in script
+    before_pytest = script.split('echo "== pytest =="', 1)[0]
+    assert before_pytest.index("ensure_data_ownership") < before_pytest.index(
+        "ensure_private_permissions"
+    )
