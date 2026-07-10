@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+if [ "$(id -u)" -ne 0 ]; then
+  exec sudo --preserve-env=APP_UID,APP_GID,BACKUP_KEEP_RECENT "$0" "$@"
+fi
+
 umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

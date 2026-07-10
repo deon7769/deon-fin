@@ -82,3 +82,12 @@ def test_deploy_enforces_private_data_and_backup_permissions():
     assert before_pytest.index("ensure_data_ownership") < before_pytest.index(
         "ensure_private_permissions"
     )
+
+def test_deploy_reexecutes_as_root_before_accessing_private_data():
+    script = Path("scripts/vps_deploy.sh").read_text(encoding="utf-8")
+
+    assert 'if [ "$(id -u)" -ne 0 ]; then' in script
+    assert 'exec sudo --preserve-env=APP_UID,APP_GID,BACKUP_KEEP_RECENT "$0" "$@"' in script
+    assert script.index('exec sudo --preserve-env=APP_UID,APP_GID,BACKUP_KEEP_RECENT "$0" "$@"') < script.index(
+        'db_path="$ROOT/data/financas.db"'
+    )
