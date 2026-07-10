@@ -109,3 +109,21 @@ def test_env_example_documents_postgres_without_switching_default_database():
     assert "NEXT_PUBLIC_AUTH_ENABLED=false" in env_example
     assert "APP_UID=1000" in env_example
     assert "APP_GID=1000" in env_example
+
+
+def test_compose_applies_security_headers_at_the_traefik_edge():
+    compose = yaml.safe_load(Path("docker-compose.yml").read_text(encoding="utf-8"))
+    labels = compose["services"]["financas-agent"]["labels"]
+
+    assert "traefik.http.routers.financas.middlewares=tailscale-only@docker,financas-security@docker" in labels
+    assert "traefik.http.middlewares.financas-security.headers.stsSeconds=15552000" in labels
+    assert "traefik.http.middlewares.financas-security.headers.contentTypeNosniff=true" in labels
+    assert "traefik.http.middlewares.financas-security.headers.frameDeny=true" in labels
+    assert "traefik.http.middlewares.financas-security.headers.referrerPolicy=strict-origin-when-cross-origin" in labels
+    assert "traefik.http.middlewares.financas-security.headers.permissionsPolicy=geolocation=(), camera=(), microphone=(), payment=(), usb=()" in labels
+    csp = next(label for label in labels if "contentSecurityPolicy=" in label)
+    assert "default-src 'self'" in csp
+    assert "object-src 'none'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert "https://cdn.pluggy.ai" in csp
+    assert "https://*.pluggy.ai" in csp
