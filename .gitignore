@@ -14,6 +14,7 @@ imports/raw/
 *.log
 .vscode/
 .idea/
+.worktrees/
 
 # Pessoal / especifico da maquina (caminhos, URL do Tailscale, dados da familia) — NAO versionar
 *.bat
