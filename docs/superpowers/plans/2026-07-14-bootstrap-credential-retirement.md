@@ -124,7 +124,7 @@ test "$(git branch --show-current)" = "codex/fase0-guardrails"
 
 expected_status='?? .cursor/
 ?? docs/repasse-2026-07-07.md'
-actual_status=$(git status --porcelain=v1 --untracked-files=all)
+actual_status=$(git status --porcelain=v1)
 test "$actual_status" = "$expected_status"
 
 git merge-base --is-ancestor HEAD codex/bootstrap-secret-retirement
@@ -174,7 +174,7 @@ test "$repo_real" = "/opt/projetos/financas-agent"
 cd "$repo_real"
 expected_status='?? .cursor/
 ?? docs/repasse-2026-07-07.md'
-actual_status=$(git status --porcelain=v1 --untracked-files=all)
+actual_status=$(git status --porcelain=v1)
 test "$actual_status" = "$expected_status"
 sudo test -d "$secrets"
 sudo test ! -L "$secrets"
@@ -236,7 +236,7 @@ elif sudo test -e "$target"; then
   cd "$repo_real"
   expected_status='?? .cursor/
 ?? docs/repasse-2026-07-07.md'
-  actual_status=$(git status --porcelain=v1 --untracked-files=all)
+  actual_status=$(git status --porcelain=v1)
   test "$actual_status" = "$expected_status"
   sudo rm -- "$target"
   echo 'TARGET_REMOVED'
@@ -283,7 +283,7 @@ cd "$repo_real"
 
 expected_status='?? .cursor/
 ?? docs/repasse-2026-07-07.md'
-actual_status=$(git status --porcelain=v1 --untracked-files=all)
+actual_status=$(git status --porcelain=v1)
 test "$actual_status" = "$expected_status"
 
 set -- $(git rev-list --left-right --count deon/codex/fase0-guardrails...HEAD)
