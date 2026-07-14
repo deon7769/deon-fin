@@ -73,11 +73,17 @@ Run from PowerShell:
 $worktree = 'C:\tmp\deon-fin-worktrees\codex-bootstrap-secret-retirement'
 $python = 'C:\Users\Escalasoft\Documents\Deon Fin\.venv\Scripts\python.exe'
 $cache = Join-Path $worktree '.pytest_cache'
+$basetemp = Join-Path $cache 'retirement-baseline'
 New-Item -ItemType Directory -Path $cache -Force | Out-Null
 
-& $python -m pytest -q --basetemp='.pytest_cache\retirement-baseline'
-if ($LASTEXITCODE -ne 0) {
-  throw 'Backend baseline failed'
+Push-Location $worktree
+try {
+  & $python -m pytest -q "--basetemp=$basetemp"
+  if ($LASTEXITCODE -ne 0) {
+    throw 'Backend baseline failed'
+  }
+} finally {
+  Pop-Location
 }
 
 Push-Location (Join-Path $worktree 'web')
@@ -133,7 +139,7 @@ test "$2" = "0"
 echo "DOCS_PUBLISHED head=$(git rev-parse HEAD)"
 '@
 
-$remoteScript | ssh minha-vps bash -s
+$remoteScript | ssh minha-vps "tr -d '\r' | bash -s"
 if ($LASTEXITCODE -ne 0) {
   throw 'Documentation publication failed'
 }
@@ -167,20 +173,28 @@ secrets="$repo_real/data/secrets"
 target="$secrets/initial-auth-owner.txt"
 
 test "$repo_real" = "/opt/projetos/financas-agent"
+sudo test -d "$secrets"
+sudo test ! -L "$secrets"
+test "$(sudo readlink -f "$secrets")" = "/opt/projetos/financas-agent/data/secrets"
 test "$(sudo stat -c '%a' "$secrets")" = "700"
+test "$(sudo stat -c '%U:%G' "$secrets")" = "ubuntu:ubuntu"
 
-if sudo test -e "$target"; then
+if sudo test -L "$target"; then
+  echo 'TARGET_INVALID_SYMLINK' >&2
+  exit 1
+elif sudo test -e "$target"; then
   sudo test -f "$target"
   sudo test ! -L "$target"
   test "$(sudo readlink -f "$target")" = "$target"
   test "$(sudo stat -c '%a' "$target")" = "600"
+  test "$(sudo stat -c '%U:%G' "$target")" = "ubuntu:ubuntu"
   sudo stat -c 'TARGET_PRESENT mode=%a owner=%U:%G bytes=%s modified=%y' "$target"
 else
   echo 'TARGET_ALREADY_ABSENT'
 fi
 '@
 
-$preflight | ssh minha-vps bash -s
+$preflight | ssh minha-vps "tr -d '\r' | bash -s"
 if ($LASTEXITCODE -ne 0) {
   throw 'Credential-retirement preflight failed'
 }
@@ -201,13 +215,21 @@ secrets="$repo_real/data/secrets"
 target="$secrets/initial-auth-owner.txt"
 
 test "$repo_real" = "/opt/projetos/financas-agent"
+sudo test -d "$secrets"
+sudo test ! -L "$secrets"
+test "$(sudo readlink -f "$secrets")" = "/opt/projetos/financas-agent/data/secrets"
 test "$(sudo stat -c '%a' "$secrets")" = "700"
+test "$(sudo stat -c '%U:%G' "$secrets")" = "ubuntu:ubuntu"
 
-if sudo test -e "$target"; then
+if sudo test -L "$target"; then
+  echo 'TARGET_INVALID_SYMLINK' >&2
+  exit 1
+elif sudo test -e "$target"; then
   sudo test -f "$target"
   sudo test ! -L "$target"
   test "$(sudo readlink -f "$target")" = "$target"
   test "$(sudo stat -c '%a' "$target")" = "600"
+  test "$(sudo stat -c '%U:%G' "$target")" = "ubuntu:ubuntu"
   sudo rm -- "$target"
   echo 'TARGET_REMOVED'
 else
@@ -215,10 +237,12 @@ else
 fi
 
 sudo test ! -e "$target"
+sudo test ! -L "$target"
 test "$(sudo stat -c '%a' "$secrets")" = "700"
+test "$(sudo stat -c '%U:%G' "$secrets")" = "ubuntu:ubuntu"
 '@
 
-$retire | ssh minha-vps bash -s
+$retire | ssh minha-vps "tr -d '\r' | bash -s"
 if ($LASTEXITCODE -ne 0) {
   throw 'Credential retirement failed'
 }
@@ -234,10 +258,20 @@ Run:
 $verifyHost = @'
 set -euo pipefail
 repo=/opt/projetos/financas-agent
-cd "$repo"
+repo_real=$(readlink -f "$repo")
+secrets="$repo_real/data/secrets"
+target="$secrets/initial-auth-owner.txt"
 
-sudo test ! -e data/secrets/initial-auth-owner.txt
-test "$(sudo stat -c '%a' data/secrets)" = "700"
+test "$repo_real" = "/opt/projetos/financas-agent"
+sudo test -d "$secrets"
+sudo test ! -L "$secrets"
+test "$(sudo readlink -f "$secrets")" = "/opt/projetos/financas-agent/data/secrets"
+test "$(sudo stat -c '%a' "$secrets")" = "700"
+test "$(sudo stat -c '%U:%G' "$secrets")" = "ubuntu:ubuntu"
+sudo test ! -e "$target"
+sudo test ! -L "$target"
+
+cd "$repo_real"
 
 unexpected=$(
   git status --porcelain=v1 \
@@ -249,17 +283,19 @@ test -z "$unexpected"
 set -- $(git rev-list --left-right --count deon/codex/fase0-guardrails...HEAD)
 test "$1" = "0"
 test "$2" = "0"
-docker ps --filter name=financas-agent --format 'CONTAINER={{.Names}} STATUS={{.Status}}'
-echo "HOST_OK head=$(git rev-parse HEAD) secret_dir_mode=$(sudo stat -c '%a' data/secrets)"
+container=$(docker ps --filter 'status=running' --format '{{.Names}}' | grep -Fx 'financas-agent' || true)
+test "$container" = "financas-agent"
+echo "CONTAINER=$container STATUS=running"
+echo "HOST_OK head=$(git rev-parse HEAD) secret_dir_mode=$(sudo stat -c '%a' "$secrets") secret_dir_owner=$(sudo stat -c '%U:%G' "$secrets")"
 '@
 
-$verifyHost | ssh minha-vps bash -s
+$verifyHost | ssh minha-vps "tr -d '\r' | bash -s"
 if ($LASTEXITCODE -ne 0) {
   throw 'Host verification failed'
 }
 ```
 
-Expected: the `financas-agent` container is `Up`; `HOST_OK` reports the published head and `secret_dir_mode=700`; Git has no unexpected changes.
+Expected: the exact `financas-agent` container is running; `HOST_OK` reports the published head, `secret_dir_mode=700`, and `secret_dir_owner=ubuntu:ubuntu`; Git has no unexpected changes.
 
 ---
 

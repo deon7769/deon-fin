@@ -29,6 +29,12 @@ or a recovery source for the active password.
 Retire only `data/secrets/initial-auth-owner.txt` from the live VPS. Keep the
 `data/secrets/` directory and its established `0700` privacy boundary.
 
+The metadata-only probe confirmed these required invariants:
+
+- `data/secrets/`: real directory, not a symlink, mode `0700`, owner `ubuntu:ubuntu`.
+- `data/secrets/initial-auth-owner.txt`: when present, regular non-symlink file, mode `0600`, owner `ubuntu:ubuntu`.
+- Any canonical-path, type, mode, or ownership mismatch stops the procedure without deleting anything.
+
 Do not add automatic deletion to the application or deploy script. Bootstrap
 credential handling is an operator action, and coupling account updates to a
 host filesystem path would make authentication depend on deployment layout.
@@ -73,8 +79,9 @@ The code baseline must remain green before the operational change:
 
 After removal, validate:
 
-- `test ! -e data/secrets/initial-auth-owner.txt`.
-- `stat` reports mode `0700` for `data/secrets/`.
+- Both `test ! -e` and `test ! -L` hold for the exact
+  `data/secrets/initial-auth-owner.txt` target.
+- `stat` reports mode `0700` and owner `ubuntu:ubuntu` for `data/secrets/`.
 - `https://fin.deonlab.tech/api/health` returns `{"status":"ok"}`.
 - The public root continues to redirect unauthenticated users to `/login`.
 - The active branch remains aligned with the GitHub `deon` branch.
