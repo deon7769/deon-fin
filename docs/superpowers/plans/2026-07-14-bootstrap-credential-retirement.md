@@ -63,7 +63,7 @@ if (Compare-Object $expected $actual) {
 git -C $worktree log --oneline "$base..HEAD"
 ```
 
-Expected: clean worktree; exactly the design and plan are changed relative to the VPS base; the log contains the two documentation commits.
+Expected: clean worktree; exactly the approved design and plan files are changed relative to the VPS base; the log contains only the approved documentation commits.
 
 - [ ] **Step 2: Re-run the backend and frontend baselines**
 
@@ -122,12 +122,10 @@ cd "$repo"
 
 test "$(git branch --show-current)" = "codex/fase0-guardrails"
 
-unexpected=$(
-  git status --porcelain=v1 \
-    | grep -vFx -e '?? .cursor/' -e '?? docs/repasse-2026-07-07.md' \
-    || true
-)
-test -z "$unexpected"
+expected_status='?? .cursor/
+?? docs/repasse-2026-07-07.md'
+actual_status=$(git status --porcelain=v1 --untracked-files=all)
+test "$actual_status" = "$expected_status"
 
 git merge-base --is-ancestor HEAD codex/bootstrap-secret-retirement
 git merge --ff-only codex/bootstrap-secret-retirement
@@ -173,6 +171,11 @@ secrets="$repo_real/data/secrets"
 target="$secrets/initial-auth-owner.txt"
 
 test "$repo_real" = "/opt/projetos/financas-agent"
+cd "$repo_real"
+expected_status='?? .cursor/
+?? docs/repasse-2026-07-07.md'
+actual_status=$(git status --porcelain=v1 --untracked-files=all)
+test "$actual_status" = "$expected_status"
 sudo test -d "$secrets"
 sudo test ! -L "$secrets"
 test "$(sudo readlink -f "$secrets")" = "/opt/projetos/financas-agent/data/secrets"
@@ -230,6 +233,11 @@ elif sudo test -e "$target"; then
   test "$(sudo readlink -f "$target")" = "$target"
   test "$(sudo stat -c '%a' "$target")" = "600"
   test "$(sudo stat -c '%U:%G' "$target")" = "ubuntu:ubuntu"
+  cd "$repo_real"
+  expected_status='?? .cursor/
+?? docs/repasse-2026-07-07.md'
+  actual_status=$(git status --porcelain=v1 --untracked-files=all)
+  test "$actual_status" = "$expected_status"
   sudo rm -- "$target"
   echo 'TARGET_REMOVED'
 else
@@ -273,12 +281,10 @@ sudo test ! -L "$target"
 
 cd "$repo_real"
 
-unexpected=$(
-  git status --porcelain=v1 \
-    | grep -vFx -e '?? .cursor/' -e '?? docs/repasse-2026-07-07.md' \
-    || true
-)
-test -z "$unexpected"
+expected_status='?? .cursor/
+?? docs/repasse-2026-07-07.md'
+actual_status=$(git status --porcelain=v1 --untracked-files=all)
+test "$actual_status" = "$expected_status"
 
 set -- $(git rev-list --left-right --count deon/codex/fase0-guardrails...HEAD)
 test "$1" = "0"
@@ -384,7 +390,12 @@ if ($productionHead -ne $featureHead) {
   throw "Local feature and production refs differ: feature=$featureHead production=$productionHead"
 }
 
-Write-Output "LOCAL_OK branch=$(git -C $worktree branch --show-current) head=$featureHead status=clean"
+$localBranch = (git -C $worktree branch --show-current).Trim()
+if ($localBranch -ne 'codex/bootstrap-secret-retirement') {
+  throw "Unexpected local branch: $localBranch"
+}
+
+Write-Output "LOCAL_OK branch=$localBranch head=$featureHead status=clean"
 ```
 
 Expected: local worktree clean and the local feature head identical to `vps/codex/fase0-guardrails`. No post-retirement commit is created because the deleted file is ignored host state, not repository content.

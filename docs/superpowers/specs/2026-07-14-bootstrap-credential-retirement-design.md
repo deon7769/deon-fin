@@ -53,7 +53,7 @@ live filesystem.
 4. Remove only `data/secrets/initial-auth-owner.txt` with elevated host access.
 5. Verify the file is absent and `data/secrets/` remains mode `0700`.
 6. Verify the public login boundary and `/api/health` still respond normally.
-7. Verify Git state is unchanged apart from the two already-known untracked
+7. Verify Git state contains both and only the two already-known untracked
    paths: `.cursor/` and `docs/repasse-2026-07-07.md`.
 
 No application restart or deploy is required because no running component
