@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 
-DATA_PATH = Path(__file__).resolve().parents[3] / "data" / "country_ratings.json"
+DATA_PATH = Path(__file__).with_suffix(".json")
 
 TIER_COLORS = {
     "top": "#2563EB",

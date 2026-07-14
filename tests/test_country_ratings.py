@@ -22,6 +22,21 @@ def test_rating_tiers_and_colors_follow_spec():
     assert color_for_tier("nodata") == "#3A3A3E"
 
 
+def test_country_ratings_dataset_is_packaged_beside_loader():
+    import json
+    from pathlib import Path
+
+    from src.agent.portfolio import country_ratings
+
+    expected_path = Path(country_ratings.__file__).with_suffix(".json")
+
+    assert country_ratings.DATA_PATH == expected_path
+    assert expected_path.is_file()
+
+    payload = json.loads(expected_path.read_text(encoding="utf-8"))
+    assert {"US", "BR", "DE", "IN", "RU"} <= set(payload)
+
+
 def test_load_country_ratings_reads_seeded_dataset_once_per_process():
     from src.agent.portfolio.country_ratings import load_country_ratings
 

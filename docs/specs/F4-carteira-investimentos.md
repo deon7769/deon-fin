@@ -361,7 +361,7 @@ internacionais (Ações Int., REITs, RF Internacional).
     Nvidia/NVDA, Amazon/AMZN.
   - **ETFs:** lista de ETFs (ticker + rótulo) — ex.: SPY, IVV, VOO ("ETF Americano").
 
-**Dados (simples — "nada demais"):** dataset de referência **seedado** (ex.: `data/country_ratings.json`):
+**Dados (simples — "nada demais"):** dataset de referência **seedado** (ex.: `src/agent/portfolio/country_ratings.json`):
 `{ country_code, name, name_intl, main_index, ratings:{sp,moody,fitch}, tier_label, tier_color, empresas:[{name,ticker,setor}], etfs:[{ticker,label}] }`. Ratings de soberano mudam **raramente** → atualização
 manual (ou rotina futura). **Sem cálculo**; é leitura.
 
