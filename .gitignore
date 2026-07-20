@@ -10,6 +10,7 @@ venv/
 .coverage
 htmlcov/
 data/
+web_dist/
 imports/raw/
 *.log
 .vscode/

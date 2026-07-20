@@ -100,7 +100,14 @@ Para analise por IA, configure um provedor opcional no `.env`, como
 
 ## Rodando a aplicacao
 
-Backend FastAPI:
+A UI padrao do projeto e o frontend Next.js (`web/`). O front legado em Jinja
+(`src/web/templates`) so aparece se nao houver build do Next disponivel, ou se
+`LEGACY_UI=1` for definido explicitamente — ele continua acessivel em
+`/legacy` para referencia/rollback. Ha dois jeitos de rodar localmente:
+
+### Opcao A - desenvolvimento com hot reload (recomendado ao mexer no frontend)
+
+Backend FastAPI (API em `:8000`, sem servir o Next):
 
 ```powershell
 .venv\Scripts\python -m src.cli serve --host 127.0.0.1 --port 8000
@@ -115,12 +122,37 @@ npm run dev
 ```
 
 Por padrao, o frontend de desenvolvimento usa `NEXT_PUBLIC_API_URL` para falar
-com a API. Veja `web/.env.example`.
+com a API. Veja `web/.env.example` (copie para `web/.env.local`).
+
+Acesse sempre por `http://localhost:3000` (nao `127.0.0.1:3000`) — o Next 16
+bloqueia recursos de dev (HMR, fontes) quando a origem nao esta em
+`allowedDevOrigins` (`web/next.config.mjs`).
+
+### Opcao B - build unico, same-origin (igual producao/Docker)
+
+Gera o export estatico do Next e deixa o FastAPI servir tudo em `:8000`
+(UI em `/`, API em `/api`), sem precisar de dois processos:
+
+```powershell
+cd web
+npm install
+$env:NEXT_PUBLIC_API_URL="/api"; npm run build
+cd ..
+Remove-Item -Recurse -Force web_dist -ErrorAction SilentlyContinue
+Copy-Item -Recurse web\out web_dist
+.venv\Scripts\python -m src.cli serve --host 127.0.0.1 --port 8000
+```
+
+O backend detecta `web_dist/index.html` a cada request, mas o mount dos
+assets `/_next` so acontece na inicializacao — reinicie o backend depois de
+gerar/atualizar o build. Repita o `npm run build` + copia sempre que o
+frontend mudar.
 
 URLs locais comuns:
 
-- API e build estatico servido pelo FastAPI: `http://127.0.0.1:8000`
-- Next dev server: `http://127.0.0.1:3000`
+- UI + API same-origin (build do Next servido pelo FastAPI): `http://127.0.0.1:8000`
+- UI legada (Jinja, fallback): `http://127.0.0.1:8000/legacy`
+- Next dev server (hot reload): `http://localhost:3000`
 - Health check: `http://127.0.0.1:8000/api/health`
 
 ## Pluggy Connect
