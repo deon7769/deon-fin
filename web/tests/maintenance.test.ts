@@ -12,7 +12,9 @@ import {
   buildMaintenanceHealth,
   buildMaintenanceSections,
   classificationCoverage,
+  classificationBulkApplyFeedback,
   classificationIssueRows,
+  classificationSuggestionImpactLabel,
   maintenanceToEditorState,
   maintenanceSummary,
   missingCategoryTranslations,
@@ -262,6 +264,40 @@ describe("maintenance helpers", () => {
     });
   });
 
+  it("formats bulk apply feedback with target, preview total, and pending rows", () => {
+    expect(
+      classificationBulkApplyFeedback({
+        kind: "tag",
+        target_id: 2,
+        target_name: "Mercado",
+        preview_total: 4,
+        updated: 3,
+        not_found: ["tx-gone"],
+      }),
+    ).toBe("Tag Mercado aplicada em 3 de 4 lançamento(s). 1 não encontrado(s).");
+
+    expect(
+      classificationBulkApplyFeedback({
+        kind: "bucket",
+        target_id: 1,
+        target_name: "Conforto",
+        preview_total: 2,
+        updated: 2,
+        not_found: [],
+      }),
+    ).toBe("Meta Conforto aplicada em 2 de 2 lançamento(s).");
+  });
+
+  it("formats classification suggestion impact by queue", () => {
+    expect(
+      classificationSuggestionImpactLabel({
+        transaction_count: 6,
+        missing_tag_count: 4,
+        missing_bucket_count: 2,
+      }),
+    ).toBe("6 lançamento(s): 4 sem Tag, 2 sem Meta");
+  });
+
   it("renders classification health panel with coverage and issue queues", () => {
     const html = renderToStaticMarkup(
       createElement(
@@ -334,6 +370,17 @@ describe("maintenance helpers", () => {
         createElement(ClassificationHealthPanel, {
           data: sample,
           month: "2026-06",
+          onApplySuggestion: async () => ({
+            kind: "tag" as const,
+            raw_category: "Digital services",
+            target_id: 3,
+            target_name: "Servi\u00e7os digitais",
+            month: "2026-06",
+            preview_total: 2,
+            updated: 2,
+            not_found: [],
+            created_target: true,
+          }),
           suggestions: {
             month: "2026-06",
             total: 1,
@@ -384,6 +431,10 @@ describe("maintenance helpers", () => {
     expect(html).toContain("Tag sugerida");
     expect(html).toContain("Meta sugerida");
     expect(html).toContain("2 lan\u00e7amento(s)");
+    expect(html).toContain("2 sem Tag");
+    expect(html).toContain("2 sem Meta");
+    expect(html).toContain("Aplicar Tag");
+    expect(html).toContain("Aplicar Meta");
     expect(html).toContain("OpenAI ChatGPT");
   });
 
@@ -467,6 +518,46 @@ describe("maintenance helpers", () => {
     expect(html).toContain("-ifood mercado");
     expect(html.indexOf("Mercado")).toBeLessThan(html.indexOf("-ifood mercado"));
     expect(html).toContain("4 de 4");
+  });
+
+  it("renders single and similar classification audit actions with business labels", () => {
+    const html = renderToStaticMarkup(
+      createElement(ClassificationAuditPanel, {
+        data: {
+          items: [
+            {
+              id: 5,
+              action: "similar_apply",
+              kind: "tag",
+              target_id: 2,
+              target_name: "Mercado",
+              match_key: "-mercado teste",
+              affected_count: 3,
+              preview_total: 3,
+              metadata: { affected_transaction_ids: ["tx-1", "tx-2", "tx-3"] },
+              created_at: "2026-06-23T11:00:00",
+            },
+            {
+              id: 4,
+              action: "single_apply",
+              kind: "bucket",
+              target_id: 1,
+              target_name: "Conforto",
+              match_key: null,
+              affected_count: 1,
+              preview_total: 1,
+              metadata: { affected_transaction_ids: ["tx-4"] },
+              created_at: "2026-06-23T10:30:00",
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(html).toContain("Aplicação em similares");
+    expect(html).toContain("Aplicação manual");
+    expect(html).toContain("3 de 3");
+    expect(html).toContain("1 de 1");
   });
 
   it("renders compact editable sections as responsive field groups", () => {

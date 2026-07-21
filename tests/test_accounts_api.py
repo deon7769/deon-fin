@@ -9,12 +9,26 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.storage import Account, Database, Transaction
+from src.web import app as web_app
 from src.web.app import create_app, get_db, get_pluggy
 from src.web.repositories import accounts_repo
 
 
+def _reset_sync_state() -> None:
+    web_app._sync_state.update(
+        {
+            "running": False,
+            "last_started": None,
+            "last_finished": None,
+            "last_result": None,
+            "scheduler_on": False,
+        }
+    )
+
+
 @pytest.fixture
 def client(tmp_db, monkeypatch):
+    _reset_sync_state()
     monkeypatch.setattr("src.web.app._background_sync", lambda *a, **kw: None)
     monkeypatch.setattr(
         "src.web.repositories.profile_repo.settings",
@@ -321,6 +335,22 @@ def test_account_actions_wrap_item_flow(client, tmp_db, monkeypatch):
     assert delete.json()["kept_transactions"] is True
     assert client.fake_pluggy.deleted == ["item-inter"]  # type: ignore[attr-defined]
     assert client.get("/api/items").json() == []
+
+
+def test_account_sync_marks_state_running_before_background(client, tmp_db, monkeypatch):
+    _reset_sync_state()
+    _seed_connected_accounts(tmp_db)
+    spy = MagicMock(return_value=None)
+    monkeypatch.setattr("src.web.app._background_sync", spy)
+
+    sync = client.post("/api/accounts/pluggy:bank/sync", json={"days": 90})
+
+    assert sync.status_code == 200
+    assert web_app._sync_state["running"] is True
+    assert web_app._sync_state["last_started"] is not None
+    assert web_app._sync_state["last_result"] == "Sincronizando item-inter..."
+    spy.assert_called_once_with("item-inter", 90)
+    _reset_sync_state()
 
 
 def test_sort_endpoint_persists_order(client, tmp_db):

@@ -6,8 +6,10 @@ COPY web/package*.json ./
 RUN npm ci
 
 COPY web/ ./
+ARG NEXT_PUBLIC_AUTH_ENABLED=false
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PUBLIC_API_URL=/api
+ENV NEXT_PUBLIC_AUTH_ENABLED=$NEXT_PUBLIC_AUTH_ENABLED
 RUN npm run build
 
 
@@ -25,6 +27,7 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY alembic.ini ./alembic.ini
 COPY src ./src
 COPY scripts ./scripts
 COPY --from=web /web/out ./web_dist

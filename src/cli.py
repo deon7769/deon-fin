@@ -11,10 +11,13 @@ from .agent import AnalystError, Categorizer, FinancialAnalyst, build_financial_
 from .agent.buckets import apply_buckets_to_database
 from .agent.context import account_owner_aliases, spending_value
 from .agent.tags import apply_tags_to_database
+from .auth.bootstrap import BootstrapInput, bootstrap_admin_family
 from .config import settings
 from .importers import import_nubank_csv, import_ofx, sync_pluggy_item
 from .pluggy import PluggyClient
 from .storage import Database
+from .storage.migrate_sqlite_to_postgres import collect_sqlite_migration_report
+from .storage.postgres import connect_postgres, run_postgres_migrations
 from .web.repositories import buckets_repo, profile_repo, tags_repo, transactions_repo
 
 
@@ -29,6 +32,10 @@ console = Console()
 
 def _db() -> Database:
     return Database(settings.database_path)
+
+
+def _auth_database_url() -> str:
+    return getattr(settings, "auth_database_url", None) or settings.database_url
 
 
 @app.command()
@@ -218,6 +225,74 @@ def analyze(
         console.print(f"\n[red]{e}[/red]")
         raise typer.Exit(code=1)
     console.print()  # newline final
+
+
+@app.command("bootstrap-auth")
+def bootstrap_auth(
+    email: str = typer.Option(..., help="Email do primeiro administrador."),
+    display_name: str = typer.Option("Admin", help="Nome exibido para o administrador."),
+    family_name: str = typer.Option("Familia Principal", help="Nome da família inicial."),
+    family_slug: str = typer.Option("familia-principal", help="Slug único da família inicial."),
+    password: str = typer.Option(
+        ...,
+        prompt=True,
+        hide_input=True,
+        confirmation_prompt=True,
+        help="Senha inicial do administrador.",
+    ),
+) -> None:
+    """Cria ou atualiza o primeiro usuário owner e a família inicial no PostgreSQL."""
+    auth_database_url = _auth_database_url()
+    run_postgres_migrations(auth_database_url)
+    with connect_postgres(auth_database_url) as conn:
+        result = bootstrap_admin_family(
+            conn,
+            BootstrapInput(
+                email=email,
+                password=password,
+                display_name=display_name,
+                family_name=family_name,
+                family_slug=family_slug,
+            ),
+        )
+    console.print(
+        "[green]Bootstrap concluído:[/green] "
+        f"user={result.user_id} family={result.family_id} person={result.person_id}"
+    )
+
+
+@app.command("pg-migration-dry-run")
+def pg_migration_dry_run(
+    sqlite_path: Path | None = typer.Option(
+        None,
+        help="Caminho do SQLite legado. Usa settings.database_path quando omitido.",
+    ),
+    family_name: str = typer.Option("Familia Principal", help="Nome da família padrão da migração."),
+) -> None:
+    """Mostra contagens e mapeamentos da migração SQLite -> PostgreSQL sem escrever no destino."""
+    source_path = sqlite_path or settings.database_path
+    try:
+        report = collect_sqlite_migration_report(source_path, default_family_name=family_name)
+    except FileNotFoundError:
+        console.print(f"[red]SQLite não encontrado: {source_path}[/red]", soft_wrap=True)
+        raise typer.Exit(code=1)
+
+    table = Table("Origem SQLite", "Destino PostgreSQL", "Linhas")
+    for source, count in report.counts.items():
+        table.add_row(source, report.target_tables[source], str(count))
+    console.print(f"[bold]Família padrão:[/bold] {report.default_family_name}")
+    console.print(f"[bold]SQLite:[/bold] {report.sqlite_path}")
+    console.print(table)
+    if report.ignored_counts:
+        ignored_table = Table(
+            "Origem SQLite",
+            "Linhas",
+            "Motivo",
+            title="Tabelas sem destino nesta fundação",
+        )
+        for source, count in report.ignored_counts.items():
+            ignored_table.add_row(source, str(count), report.ignored_tables[source])
+        console.print(ignored_table)
 
 
 @app.command()

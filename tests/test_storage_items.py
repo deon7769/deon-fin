@@ -30,7 +30,7 @@ def test_mark_synced_updates_timestamp(tmp_db: Database):
     tmp_db.upsert_pluggy_item("item-xyz", connector_name="Itau")
     assert tmp_db.get_pluggy_item("item-xyz")["last_synced_at"] is None
     tmp_db.upsert_pluggy_item("item-xyz", mark_synced=True)
-    assert tmp_db.get_pluggy_item("item-xyz")["last_synced_at"] is not None
+    assert tmp_db.get_pluggy_item("item-xyz")["last_synced_at"].endswith("Z")
 
 
 def test_delete_pluggy_item(tmp_db: Database):

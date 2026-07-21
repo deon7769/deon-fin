@@ -10,6 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+from ..time_utils import utc_now_iso
 from .migrations import apply_migrations
 
 SQLITE_BUSY_TIMEOUT_MS = 5000
@@ -243,9 +244,12 @@ class Database:
         client_user_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         mark_synced: bool = False,
+        synced_at: str | None = None,
     ) -> None:
         import json
         flag = 1 if mark_synced else 0
+        now = utc_now_iso()
+        sync_timestamp = synced_at or now
         with self._cursor() as cur:
             cur.execute(
                 """
@@ -253,23 +257,27 @@ class Database:
                   (id, connector_id, connector_name, status, client_user_id, metadata_json,
                    last_synced_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?,
-                  CASE WHEN ? = 1 THEN datetime('now') ELSE NULL END,
-                  datetime('now'))
+                  CASE WHEN ? = 1 THEN ? ELSE NULL END,
+                  ?)
                 ON CONFLICT(id) DO UPDATE SET
                     connector_id   = COALESCE(excluded.connector_id, connector_id),
                     connector_name = COALESCE(excluded.connector_name, connector_name),
                     status         = COALESCE(excluded.status, status),
                     client_user_id = COALESCE(excluded.client_user_id, client_user_id),
                     metadata_json  = COALESCE(excluded.metadata_json, metadata_json),
-                    last_synced_at = CASE WHEN ? = 1 THEN datetime('now')
+                    last_synced_at = CASE WHEN ? = 1 THEN ?
                                           ELSE last_synced_at END,
-                    updated_at     = datetime('now')
+                    updated_at     = ?
                 """,
                 (
                     item_id, connector_id, connector_name, status, client_user_id,
                     json.dumps(metadata) if metadata else None,
                     flag,
+                    sync_timestamp,
+                    now,
                     flag,
+                    sync_timestamp,
+                    now,
                 ),
             )
 

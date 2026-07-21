@@ -40,6 +40,15 @@ function optionKey(value: FilterMultiSelectValue): string {
   return value === null ? "none" : String(value);
 }
 
+function fallbackOption<T extends FilterMultiSelectValue>(
+  value: T,
+): FilterMultiSelectOption<T> {
+  return {
+    value,
+    label: value === null ? "Sem valor" : String(value),
+  };
+}
+
 function Swatch({ color }: { color?: string | null }) {
   if (!color) {
     return null;
@@ -69,9 +78,10 @@ export function FilterMultiSelect<T extends FilterMultiSelectValue>({
   const rootRef = useRef<HTMLDivElement>(null);
   const selectedOptions = useMemo(
     () =>
-      values
-        .map((value) => options.find((option) => sameValue(option.value, value)))
-        .filter((option): option is FilterMultiSelectOption<T> => Boolean(option)),
+      values.map(
+        (value) =>
+          options.find((option) => sameValue(option.value, value)) ?? fallbackOption(value),
+      ),
     [options, values],
   );
   const filteredOptions = useMemo(() => {

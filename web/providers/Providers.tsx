@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Suspense, useState, type ReactNode } from "react";
+import { AuthProvider } from "./AuthProvider";
 import { PeriodProvider } from "./PeriodProvider";
 import { PrivacyProvider } from "./PrivacyProvider";
 
@@ -27,11 +28,13 @@ export function Providers({ children }: { children: ReactNode }) {
       disableTransitionOnChange
     >
       <QueryClientProvider client={queryClient}>
-        <PrivacyProvider>
-          <Suspense fallback={null}>
-            <PeriodProvider>{children}</PeriodProvider>
-          </Suspense>
-        </PrivacyProvider>
+        <AuthProvider>
+          <PrivacyProvider>
+            <Suspense fallback={null}>
+              <PeriodProvider>{children}</PeriodProvider>
+            </Suspense>
+          </PrivacyProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

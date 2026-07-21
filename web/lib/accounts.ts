@@ -7,6 +7,45 @@ const SYNC_LABELS: Record<string, string> = {
   UNKNOWN: "Indisponível",
 };
 
+type AccountsSyncLike = {
+  sync?: {
+    running?: boolean;
+  };
+};
+
+function normalizeSyncTimestamp(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  return `${trimmed.replace(" ", "T")}Z`;
+}
+
+export function formatSyncDateTime(value?: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(normalizeSyncTimestamp(value));
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
+}
+
+export function accountsRefetchInterval(data: AccountsSyncLike | null | undefined): number | false {
+  return data?.sync?.running ? 2000 : false;
+}
+
 export function usageLabel(value: number | null | undefined): string {
   if (value === null || value === undefined) {
     return "--";

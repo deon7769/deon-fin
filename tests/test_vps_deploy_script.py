@@ -37,3 +37,11 @@ def test_deploy_backup_includes_sqlite_sidecars():
     assert '"$db_path-wal"' in script
     assert '"$db_path-shm"' in script
     assert "basename" in script
+
+
+def test_deploy_pytest_runs_with_auth_cutover_flags_disabled():
+    script = Path("scripts/vps_deploy.sh").read_text(encoding="utf-8")
+
+    assert "AUTH_SESSION_ENABLED=false" in script
+    assert "NEXT_PUBLIC_AUTH_ENABLED=false" in script
+    assert "AUTH_SESSION_ENABLED=false NEXT_PUBLIC_AUTH_ENABLED=false .venv/bin/python -m pytest -q" in script

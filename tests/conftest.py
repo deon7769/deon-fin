@@ -21,6 +21,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///data/test-suite.db")
 os.environ["APP_PASSWORD"] = ""
 os.environ["AUTO_SYNC_ON_START"] = "false"
 os.environ["AUTO_SYNC_MINUTES"] = "0"
+os.environ["AUTH_SESSION_ENABLED"] = "false"
 
 from src.storage import Database
 

@@ -1,4 +1,11 @@
-import type { MaintenanceFamilyProfile, MaintenanceOverrides, MaintenanceResponse } from "./types";
+import type {
+  MaintenanceClassificationBulkApplyResponse,
+  MaintenanceClassificationSuggestion,
+  MaintenanceClassificationSuggestionApplyResponse,
+  MaintenanceFamilyProfile,
+  MaintenanceOverrides,
+  MaintenanceResponse,
+} from "./types";
 
 export type MaintenanceSummary = {
   incomeTotal: number;
@@ -316,6 +323,36 @@ export function classificationIssueRows(
     categoryLabel: row.category_label?.trim() || row.category?.trim() || "Sem categoria",
     amountAbs: row.amount_abs,
   }));
+}
+
+export function classificationBulkApplyFeedback(
+  result: MaintenanceClassificationBulkApplyResponse,
+): string {
+  const kind = result.kind === "bucket" ? "Meta" : "Tag";
+  const notFound = result.not_found.length;
+  const suffix = notFound ? ` ${notFound} não encontrado(s).` : "";
+
+  return `${kind} ${result.target_name} aplicada em ${result.updated} de ${result.preview_total} lançamento(s).${suffix}`;
+}
+
+export function classificationSuggestionApplyFeedback(
+  result: MaintenanceClassificationSuggestionApplyResponse,
+): string {
+  const kind = result.kind === "bucket" ? "Meta" : "Tag";
+  const created = result.created_target ? " criada e" : "";
+  const notFound = result.not_found.length;
+  const suffix = notFound ? ` ${notFound} não encontrado(s).` : "";
+
+  return `${kind} ${result.target_name}${created} aplicada em ${result.updated} de ${result.preview_total} lançamento(s).${suffix}`;
+}
+
+export function classificationSuggestionImpactLabel(
+  item: Pick<
+    MaintenanceClassificationSuggestion,
+    "transaction_count" | "missing_tag_count" | "missing_bucket_count"
+  >,
+): string {
+  return `${item.transaction_count} lançamento(s): ${item.missing_tag_count} sem Tag, ${item.missing_bucket_count} sem Meta`;
 }
 
 function cloneRows<T extends object>(rows: T[] | undefined): T[] {

@@ -19,6 +19,10 @@ function actionLabel(action: string): string {
       return "Regra atualizada";
     case "rule_delete":
       return "Regra removida";
+    case "similar_apply":
+      return "Aplicação em similares";
+    case "single_apply":
+      return "Aplicação manual";
     default:
       return action;
   }

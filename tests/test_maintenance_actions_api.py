@@ -230,6 +230,155 @@ def test_maintenance_classification_suggestions_group_missing_tag_and_bucket(
     assert {example["id"] for example in item["examples"]} == {first.id, second.id}
 
 
+def test_maintenance_apply_classification_suggestion_creates_tag_for_category_group(
+    client,
+    tmp_db,
+    monkeypatch,
+):
+    _seed_account(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    tags_repo.seed_tags(tmp_db)
+    manual_tag = tags_repo.list_tags(tmp_db)[0]
+    monkeypatch.setattr(
+        "src.agent.maintenance.load_overrides",
+        lambda: {"categorias_pt": {"digital services": "Servi\u00e7os digitais"}, "recorrencias": []},
+    )
+    first = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-apply-tag-1",
+        description="OpenAI ChatGPT assinatura",
+        category="Digital services",
+    )
+    second = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-apply-tag-2",
+        description="OpenAI ChatGPT adicional",
+        category="Digital services",
+    )
+    other_category = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-apply-tag-other",
+        description="Uber trip help",
+        category="Taxi and ride-hailing",
+    )
+    other_month = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-apply-tag-other-month",
+        description="OpenAI ChatGPT julho",
+        category="Digital services",
+        posted_at=date(2026, 7, 5),
+    )
+    manual = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-apply-tag-manual",
+        description="OpenAI ChatGPT manual",
+        category="Digital services",
+    )
+    tmp_db._conn.execute(
+        "UPDATE transactions SET tag_id=?, tag_source='manual' WHERE id=?",
+        (manual_tag["id"], manual.id),
+    )
+    tmp_db._conn.commit()
+
+    response = client.post(
+        "/api/maintenance/classification/suggestions/apply",
+        json={"kind": "tag", "raw_category": "Digital services", "month": "2026-06"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "tag"
+    assert body["raw_category"] == "Digital services"
+    assert body["target_name"] == "Servi\u00e7os digitais"
+    assert body["created_target"] is True
+    assert body["preview_total"] == 2
+    assert body["updated"] == 2
+    created_tag = tags_repo.find_tag_by_name(tmp_db, "Servi\u00e7os digitais")
+    assert created_tag is not None
+    rows = {
+        row["id"]: (row["tag_id"], row["tag_source"])
+        for row in tmp_db._conn.execute("SELECT id, tag_id, tag_source FROM transactions")
+    }
+    assert rows[first.id] == (created_tag["id"], "manual")
+    assert rows[second.id] == (created_tag["id"], "manual")
+    assert rows[other_category.id] == (None, None)
+    assert rows[other_month.id] == (None, None)
+    assert rows[manual.id] == (manual_tag["id"], "manual")
+
+    audit = client.get("/api/maintenance/classification/audit").json()["items"][0]
+    assert audit["action"] == "suggestion_apply"
+    assert audit["kind"] == "tag"
+    assert audit["target_name"] == "Servi\u00e7os digitais"
+    assert audit["affected_count"] == 2
+    assert audit["preview_total"] == 2
+    assert audit["metadata"]["month"] == "2026-06"
+    assert audit["metadata"]["raw_category"] == "Digital services"
+    assert audit["metadata"]["created_target"] is True
+    assert set(audit["metadata"]["affected_transaction_ids"]) == {first.id, second.id}
+
+
+def test_maintenance_apply_classification_suggestion_updates_only_bucket_category_group(
+    client,
+    tmp_db,
+    monkeypatch,
+):
+    _seed_account(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    monkeypatch.setattr(
+        "src.agent.maintenance.load_overrides",
+        lambda: {"categorias_pt": {"digital services": "Servi\u00e7os digitais"}, "recorrencias": []},
+    )
+    first = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-apply-bucket-1",
+        description="OpenAI ChatGPT assinatura",
+        category="Digital services",
+    )
+    second = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-apply-bucket-2",
+        description="OpenAI ChatGPT adicional",
+        category="Digital services",
+    )
+    other = _insert_tx(
+        tmp_db,
+        external_id="maint-suggestion-apply-bucket-other",
+        description="Academia Teste",
+        category="Sports",
+    )
+
+    response = client.post(
+        "/api/maintenance/classification/suggestions/apply",
+        json={"kind": "bucket", "raw_category": "Digital services", "month": "2026-06"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    target_bucket = next(
+        bucket for bucket in buckets_repo.list_buckets(tmp_db) if bucket["key"] == "prazeres"
+    )
+    assert body["kind"] == "bucket"
+    assert body["target_id"] == target_bucket["id"]
+    assert body["target_name"] == "Prazeres"
+    assert body["raw_category"] == "Digital services"
+    assert body["preview_total"] == 2
+    assert body["updated"] == 2
+    rows = {
+        row["id"]: (row["bucket_id"], row["bucket_source"])
+        for row in tmp_db._conn.execute("SELECT id, bucket_id, bucket_source FROM transactions")
+    }
+    assert rows[first.id] == (target_bucket["id"], "manual")
+    assert rows[second.id] == (target_bucket["id"], "manual")
+    assert rows[other.id] == (None, None)
+
+    audit = client.get("/api/maintenance/classification/audit").json()["items"][0]
+    assert audit["action"] == "suggestion_apply"
+    assert audit["kind"] == "bucket"
+    assert audit["target_id"] == target_bucket["id"]
+    assert audit["metadata"]["raw_category"] == "Digital services"
+    assert set(audit["metadata"]["affected_transaction_ids"]) == {first.id, second.id}
+
+
 def test_maintenance_apply_classification_returns_affected_count_and_ids(client, tmp_db):
     _seed_account(tmp_db)
     tags_repo.seed_tags(tmp_db)
@@ -287,6 +436,74 @@ def test_maintenance_apply_classification_returns_affected_count_and_ids(client,
 
     audit = client.get("/api/maintenance/classification/audit").json()["items"][0]
     assert audit["action"] == "similar_apply"
+    assert audit["affected_count"] == 2
+    assert set(audit["metadata"]["affected_transaction_ids"]) == {first.id, second.id}
+
+
+def test_maintenance_apply_bucket_classification_returns_affected_count_and_preserves_manual_bucket(
+    client,
+    tmp_db,
+):
+    _seed_account(tmp_db)
+    buckets_repo.seed_buckets(tmp_db)
+    buckets = buckets_repo.list_buckets(tmp_db)
+    target_bucket = buckets[0]
+    manual_bucket = buckets[1]
+    first = _insert_tx(
+        tmp_db,
+        external_id="maint-apply-bucket-1",
+        description="Academia Teste",
+        category="Sports",
+    )
+    second = _insert_tx(
+        tmp_db,
+        external_id="maint-apply-bucket-2",
+        description="Academia Teste",
+        category="Sports",
+    )
+    manual = _insert_tx(
+        tmp_db,
+        external_id="maint-apply-bucket-3",
+        description="Academia Teste",
+        category="Sports",
+    )
+    tmp_db._conn.execute(
+        "UPDATE transactions SET bucket_id=?, bucket_source='manual' WHERE id=?",
+        (manual_bucket["id"], manual.id),
+    )
+    tmp_db._conn.commit()
+
+    response = client.post(
+        "/api/maintenance/classification/apply",
+        json={
+            "kind": "bucket",
+            "transaction_id": first.id,
+            "target_id": target_bucket["id"],
+            "apply_to_similar": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["kind"] == "bucket"
+    assert body["target_id"] == target_bucket["id"]
+    assert body["target_name"] == target_bucket["name"]
+    assert body["affected_count"] == 2
+    assert body["similar_affected"] == 1
+    assert set(body["affected_transaction_ids"]) == {first.id, second.id}
+    rows = {
+        row["id"]: (row["bucket_id"], row["bucket_source"])
+        for row in tmp_db._conn.execute(
+            "SELECT id, bucket_id, bucket_source FROM transactions"
+        )
+    }
+    assert rows[first.id] == (target_bucket["id"], "manual")
+    assert rows[second.id] == (target_bucket["id"], "rule")
+    assert rows[manual.id] == (manual_bucket["id"], "manual")
+
+    audit = client.get("/api/maintenance/classification/audit").json()["items"][0]
+    assert audit["action"] == "similar_apply"
+    assert audit["kind"] == "bucket"
     assert audit["affected_count"] == 2
     assert set(audit["metadata"]["affected_transaction_ids"]) == {first.id, second.id}
 

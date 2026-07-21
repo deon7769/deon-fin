@@ -5,6 +5,47 @@ export type ApiErrorShape = {
   };
 };
 
+export type ApiDetailErrorShape = {
+  detail?: string;
+};
+
+export type AuthUser = {
+  id: string;
+  email: string;
+  display_name: string | null;
+};
+
+export type AuthFamily = {
+  id: string;
+  name: string;
+  role: string;
+};
+
+export type AuthSession = {
+  authenticated: true;
+  user: AuthUser;
+  family: AuthFamily;
+  session?: {
+    id: string;
+    expires_at: string;
+  };
+};
+
+export type LoginRequest = {
+  email: string;
+  password: string;
+};
+
+export type LoginResponse = AuthSession;
+
+export type AccountUpdateInput = {
+  email?: string;
+  current_password: string;
+  new_password?: string;
+};
+
+export type AccountUpdateResponse = AuthSession;
+
 export type Page<T> = {
   items: T[];
   page: number;
@@ -708,6 +749,18 @@ export type MaintenanceClassificationBulkApplyResponse = {
   updated: number;
   not_found: string[];
 };
+
+export type MaintenanceClassificationSuggestionApplyRequest = {
+  kind: MaintenanceClassificationBulkKind;
+  raw_category: string;
+  month?: string | null;
+};
+
+export type MaintenanceClassificationSuggestionApplyResponse =
+  MaintenanceClassificationBulkApplyResponse & {
+    raw_category: string;
+    created_target: boolean;
+  };
 
 export type MaintenanceClassificationSuggestionTag = {
   id: number | null;
