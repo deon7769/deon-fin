@@ -1,0 +1,20 @@
+{
+  "name": "Deon Fin",
+  "install": "bash scripts/cloud_agent_install.sh",
+  "terminals": [
+    {
+      "name": "backend",
+      "command": "python3 -m src.cli serve --host 127.0.0.1 --port 8000",
+      "description": "FastAPI backend serving the API at /api and the built Next.js UI at / (same-origin) on http://127.0.0.1:8000."
+    },
+    {
+      "name": "web-dev",
+      "command": "cd web && npm run dev",
+      "description": "Next.js dev server with hot reload on http://localhost:3000; talks to the backend API via NEXT_PUBLIC_API_URL (web/.env.local)."
+    }
+  ],
+  "ports": [
+    { "name": "backend (UI + API)", "port": 8000 },
+    { "name": "web dev server", "port": 3000 }
+  ]
+}
